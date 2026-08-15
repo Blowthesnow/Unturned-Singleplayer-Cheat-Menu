@@ -6,7 +6,32 @@
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
-![角色页运行截图](docs/images/character-tab.png)
+![物品页：自动扫描原版、地图和 Workshop 物品](docs/images/items-tab.png)
+
+<details>
+<summary><strong>查看其他界面截图</strong></summary>
+
+### 角色状态与技能
+
+![角色页：生存状态、经验、声望和技能](docs/images/character-tab.png)
+
+### 车辆浏览与生成
+
+![车辆页：自动扫描车辆并生成模型缩略图](docs/images/vehicles-tab.png)
+
+### 收藏
+
+![收藏页：物品与车辆收藏及空状态](docs/images/favorites-tab.png)
+
+### 传送点
+
+![传送页：按地图保存和管理具名位置](docs/images/teleports-tab.png)
+
+### 时间、天气和世界事件
+
+![其他页：时间、天气、满月、空投和资产重扫](docs/images/world-tab.png)
+
+</details>
 
 ## 主要功能
 

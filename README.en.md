@@ -6,7 +6,32 @@ A BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 
-![Character tab](docs/images/character-tab.png)
+![Items tab scanning vanilla, map-provided, and Workshop assets](docs/images/items-tab.png)
+
+<details>
+<summary><strong>View more interface screenshots</strong></summary>
+
+### Player stats and skills
+
+![Character tab with survival stats, experience, reputation, and skills](docs/images/character-tab.png)
+
+### Vehicle browser and spawning
+
+![Vehicles tab with automatic discovery and rendered thumbnails](docs/images/vehicles-tab.png)
+
+### Favorites
+
+![Favorites tab for saved items and vehicles](docs/images/favorites-tab.png)
+
+### Teleport points
+
+![Teleports tab with named map-scoped positions](docs/images/teleports-tab.png)
+
+### Time, weather, and world events
+
+![World controls for time, weather, full moon, airdrops, and rescanning](docs/images/world-tab.png)
+
+</details>
 
 ## Features
 
