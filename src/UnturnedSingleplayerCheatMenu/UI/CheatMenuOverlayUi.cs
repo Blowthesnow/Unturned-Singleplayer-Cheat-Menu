@@ -155,7 +155,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         {
             _statusUntil = 0f;
             if (_statusText != null)
-                _statusText.text = "准备就绪。";
+                _statusText.text = PluginLocalization.Translate("准备就绪。");
         }
     }
 
@@ -233,7 +233,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     {
         GameObject row = CreateRow(parent, 46f, 10f);
         Text title = CreateText(row.transform, "单人作弊指令菜单", 25, TextColor, TextAnchor.MiddleLeft, FontStyle.Bold);
-        SetLayout(title.gameObject, preferredWidth: 255f);
+        SetLayout(
+            title.gameObject,
+            preferredWidth: PluginLocalization.CurrentLanguage == PluginLanguage.English ? 315f : 255f);
 
         GameObject badgePanel = CreateObject("SingleplayerBadge", row.transform, typeof(Image));
         badgePanel.GetComponent<Image>().color = new Color(0.06f, 0.30f, 0.19f, 1f);
@@ -242,9 +244,46 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         Stretch(badge.rectTransform);
 
         CreateFlexibleSpacer(row.transform);
+        CreateButton(
+            row.transform,
+            PluginLocalization.SwitchButtonLabel,
+            () =>
+            {
+                bool persisted = _plugin.ToggleLanguageFromUi();
+                RebuildForLanguageChange(persisted);
+            },
+            58f,
+            36f,
+            Accent,
+            13);
         _mapAndShortcutText = CreateText(row.transform, string.Empty, 13, MutedColor, TextAnchor.MiddleRight);
         SetLayout(_mapAndShortcutText.gameObject, preferredWidth: 250f);
         CreateButton(row.transform, "×", () => _plugin.CloseMenu(), 44f, 36f, Danger, 23);
+    }
+
+    private void RebuildForLanguageChange(bool persisted)
+    {
+        GameObject previousRoot = _root;
+        _root = null;
+        _panel = null;
+        _contentHost = null;
+        _mapAndShortcutText = null;
+        _statusText = null;
+        _lastHeaderMap = string.Empty;
+        _lastHeaderShortcut = string.Empty;
+        _tabButtons.Clear();
+
+        if (previousRoot != null)
+        {
+            previousRoot.SetActive(false);
+            UnityEngine.Object.Destroy(previousRoot);
+        }
+
+        EnsureShell();
+        RefreshHeader();
+        _root.SetActive(true);
+        ShowTab(_activeTab);
+        SetStatus(PluginLocalization.LanguageChangedMessage(persisted), 5f);
     }
 
     private void RefreshHeader()
@@ -252,7 +291,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         if (_mapAndShortcutText == null)
             return;
 
-        string mapName = string.IsNullOrWhiteSpace(Provider.map) ? "未进入地图" : Provider.map;
+        string mapName = string.IsNullOrWhiteSpace(Provider.map)
+            ? PluginLocalization.Translate("未进入地图")
+            : Provider.map;
         string shortcut = _plugin.ShortcutLabel;
         if (string.Equals(_lastHeaderMap, mapName, StringComparison.Ordinal)
             && string.Equals(_lastHeaderShortcut, shortcut, StringComparison.Ordinal))
@@ -842,7 +883,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         raw.raycastTarget = false;
         iconObject.GetComponent<OverlayIconBinder>().Initialize(raw, iconLoader, isVehicle);
 
-        Text nameText = CreateText(parent, name, 12, TextColor, TextAnchor.MiddleCenter, FontStyle.Bold);
+        Text nameText = CreateText(parent, name, 12, TextColor, TextAnchor.MiddleCenter, FontStyle.Bold, localize: false);
         nameText.rectTransform.anchorMin = new Vector2(0.04f, 0.13f);
         nameText.rectTransform.anchorMax = new Vector2(0.96f, 0.40f);
         nameText.rectTransform.offsetMin = nameText.rectTransform.offsetMax = Vector2.zero;
@@ -900,7 +941,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
             bool sameMap = string.Equals(point.Map, Provider.map, StringComparison.OrdinalIgnoreCase);
             GameObject row = CreateRow(content, 62f, 8f);
             row.AddComponent<Image>().color = Surface;
-            Text pointText = CreateText(row.transform, $"{point.Name}\n{point.Map}  ·  ({point.X:F1}, {point.Y:F1}, {point.Z:F1})", 13, sameMap ? TextColor : MutedColor, TextAnchor.MiddleLeft);
+            Text pointText = CreateText(
+                row.transform,
+                $"{point.Name}\n{point.Map}  ·  ({point.X:F1}, {point.Y:F1}, {point.Z:F1})",
+                13,
+                sameMap ? TextColor : MutedColor,
+                TextAnchor.MiddleLeft,
+                localize: false);
             SetLayout(pointText.gameObject, flexibleWidth: 1f);
             Button teleport = CreateButton(row.transform, sameMap ? "传送" : "其他地图", () =>
             {
@@ -999,7 +1046,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     {
         GameObject group = CreateRow(parent, 34f, 4f);
         SetLayout(group, preferredWidth: width, flexibleWidth: 0f);
-        CreateLabel(group.transform, label, 12, MutedColor, 46f, TextAnchor.MiddleRight);
+        string localizedLabel = PluginLocalization.Translate(label);
+        float labelWidth = PluginLocalization.CurrentLanguage == PluginLanguage.English
+            ? Mathf.Clamp(localizedLabel.Length * 7f + 10f, 58f, Math.Min(112f, width * 0.62f))
+            : 46f;
+        CreateLabel(group.transform, localizedLabel, 12, MutedColor, labelWidth, TextAnchor.MiddleRight);
         CreateInput(group.transform, value, changed, 0f, 1f);
     }
 
@@ -1013,7 +1064,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         field.text = value ?? string.Empty;
         field.lineType = InputField.LineType.SingleLine;
         field.contentType = InputField.ContentType.Standard;
-        Text text = CreateText(inputObject.transform, field.text, 13, TextColor, TextAnchor.MiddleLeft);
+        Text text = CreateText(inputObject.transform, field.text, 13, TextColor, TextAnchor.MiddleLeft, localize: false);
         SetOffsets(text.rectTransform, 9f, 9f, 2f, 2f);
         field.textComponent = text;
         Text placeholder = CreateText(inputObject.transform, "输入…", 13, MutedColor, TextAnchor.MiddleLeft, FontStyle.Italic);
@@ -1045,12 +1096,19 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         return button;
     }
 
-    private Text CreateText(Transform parent, string value, int size, Color color, TextAnchor alignment, FontStyle style = FontStyle.Normal)
+    private Text CreateText(
+        Transform parent,
+        string value,
+        int size,
+        Color color,
+        TextAnchor alignment,
+        FontStyle style = FontStyle.Normal,
+        bool localize = true)
     {
         GameObject textObject = CreateObject("Text", parent, typeof(Text));
         Text text = textObject.GetComponent<Text>();
         text.font = _font;
-        text.text = value;
+        text.text = localize ? PluginLocalization.Translate(value) : value;
         text.fontSize = size;
         text.fontStyle = style;
         text.color = color;
@@ -1205,7 +1263,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     private void SetStatus(string message, float seconds = 3f)
     {
         if (_statusText != null)
-            _statusText.text = message;
+            _statusText.text = PluginLocalization.Translate(message);
         _statusUntil = Time.unscaledTime + seconds;
     }
 

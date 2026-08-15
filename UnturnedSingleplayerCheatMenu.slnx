@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="src/UnturnedSingleplayerCheatMenu/UnturnedSingleplayerCheatMenu.csproj" />
   <Project Path="tests/FavoritesSerializationSmoke/FavoritesSerializationSmoke.csproj" />
+  <Project Path="tests/LocalizationSmoke/LocalizationSmoke.csproj" />
   <Project Path="tests/TeleportSerializationSmoke/TeleportSerializationSmoke.csproj" />
 </Solution>

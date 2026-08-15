@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+## [1.2.0] - 2026-08-15
+
+### Added
+
+- English localization for the active in-game overlay, including tabs, controls, categories, status messages, empty states, and default teleport names.
+- `Interface.Language` configuration with `Auto`, `English`, and `Chinese` modes. `Auto` follows Unturned's current language and falls back to English for non-Chinese languages.
+- An in-window `EN` / `中文` button that switches language immediately and persists the selection without restarting the game.
+- Localization smoke tests covering language resolution, static strings, dynamic status messages, user-authored text preservation, and default names.
+
+### Verified
+
+- Release build: zero warnings and zero errors.
+- Localization, favorites serialization, and teleport serialization smoke tests.
+- Real singleplayer runtime confirmation that the language button is visible and switches the active overlay between Chinese and English.
+
 ## [1.1.0] - 2026-08-15
 
 ### Added

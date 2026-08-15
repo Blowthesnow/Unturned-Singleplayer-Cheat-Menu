@@ -26,11 +26,11 @@ internal static class SingleplayerGuard
         get
         {
             if (!Provider.isConnected)
-                return "尚未进入世界。";
+                return PluginLocalization.Translate("尚未进入世界。");
             if (!IsSingleplayerWorld)
-                return "此菜单只允许在真正的单人世界中使用。";
+                return PluginLocalization.Translate("此菜单只允许在真正的单人世界中使用。");
             if (Player.LocalPlayer == null)
-                return "本地玩家尚未生成。";
+                return PluginLocalization.Translate("本地玩家尚未生成。");
             return string.Empty;
         }
     }

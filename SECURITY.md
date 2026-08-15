@@ -2,7 +2,7 @@
 
 ## Supported version
 
-Security and compatibility reports are currently accepted for the latest published version, `1.1.0`.
+Security and compatibility reports are currently accepted for the latest published version, `1.2.0`.
 
 ## Intended environment
 

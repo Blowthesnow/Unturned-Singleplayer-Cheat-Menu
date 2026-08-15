@@ -3,7 +3,7 @@ param(
     [string]$BepInExSource,
     [string]$PluginDll,
     [string]$OutputDirectory,
-    [string]$Version = '1.1.0'
+    [string]$Version = '1.2.0'
 )
 
 Set-StrictMode -Version Latest

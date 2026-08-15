@@ -128,12 +128,12 @@ internal sealed class AssetCatalog
     public static string GetOriginLabel(Asset asset)
     {
         if (IsWorkshopAsset(asset))
-            return "模组";
+            return PluginLocalization.Translate("模组");
 
         string origin = asset.GetOriginName();
         if (Contains(origin, "core") || Contains(origin, "official"))
-            return "原版";
-        return string.IsNullOrWhiteSpace(origin) ? "未知来源" : origin;
+            return PluginLocalization.Translate("原版");
+        return string.IsNullOrWhiteSpace(origin) ? PluginLocalization.Translate("未知来源") : origin;
     }
 
 #pragma warning disable CS0618

@@ -58,7 +58,7 @@ internal sealed class TeleportStore
         string map = Provider.map ?? string.Empty;
         int mapPointCount = _points.Count(point => string.Equals(point.Map, map, StringComparison.OrdinalIgnoreCase));
         string name = string.IsNullOrWhiteSpace(requestedName)
-            ? $"位置 {mapPointCount + 1}"
+            ? PluginLocalization.DefaultTeleportName(mapPointCount + 1)
             : requestedName.Trim();
 
         Vector3 position = player.transform.position;

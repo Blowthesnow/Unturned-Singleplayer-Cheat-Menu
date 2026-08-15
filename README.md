@@ -2,9 +2,11 @@
 
 [English](README.en.md) · [更新日志](CHANGELOG.md) · [验收记录](ACCEPTANCE.md) · [安全说明](SECURITY.md)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中文作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
+
+**默认快捷键：进入单人世界后按 `End` 打开或关闭菜单。**
 
 ![物品页：自动扫描原版、地图和 Workshop 物品](docs/images/items-tab.png)
 
@@ -96,7 +98,7 @@
 
 ## 兼容环境
 
-v1.1.0 已针对以下环境构建和实际验收：
+v1.2.0 已针对以下环境构建和实际验收：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -104,13 +106,13 @@ v1.1.0 已针对以下环境构建和实际验收：
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.1.0` |
+| 插件 | `1.2.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
 ## 安装
 
-GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.1.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
+GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.2.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
 
 1. 完全退出 Unturned。
 2. 安装 BepInEx `5.4.23.5` x64 到 Unturned 游戏根目录。
@@ -133,12 +135,16 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.1.0-Plugin-Only.zip` 
 
 | 文件 | 用途 |
 | --- | --- |
-| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 快捷键、UI 缩放、每页卡片数 |
+| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、快捷键、UI 缩放、每页卡片数 |
 | `UnturnedSingleplayerCheatMenu.favorites.json` | 物品与车辆收藏 |
 | `UnturnedSingleplayerCheatMenu.teleports.json` | 具名传送点 |
 | `BepInEx/LogOutput.log` | BepInEx 与插件运行日志 |
 
 默认快捷键是 `End`，可以在配置文件中的 `ToggleShortcut` 修改。修改前请退出游戏。
+
+插件窗口右上角提供 `EN` / `中文` 语言切换按钮，点击后立即刷新界面并写回 `Interface.Language`，不需要重启游戏。
+
+`Interface.Language` 初始默认为 `Auto`：简体/繁体中文 Unturned 使用中文，其余游戏语言使用英文。也可以在配置文件中显式填写 `English` 或 `Chinese`；未知值按 `Auto` 处理。
 
 自动扫描只会显示**当前游戏进程已经成功加载并进入 `Assets` 映射的内容**。未订阅、下载失败、依赖缺失或当前地图没有加载的模组不会被插件凭空发现。进入世界后可以在“其他”页点击“重新扫描”刷新。
 
@@ -160,6 +166,7 @@ BepInEx\plugins\UnturnedSingleplayerCheatMenu
 .\scripts\Prepare-References.ps1 -GameRoot 'C:\Program Files (x86)\Steam\steamapps\common\Unturned'
 dotnet build .\UnturnedSingleplayerCheatMenu.slnx -c Release
 dotnet run --project .\tests\FavoritesSerializationSmoke\FavoritesSerializationSmoke.csproj -c Release
+dotnet run --project .\tests\LocalizationSmoke\LocalizationSmoke.csproj -c Release
 dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmoke.csproj -c Release
 ```
 
@@ -176,12 +183,12 @@ dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmo
 
 ## 验证
 
-v1.1.0 的 Release 构建为 `0` 警告、`0` 错误。收藏与传送 JSON 往返测试通过，并完成真实单人世界中的菜单、输入隔离、模组资产扫描、物品给予、车辆生成、收藏重启恢复、传送持久化、时间/天气/满月/空投等验收。详细矩阵见 [ACCEPTANCE.md](ACCEPTANCE.md)。
+v1.2.0 的 Release 构建为 `0` 警告、`0` 错误。本地化、收藏与传送冒烟测试通过，并完成真实单人世界中的菜单、输入隔离、模组资产扫描、物品给予、车辆生成、收藏重启恢复、传送持久化、时间/天气/满月/空投，以及中英文即时切换验收。详细矩阵见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 
 已发布插件 DLL：
 
 ```text
-SHA-256: CDFA683D3E963B8193FDD8D4CA8B7850CD2F22308D96DDCEA204C5C21AA86A87
+SHA-256: D442E45C4C541E44362D99144F3DAE198FDFDD85E165C2F2222E2B1501AEE85B
 ```
 
 ## 免责声明

@@ -2,9 +2,11 @@
 
 [中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md)
 
-A BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
+
+**Default shortcut: press `End` after entering a singleplayer world to open or close the menu.**
 
 ![Items tab scanning vanilla, map-provided, and Workshop assets](docs/images/items-tab.png)
 
@@ -54,11 +56,11 @@ The map setup checkbox named **singleplayer cheats** is not required. It control
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `1.1.0` |
+| Plugin | `1.2.0` |
 
 ## Installation
 
-The `Unturned-Singleplayer-Cheat-Menu-v1.1.0-Plugin-Only.zip` release asset contains the plugin only.
+The `Unturned-Singleplayer-Cheat-Menu-v1.2.0-Plugin-Only.zip` release asset contains the plugin only.
 
 1. Exit Unturned.
 2. Install BepInEx `5.4.23.5` x64 into the Unturned game root.
@@ -84,6 +86,10 @@ Files are created under `BepInEx/config` after first use:
 
 The default shortcut is `End` and can be changed through `ToggleShortcut`.
 
+The top-right `EN` / `中文` button switches the language immediately and writes the choice back to `Interface.Language`; no restart is required.
+
+`Interface.Language` initially defaults to `Auto`: Chinese Unturned languages use Chinese, while all other game languages use English. It can also be set explicitly to `English` or `Chinese`. Unknown values fall back to `Auto`.
+
 Only assets successfully loaded by the current game process are discoverable. Missing subscriptions, failed downloads, unresolved dependencies, or map-specific assets that were not loaded cannot be synthesized by the plugin.
 
 ## Building
@@ -94,6 +100,7 @@ Game, Unity, and BepInEx assemblies are intentionally not committed.
 .\scripts\Prepare-References.ps1 -GameRoot 'C:\Program Files (x86)\Steam\steamapps\common\Unturned'
 dotnet build .\UnturnedSingleplayerCheatMenu.slnx -c Release
 dotnet run --project .\tests\FavoritesSerializationSmoke\FavoritesSerializationSmoke.csproj -c Release
+dotnet run --project .\tests\LocalizationSmoke\LocalizationSmoke.csproj -c Release
 dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmoke.csproj -c Release
 ```
 
@@ -101,12 +108,12 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-Version 1.1.0 built with zero warnings and zero errors. Serialization smoke tests passed, and the menu, input isolation, loaded Workshop asset discovery, item giving, vehicle spawning, favorites persistence, teleports, time, weather, full moon, and airdrop actions were exercised in a real singleplayer world. See [ACCEPTANCE.md](ACCEPTANCE.md).
+Version 1.2.0 built with zero warnings and zero errors. Localization and serialization smoke tests passed, and the menu, input isolation, loaded Workshop asset discovery, item giving, vehicle spawning, favorites persistence, teleports, time, weather, full moon, airdrops, and live Chinese/English switching were exercised in a real singleplayer world. See [ACCEPTANCE.md](ACCEPTANCE.md).
 
 Published plugin DLL:
 
 ```text
-SHA-256: CDFA683D3E963B8193FDD8D4CA8B7850CD2F22308D96DDCEA204C5C21AA86A87
+SHA-256: D442E45C4C541E44362D99144F3DAE198FDFDD85E165C2F2222E2B1501AEE85B
 ```
 
 ## Disclaimer and license

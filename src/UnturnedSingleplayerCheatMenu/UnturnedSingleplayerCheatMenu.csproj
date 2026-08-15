@@ -6,8 +6,10 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>UnturnedSingleplayerCheatMenu</AssemblyName>
     <RootNamespace>UnturnedSingleplayerCheatMenu</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <EnableSourceLink>false</EnableSourceLink>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\</OutputPath>
     <DebugType>portable</DebugType>

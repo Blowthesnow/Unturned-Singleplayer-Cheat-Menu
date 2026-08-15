@@ -18,9 +18,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.codex.unturned.singleplayer-cheat-menu";
     public const string PluginName = "Unturned Singleplayer Cheat Menu";
-    public const string PluginVersion = "1.1.0";
+    public const string PluginVersion = "1.2.0";
 
     private Harmony _harmony;
+    private ConfigEntry<string> _language;
     private ConfigEntry<KeyboardShortcut> _toggleShortcut;
     private ConfigEntry<float> _uiScale;
     private ConfigEntry<int> _pageSize;
@@ -58,6 +59,38 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     internal int PageSize => Mathf.Clamp(_pageSize.Value, 12, 80);
     internal string ShortcutLabel => _toggleShortcut.Value.ToString();
     internal bool IsMenuOpen => _menuOpen;
+
+    internal bool ToggleLanguageFromUi()
+    {
+        PluginLanguage target = PluginLocalization.CurrentLanguage == PluginLanguage.English
+            ? PluginLanguage.Chinese
+            : PluginLanguage.English;
+        string configValue = target == PluginLanguage.English ? "English" : "Chinese";
+        bool saveOnConfigSet = Config.SaveOnConfigSet;
+        bool persisted = true;
+
+        try
+        {
+            // Avoid writing twice: ConfigEntry.Value normally auto-saves, but
+            // this explicit save lets us report persistence failures to the UI.
+            Config.SaveOnConfigSet = false;
+            _language.Value = configValue;
+            Config.Save();
+        }
+        catch (Exception ex)
+        {
+            persisted = false;
+            Logger.LogWarning($"Language changed for this session, but the config file could not be saved.\n{ex}");
+        }
+        finally
+        {
+            Config.SaveOnConfigSet = saveOnConfigSet;
+        }
+
+        PluginLocalization.Initialize(configValue, Provider.language);
+        Logger.LogInfo($"Plugin UI language changed to {PluginLocalization.CurrentLanguageName}; persisted={persisted}.");
+        return persisted;
+    }
 
     internal void LogRuntimeHostCreated(PluginRuntimeHost host)
     {
@@ -138,21 +171,27 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     private void Awake()
     {
         Instance = this;
+        _language = Config.Bind(
+            "Interface",
+            "Language",
+            "Auto",
+            "UI language. Auto follows Unturned; supported values: Auto, English, Chinese. / 界面语言：Auto 跟随 Unturned，也可填写 English 或 Chinese。");
+        PluginLocalization.Initialize(_language.Value, Provider.language);
         _toggleShortcut = Config.Bind(
             "General",
             "ToggleShortcut",
             new KeyboardShortcut(KeyCode.End),
-            "打开或关闭单人作弊菜单。默认 End，可自由修改。仅在真正的单人世界中生效。");
+            PluginLocalization.Translate("打开或关闭单人作弊菜单。默认 End，可自由修改。仅在真正的单人世界中生效。"));
         _uiScale = Config.Bind(
             "Interface",
             "Scale",
             1.0f,
-            "菜单缩放，范围 0.75 到 1.5。");
+            PluginLocalization.Translate("菜单缩放，范围 0.75 到 1.5。"));
         _pageSize = Config.Bind(
             "Interface",
             "CardsPerPage",
             32,
-            "物品/车辆每页卡片数量，范围 12 到 80。");
+            PluginLocalization.Translate("物品/车辆每页卡片数量，范围 12 到 80。"));
 
         Catalog = new AssetCatalog();
         _vehicleIconRenderer = new VehicleIconRenderer(this);
@@ -168,6 +207,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
         Assets.onAssetsRefreshed += OnAssetsRefreshed;
         InstallRuntimePatches();
         Logger.LogInfo($"{PluginName} {PluginVersion} 已加载。快捷键：{ShortcutLabel}；严格限制：单人模式。");
+        Logger.LogInfo($"Plugin UI language: {PluginLocalization.CurrentLanguageName}; configured={_language.Value}; Unturned={Provider.language}.");
         Version bepinExVersion = typeof(BaseUnityPlugin).Assembly.GetName().Version;
         Logger.LogInfo($"检测环境：Unturned {Provider.APP_VERSION}，Unity {Application.unityVersion}，BepInEx {bepinExVersion}。");
     }
@@ -345,6 +385,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
         if (open)
         {
+            PluginLocalization.Initialize(_language.Value, Provider.language);
             RefreshCatalog();
             _ui.OnOpened();
         }
