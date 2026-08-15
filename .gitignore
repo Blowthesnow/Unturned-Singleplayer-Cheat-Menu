@@ -1,0 +1,13 @@
+.codebase-memory/
+.tools/
+.vs/
+artifacts/
+backups/
+dist/
+lib/
+vendor/
+**/bin/
+**/obj/
+*.log
+*.suo
+*.user

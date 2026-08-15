@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Permissions" Version="8.0.0" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\TeleportPoint.cs" Link="TeleportPoint.cs" />
+    <Reference Include="Newtonsoft.Json" HintPath="..\..\lib\Newtonsoft.Json.dll" Private="true" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="..\..\lib\UnityEngine.CoreModule.dll" Private="true" />
+  </ItemGroup>
+</Project>

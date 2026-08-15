@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>UnturnedSingleplayerCheatMenu</AssemblyName>
+    <RootNamespace>UnturnedSingleplayerCheatMenu</RootNamespace>
+    <Version>1.1.0</Version>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\</OutputPath>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx" HintPath="$(MSBuildThisFileDirectory)..\..\lib\BepInEx.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(MSBuildThisFileDirectory)..\..\lib\0Harmony.dll" Private="false" />
+    <Reference Include="Assembly-CSharp" HintPath="$(MSBuildThisFileDirectory)..\..\lib\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(MSBuildThisFileDirectory)..\..\lib\Newtonsoft.Json.dll" Private="false" />
+    <Reference Include="SDG.Glazier.Runtime" HintPath="$(MSBuildThisFileDirectory)..\..\lib\SDG.Glazier.Runtime.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.JSONSerializeModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.JSONSerializeModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.UIModule.dll" Private="false" />
+  </ItemGroup>
+</Project>
