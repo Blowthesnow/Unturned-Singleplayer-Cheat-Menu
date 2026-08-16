@@ -13,6 +13,7 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal sealed class TeleportStore
 {
+    private const string DefaultMarkerColorHex = "#F5C542";
     private readonly ManualLogSource _log;
     private readonly string _filePath;
     private readonly List<TeleportPoint> _points = new();
@@ -39,6 +40,12 @@ internal sealed class TeleportStore
             if (collection?.Points != null)
             {
                 _points.AddRange(collection.Points.Where(point => point != null && !string.IsNullOrWhiteSpace(point.Id)));
+                foreach (TeleportPoint point in _points)
+                {
+                    if (!Enum.IsDefined(typeof(TeleportMarkerKind), point.MarkerKind))
+                        point.MarkerKind = TeleportMarkerKind.Star;
+                    point.MarkerColorHex = NormalizeMarkerColor(point.MarkerColorHex);
+                }
             }
             Sort();
             _log.LogInfo($"已读取 {_points.Count} 个传送点。");
@@ -49,7 +56,10 @@ internal sealed class TeleportStore
         }
     }
 
-    public TeleportPoint AddCurrent(string requestedName)
+    public TeleportPoint AddCurrent(
+        string requestedName,
+        TeleportMarkerKind markerKind = TeleportMarkerKind.Star,
+        string markerColorHex = DefaultMarkerColorHex)
     {
         Player player = Player.LocalPlayer;
         if (player == null)
@@ -70,7 +80,11 @@ internal sealed class TeleportStore
             Y = position.y,
             Z = position.z,
             Yaw = player.transform.rotation.eulerAngles.y,
-            CreatedUtcTicks = DateTime.UtcNow.Ticks
+            CreatedUtcTicks = DateTime.UtcNow.Ticks,
+            MarkerKind = Enum.IsDefined(typeof(TeleportMarkerKind), markerKind)
+                ? markerKind
+                : TeleportMarkerKind.Star,
+            MarkerColorHex = NormalizeMarkerColor(markerColorHex)
         };
 
         _points.Add(point);
@@ -105,6 +119,21 @@ internal sealed class TeleportStore
                 return mapComparison;
             return right.CreatedUtcTicks.CompareTo(left.CreatedUtcTicks);
         });
+    }
+
+    private static string NormalizeMarkerColor(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return DefaultMarkerColorHex;
+
+        string candidate = value.Trim();
+        if (!candidate.StartsWith("#", StringComparison.Ordinal))
+            candidate = "#" + candidate;
+        if (candidate.Length != 7)
+            return DefaultMarkerColorHex;
+        return ColorUtility.TryParseHtmlString(candidate, out _)
+            ? candidate.ToUpperInvariant()
+            : DefaultMarkerColorHex;
     }
 
     private bool Save()

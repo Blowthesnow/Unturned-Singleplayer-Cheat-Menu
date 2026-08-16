@@ -206,7 +206,7 @@ internal sealed class VehicleIconRenderer
         Transform icon = iconObject.transform;
         icon.SetParent(model, true);
 
-        Vector3 cameraOffset = new Vector3(-1f, 0.65f, -1f).normalized;
+        Vector3 cameraOffset = new Vector3(1f, 0.65f, 1f).normalized;
         float distance = Mathf.Clamp(radius + 1.5f, 2.5f, 7.5f);
         icon.position = bounds.center + cameraOffset * distance;
         icon.rotation = Quaternion.LookRotation(bounds.center - icon.position, Vector3.up);
