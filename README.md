@@ -8,6 +8,8 @@
 
 **默认快捷键：进入单人世界后按 `End` 打开或关闭菜单。**
 
+> **截图说明：当前项目展示的截图为 1.1 版界面；2.0 版将统一更新项目截图。**
+
 ![物品页：自动扫描原版、地图和 Workshop 物品](docs/images/items-tab.png)
 
 <details>
@@ -17,9 +19,9 @@
 
 ![角色页：生存状态、经验、声望和技能](docs/images/character-tab.png)
 
-### 车辆浏览与生成
+### 载具浏览与生成
 
-![车辆页：自动扫描车辆并生成模型缩略图](docs/images/vehicles-tab.png)
+![载具页：自动扫描载具并生成模型缩略图](docs/images/vehicles-tab.png)
 
 ### 收藏
 
@@ -72,8 +74,13 @@
 
 - 保存多个具名位置。
 - 传送点按地图隔离。
+- 在地图与传送点列表之间切换；地图支持缩放、拖动、玩家位置和已保存标记。
+- 点击地图位置传送到安全地表；存在房屋或其他建筑物时优先落在可用屋顶/顶部。
+- 传送点支持星形、正方形、圆形和菱形标记，以及预设或自定义颜色。
 - 点击“传送”立即移动到保存位置，点击 `×` 直接删除。
 - 坐标、朝向、地图和创建时间写入独立 JSON 文件。
+
+界面会保存最后选择的主页面和传送子视图，下次打开时恢复。
 
 ### 其他
 
@@ -98,7 +105,7 @@
 
 ## 兼容环境
 
-v1.2.0 已针对以下环境构建和实际验收：
+v1.5.0 已针对以下环境构建和实际验收：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -106,13 +113,13 @@ v1.2.0 已针对以下环境构建和实际验收：
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.2.0` |
+| 插件 | `1.5.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
 ## 安装
 
-GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.2.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
+GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.5.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
 
 1. 完全退出 Unturned。
 2. 安装 BepInEx `5.4.23.5` x64 到 Unturned 游戏根目录。
@@ -183,12 +190,12 @@ dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmo
 
 ## 验证
 
-v1.2.0 的 Release 构建为 `0` 警告、`0` 错误。本地化、收藏与传送冒烟测试通过，并完成真实单人世界中的菜单、输入隔离、模组资产扫描、物品给予、车辆生成、收藏重启恢复、传送持久化、时间/天气/满月/空投，以及中英文即时切换验收。详细矩阵见 [ACCEPTANCE.md](ACCEPTANCE.md)。
+v1.5.0 的 Release 构建为 `0` 警告、`0` 错误。本地化、收藏与传送冒烟测试通过。本版本加入地图传送安全落点、传送点标记形状与颜色、界面状态记忆、UI 视觉反馈优化和右前方载具缩略图取景；真实运行截图与剩余运行边界见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 
 已发布插件 DLL：
 
 ```text
-SHA-256: D442E45C4C541E44362D99144F3DAE198FDFDD85E165C2F2222E2B1501AEE85B
+SHA-256: 121FC8425178DB70D57C6514DE6B751A7E391C420D5C7C7DE11002D0A2DDB44C
 ```
 
 ## 免责声明
