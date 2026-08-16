@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-16
+
+### Added
+
+- Map-based teleport view with current-player positioning, zoom/pan, map-scoped points, right-click deletion, and safe landing resolution on terrain, roofs, and structures.
+- Teleport marker shapes (star, square, circle, and diamond), custom colors, preset swatches, and persisted marker metadata with legacy-data normalization.
+- Persisted interface state for the last main tab and teleport subview.
+- Typed status feedback, empty states, confirmation dialogs, generated slider/glyph sprites, and localized UI strings for the expanded overlay.
+
+### Improved
+
+- Reworked the overlay layout and visual tokens for cards, inputs, buttons, toggles, sliders, summaries, status bars, and focus/pressed states.
+- Vehicle thumbnails now use a right-front framing for the plugin-generated camera path, and the vehicle page is labeled “载具” in Chinese.
+- Search and time controls use debounced updates; generated UI textures and transient objects are explicitly released.
+- Teleport persistence and runtime actions now validate marker metadata and resolve obstructed destinations more safely.
+
+### Verified
+
+- Release build: zero warnings and zero errors.
+- Localization, favorites serialization, and teleport serialization smoke tests.
+- Existing real singleplayer screenshot evidence for the six-page overlay, vehicle right-front framing, and the 1.1 screenshot baseline is retained; full-scale/interaction runtime limits remain documented in `ACCEPTANCE.md`.
+
 ## [1.2.0] - 2026-08-15
 
 ### Added

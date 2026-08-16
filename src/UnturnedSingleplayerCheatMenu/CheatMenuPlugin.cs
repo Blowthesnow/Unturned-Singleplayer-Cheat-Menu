@@ -18,13 +18,15 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.codex.unturned.singleplayer-cheat-menu";
     public const string PluginName = "Unturned Singleplayer Cheat Menu";
-    public const string PluginVersion = "1.2.0";
+    public const string PluginVersion = "1.5.0";
 
     private Harmony _harmony;
     private ConfigEntry<string> _language;
     private ConfigEntry<KeyboardShortcut> _toggleShortcut;
     private ConfigEntry<float> _uiScale;
     private ConfigEntry<int> _pageSize;
+    private ConfigEntry<string> _lastMainTab;
+    private ConfigEntry<string> _lastTeleportView;
     private CheatMenuOverlayUi _ui;
     private PluginRuntimeHost _runtimeHost;
     private VehicleIconRenderer _vehicleIconRenderer;
@@ -54,11 +56,24 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     internal IconCache Icons { get; private set; }
     internal FavoriteStore Favorites { get; private set; }
     internal TeleportStore Teleports { get; private set; }
+    internal TeleportMapService TeleportMaps { get; private set; }
     internal CheatActions Actions { get; private set; }
     internal float UiScale => Mathf.Clamp(_uiScale.Value, 0.75f, 1.5f);
     internal int PageSize => Mathf.Clamp(_pageSize.Value, 12, 80);
     internal string ShortcutLabel => _toggleShortcut.Value.ToString();
     internal bool IsMenuOpen => _menuOpen;
+    internal string LastMainTab => _lastMainTab?.Value ?? "Character";
+    internal string LastTeleportView => _lastTeleportView?.Value ?? "Map";
+
+    internal bool SetLastMainTab(string value)
+    {
+        return PersistInterfaceState(_lastMainTab, value);
+    }
+
+    internal bool SetLastTeleportView(string value)
+    {
+        return PersistInterfaceState(_lastTeleportView, value);
+    }
 
     internal bool ToggleLanguageFromUi()
     {
@@ -192,12 +207,23 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
             "CardsPerPage",
             32,
             PluginLocalization.Translate("物品/车辆每页卡片数量，范围 12 到 80。"));
+        _lastMainTab = Config.Bind(
+            "Interface",
+            "LastMainTab",
+            "Character",
+            "Last selected main menu tab.");
+        _lastTeleportView = Config.Bind(
+            "Interface",
+            "LastTeleportView",
+            "Map",
+            "Last selected teleport subview: Map or Points.");
 
         Catalog = new AssetCatalog();
         _vehicleIconRenderer = new VehicleIconRenderer(this);
         Icons = new IconCache(_vehicleIconRenderer);
         Favorites = new FavoriteStore(Logger);
         Teleports = new TeleportStore(Logger);
+        TeleportMaps = new TeleportMapService(Logger);
         Actions = new CheatActions(Logger);
         _ui = new CheatMenuOverlayUi(this);
         _runtimeHost = PluginRuntimeHost.Create(this);
@@ -210,6 +236,33 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
         Logger.LogInfo($"Plugin UI language: {PluginLocalization.CurrentLanguageName}; configured={_language.Value}; Unturned={Provider.language}.");
         Version bepinExVersion = typeof(BaseUnityPlugin).Assembly.GetName().Version;
         Logger.LogInfo($"检测环境：Unturned {Provider.APP_VERSION}，Unity {Application.unityVersion}，BepInEx {bepinExVersion}。");
+    }
+
+    private bool PersistInterfaceState(ConfigEntry<string> entry, string value)
+    {
+        if (entry == null || string.IsNullOrWhiteSpace(value))
+            return false;
+
+        if (string.Equals(entry.Value, value, StringComparison.Ordinal))
+            return true;
+
+        bool saveOnConfigSet = Config.SaveOnConfigSet;
+        try
+        {
+            Config.SaveOnConfigSet = false;
+            entry.Value = value;
+            Config.Save();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"界面状态已在本次运行中更新，但配置文件保存失败：{entry.Definition.Key}。\n{ex}");
+            return false;
+        }
+        finally
+        {
+            Config.SaveOnConfigSet = saveOnConfigSet;
+        }
     }
 
     private void Update()
