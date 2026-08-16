@@ -8,6 +8,8 @@ A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Untu
 
 **Default shortcut: press `End` after entering a singleplayer world to open or close the menu.**
 
+> **Screenshot note: the project screenshots currently show the 1.1 interface; screenshots will be updated together for 2.0.**
+
 ![Items tab scanning vanilla, map-provided, and Workshop assets](docs/images/items-tab.png)
 
 <details>
@@ -41,10 +43,12 @@ A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Untu
 - Items: automatic loaded-asset scan, categories, name/ID/GUID/source search, pagination, game-generated icons, and quantities from `1–255`.
 - Vehicles: automatic loaded-asset scan, engine categories, search, pagination, official or model-rendered thumbnails, and batches from `1–20` placed in front of the player.
 - Favorites: persistent item and vehicle favorites keyed by asset GUID, with direct actions from the favorites tab.
-- Teleports: multiple named, map-scoped, persistent positions with one-click teleport and delete controls.
+- Teleports: map and list views, zoom/pan, player and saved-point markers, safe map-click landing on terrain or available building tops, customizable marker shapes/colors, and persistent map-scoped positions.
 - World controls: time slider, day/night, time freeze, full moon, airdrop, rain, snow, weather clearing, and asset rescan.
 
 The menu only opens after confirming a loaded local player in a true `Singleplayer_` world where the current process is both client and server. It closes automatically if that condition stops being true.
+
+The last main tab and teleport subview are persisted and restored the next time the menu opens.
 
 The map setup checkbox named **singleplayer cheats** is not required. It controls Unturned's built-in command system; this plugin does not depend on `Provider.hasCheats`.
 
@@ -56,11 +60,11 @@ The map setup checkbox named **singleplayer cheats** is not required. It control
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `1.2.0` |
+| Plugin | `1.5.0` |
 
 ## Installation
 
-The `Unturned-Singleplayer-Cheat-Menu-v1.2.0-Plugin-Only.zip` release asset contains the plugin only.
+The `Unturned-Singleplayer-Cheat-Menu-v1.5.0-Plugin-Only.zip` release asset contains the plugin only.
 
 1. Exit Unturned.
 2. Install BepInEx `5.4.23.5` x64 into the Unturned game root.
@@ -108,12 +112,12 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-Version 1.2.0 built with zero warnings and zero errors. Localization and serialization smoke tests passed, and the menu, input isolation, loaded Workshop asset discovery, item giving, vehicle spawning, favorites persistence, teleports, time, weather, full moon, airdrops, and live Chinese/English switching were exercised in a real singleplayer world. See [ACCEPTANCE.md](ACCEPTANCE.md).
+Version 1.5.0 built with zero warnings and zero errors. Localization and serialization smoke tests passed. This release adds safe map teleport landing, teleport marker shapes and colors, persisted interface state, UI visual feedback improvements, and right-front vehicle thumbnail framing; see [ACCEPTANCE.md](ACCEPTANCE.md) for runtime evidence and remaining boundaries.
 
 Published plugin DLL:
 
 ```text
-SHA-256: D442E45C4C541E44362D99144F3DAE198FDFDD85E165C2F2222E2B1501AEE85B
+SHA-256: 121FC8425178DB70D57C6514DE6B751A7E391C420D5C7C7DE11002D0A2DDB44C
 ```
 
 ## Disclaimer and license

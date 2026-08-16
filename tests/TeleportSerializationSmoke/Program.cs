@@ -20,7 +20,9 @@ TeleportPoint point = new()
     Y = 2.5f,
     Z = 3.75f,
     Yaw = 90f,
-    CreatedUtcTicks = 123456L
+    CreatedUtcTicks = 123456L,
+    MarkerKind = TeleportMarkerKind.Circle,
+    MarkerColorHex = "#2E86DE"
 };
 
 TeleportPointCollection source = new() { Points = new[] { point } };
@@ -37,10 +39,19 @@ if (roundTrip?.Points?.Length != 1)
 TeleportPoint result = roundTrip.Points[0];
 if (result.Id != point.Id || result.Name != point.Name || result.Map != point.Map
     || result.X != point.X || result.Y != point.Y || result.Z != point.Z
-    || result.Yaw != point.Yaw || result.CreatedUtcTicks != point.CreatedUtcTicks)
+    || result.Yaw != point.Yaw || result.CreatedUtcTicks != point.CreatedUtcTicks
+    || result.MarkerKind != point.MarkerKind
+    || result.MarkerColorHex != point.MarkerColorHex)
 {
     throw new InvalidOperationException("Round-trip field mismatch.");
 }
+
+TeleportPoint legacyPoint = JsonConvert.DeserializeObject<TeleportPoint>(
+    "{\"Id\":\"legacy-id\",\"Name\":\"Legacy\",\"Map\":\"PEI\",\"X\":1,\"Y\":2,\"Z\":3}");
+if (legacyPoint == null || legacyPoint.MarkerKind != TeleportMarkerKind.Star)
+    throw new InvalidOperationException("Legacy points should default to the star marker.");
+if (legacyPoint.MarkerColorHex != "#F5C542")
+    throw new InvalidOperationException("Legacy points should default to the yellow marker color.");
 
 string emptyJson = JsonConvert.SerializeObject(new TeleportPointCollection(), Formatting.Indented);
 if (emptyJson.IndexOf("\"Points\"", StringComparison.Ordinal) < 0)

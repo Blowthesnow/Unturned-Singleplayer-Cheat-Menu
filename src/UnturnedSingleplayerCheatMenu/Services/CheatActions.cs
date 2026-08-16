@@ -223,12 +223,146 @@ internal sealed class CheatActions
             return false;
         }
 
-        bool success = player.teleportToLocation(point.Position, point.Yaw);
+        Vector3 landingPoint = ResolveTeleportPointTarget(point.Position);
+
+        bool success = player.teleportToLocation(landingPoint, point.Yaw);
         if (success)
-            _log.LogInfo($"已传送到“{point.Name}”：地图={point.Map}，位置={point.Position}，朝向={point.Yaw:F1}。");
+            _log.LogInfo($"已传送到“{point.Name}”：地图={point.Map}，位置={landingPoint}，朝向={point.Yaw:F1}。");
         else
             _log.LogWarning($"传送失败：游戏拒绝了传送点“{point.Name}”。");
         return success;
+    }
+
+    private Vector3 ResolveTeleportPointTarget(Vector3 savedPosition)
+    {
+        Player player = Player.LocalPlayer;
+        int obstructionMask = (RayMasks.BLOCK_STANCE | RayMasks.VEHICLE)
+            & ~RayMasks.CLIP
+            & ~RayMasks.RESOURCE;
+        Vector3 capsuleBottom = savedPosition + Vector3.up * 0.05f;
+        Vector3 capsuleTop = savedPosition + Vector3.up * 1.75f;
+        Collider[] colliders = Physics.OverlapCapsule(
+            capsuleBottom,
+            capsuleTop,
+            0.35f,
+            obstructionMask,
+            QueryTriggerInteraction.Ignore);
+
+        float highestObstacleTop = savedPosition.y;
+        bool foundObstacle = false;
+        foreach (Collider collider in colliders)
+        {
+            if (collider == null)
+                continue;
+            if (player != null && collider.GetComponentInParent<Player>() == player)
+                continue;
+
+            // Large-height terrain/ground colliders are not an obstruction. Vehicles,
+            // structures, barricades, and storage objects have bounded mesh bounds.
+            if (collider.bounds.size.y > 64f)
+                continue;
+            if (collider.bounds.max.y <= savedPosition.y + 0.05f)
+                continue;
+
+            foundObstacle = true;
+            highestObstacleTop = Mathf.Max(highestObstacleTop, collider.bounds.max.y);
+        }
+
+        if (!foundObstacle)
+            return savedPosition;
+
+        return new Vector3(savedPosition.x, highestObstacleTop + 0.05f, savedPosition.z);
+    }
+
+    public bool TeleportToMapPosition(Vector3 horizontalPosition)
+    {
+        Player player = Player.LocalPlayer;
+        if (player == null)
+        {
+            _log.LogWarning("地图传送失败：玩家不可用。");
+            return false;
+        }
+        if (!SingleplayerGuard.IsReady)
+        {
+            _log.LogWarning("地图传送失败：当前不是可用的单人世界。");
+            return false;
+        }
+        if (player.movement?.getVehicle() != null)
+        {
+            _log.LogWarning("地图传送失败：使用地图传送前需要离开车辆。");
+            return false;
+        }
+        if (!TryFindSafeLandingPoint(horizontalPosition, out Vector3 landingPoint))
+        {
+            _log.LogWarning($"地图传送失败：未找到安全落点，水平坐标={horizontalPosition}。");
+            return false;
+        }
+
+        float yaw = player.transform.rotation.eulerAngles.y;
+        bool success = player.teleportToLocation(landingPoint, yaw);
+        if (success)
+            _log.LogInfo($"地图传送成功：地图={Provider.map}，目标={landingPoint}，朝向={yaw:F1}。");
+        else
+            _log.LogWarning($"地图传送失败：游戏拒绝了目标位置 {landingPoint}。");
+        return success;
+    }
+
+    private bool TryFindSafeLandingPoint(Vector3 horizontalPosition, out Vector3 landingPoint)
+    {
+        landingPoint = horizontalPosition;
+        horizontalPosition.y = 0f;
+
+        if (!Level.checkSafeIncludingClipVolumes(horizontalPosition))
+            return false;
+
+        Player player = Player.LocalPlayer;
+        float rayStart = Mathf.Max(Level.HEIGHT + 64f, player?.transform.position.y + 128f ?? Level.HEIGHT + 64f);
+        int landingMask = RayMasks.BLOCK_STANCE
+            & ~RayMasks.CLIP
+            & ~RayMasks.RESOURCE
+            & ~RayMasks.VEHICLE;
+        RaycastHit[] hits = Physics.RaycastAll(
+            new Vector3(horizontalPosition.x, rayStart, horizontalPosition.z),
+            Vector3.down,
+            rayStart + 256f,
+            landingMask,
+            QueryTriggerInteraction.Ignore);
+
+        Array.Sort(hits, (left, right) => right.point.y.CompareTo(left.point.y));
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null)
+                continue;
+            if (player != null && hit.collider.GetComponentInParent<Player>() == player)
+                continue;
+
+            Vector3 candidate = hit.point;
+            if (!Level.checkSafeIncludingClipVolumes(candidate))
+                continue;
+            if (player?.stance != null && !player.stance.wouldHaveHeightClearanceAtPosition(candidate, 0.5f))
+                continue;
+
+            landingPoint = candidate;
+            return true;
+        }
+
+        try
+        {
+            float groundHeight = LevelGround.getHeight(horizontalPosition);
+            Vector3 fallback = new(horizontalPosition.x, groundHeight, horizontalPosition.z);
+            if (Level.checkSafeIncludingClipVolumes(fallback)
+                && (player?.stance == null || player.stance.wouldHaveHeightClearanceAtPosition(fallback, 0.5f)))
+            {
+                landingPoint = fallback;
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning($"计算地图地表高度失败：{horizontalPosition}\n{ex}");
+        }
+
+        return false;
     }
 
     public void SetDay()
