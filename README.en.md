@@ -2,7 +2,7 @@
 
 [中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md)
 
-A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. Version 1.6.0 adds advanced item filtering, configurable vehicle thumbnails with a persistent disk cache, and duplicate-input protection for the menu shortcut.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 
@@ -40,8 +40,8 @@ A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Untu
 ## Features
 
 - Player controls: god mode, infinite survival stats, healing, configurable health/food/water/immunity/stamina/oxygen, experience, reputation, and max skills.
-- Items: automatic loaded-asset scan, categories, name/ID/GUID/source search, pagination, game-generated icons, and quantities from `1–255`.
-- Vehicles: automatic loaded-asset scan, engine categories, search, pagination, official or model-rendered thumbnails, and batches from `1–20` placed in front of the player.
+- Items: automatic loaded-asset scan, primary and exact-type filters, origin, rarity, equipment slot, gun-action and multi-select fire-mode filters, name/ID/GUID/source search, pagination, game-generated icons, and quantities from `1–255`.
+- Vehicles: automatic loaded-asset scan, engine categories, search, pagination, official or model-rendered thumbnails, configurable `128 × 96`, `192 × 144`, or `256 × 192` output with framing control and per-configuration disk caching, and batches from `1–20` placed in front of the player.
 - Favorites: persistent item and vehicle favorites keyed by asset GUID, with direct actions from the favorites tab.
 - Teleports: map and list views, zoom/pan, player and saved-point markers, safe map-click landing on terrain or available building tops, customizable marker shapes/colors, and persistent map-scoped positions.
 - World controls: time slider, day/night, time freeze, full moon, airdrop, rain, snow, weather clearing, and asset rescan.
@@ -60,11 +60,11 @@ The map setup checkbox named **singleplayer cheats** is not required. It control
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `1.5.0` |
+| Plugin | `1.6.0` |
 
 ## Installation
 
-The `Unturned-Singleplayer-Cheat-Menu-v1.5.0-Plugin-Only.zip` release asset contains the plugin only.
+The `Unturned-Singleplayer-Cheat-Menu-v1.6.0-Plugin-Only.zip` release asset contains the plugin only.
 
 1. Exit Unturned.
 2. Install BepInEx `5.4.23.5` x64 into the Unturned game root.
@@ -104,20 +104,23 @@ Game, Unity, and BepInEx assemblies are intentionally not committed.
 .\scripts\Prepare-References.ps1 -GameRoot 'C:\Program Files (x86)\Steam\steamapps\common\Unturned'
 dotnet build .\UnturnedSingleplayerCheatMenu.slnx -c Release
 dotnet run --project .\tests\FavoritesSerializationSmoke\FavoritesSerializationSmoke.csproj -c Release
+dotnet run --project .\tests\ItemFilteringSmoke\ItemFilteringSmoke.csproj -c Release
 dotnet run --project .\tests\LocalizationSmoke\LocalizationSmoke.csproj -c Release
+dotnet run --project .\tests\ShortcutToggleSmoke\ShortcutToggleSmoke.csproj -c Release
 dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmoke.csproj -c Release
+dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSettingsSmoke.csproj -c Release
 ```
 
 The helper copies required references into the git-ignored `lib/` directory. The plugin is emitted to `artifacts/UnturnedSingleplayerCheatMenu.dll`.
 
 ## Verification
 
-Version 1.5.0 built with zero warnings and zero errors. Localization and serialization smoke tests passed. This release adds safe map teleport landing, teleport marker shapes and colors, persisted interface state, UI visual feedback improvements, and right-front vehicle thumbnail framing; see [ACCEPTANCE.md](ACCEPTANCE.md) for runtime evidence and remaining boundaries.
+Version 1.6.0 adds advanced item filtering, three vehicle-thumbnail resolutions with framing controls, configuration-keyed PNG disk caching, and cross-input shortcut de-duplication. Release build, smoke-test, package, hash, retained runtime evidence, and remaining runtime boundaries are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md).
 
 Published plugin DLL:
 
 ```text
-SHA-256: 121FC8425178DB70D57C6514DE6B751A7E391C420D5C7C7DE11002D0A2DDB44C
+SHA-256: ABEB9EA6D5B35F86B247ECF0C5F0118531871655627EF23D833DCAE41ED5B6E2
 ```
 
 ## Disclaimer and license

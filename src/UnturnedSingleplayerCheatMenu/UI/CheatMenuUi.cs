@@ -19,11 +19,6 @@ internal sealed class CheatMenuUi : IDisposable
         Other
     }
 
-    private static readonly string[] ItemCategories =
-    {
-        "全部", "武器", "弹药与配件", "衣物", "食物与饮料", "医疗与防护", "建筑与放置物", "工具", "其他"
-    };
-
     private static readonly string[] VehicleCategories =
     {
         "全部", "陆地车辆", "固定翼飞机", "直升机", "飞艇", "船只", "火车", "其他"
@@ -33,6 +28,7 @@ internal sealed class CheatMenuUi : IDisposable
     private readonly List<ItemAsset> _itemResults = new();
     private readonly List<VehicleAsset> _vehicleResults = new();
     private readonly List<Texture2D> _ownedTextures = new();
+    private readonly ItemFilterState _itemFilter = new();
 
     private Rect _windowRect;
     private MenuTab _activeTab;
@@ -45,7 +41,6 @@ internal sealed class CheatMenuUi : IDisposable
     private Vector2 _vehicleGridScroll;
     private string _itemQuery = string.Empty;
     private string _vehicleQuery = string.Empty;
-    private string _itemCategory = "全部";
     private string _vehicleCategory = "全部";
     private string _teleportName = string.Empty;
     private string _healthTarget = "100";
@@ -405,12 +400,13 @@ internal sealed class CheatMenuUi : IDisposable
         GUILayout.BeginVertical(_cardStyle, GUILayout.Width(158f), GUILayout.ExpandHeight(true));
         GUILayout.Label("物品分类", _subheaderStyle);
         _itemCategoryScroll = GUILayout.BeginScrollView(_itemCategoryScroll);
-        foreach (string category in ItemCategories)
+        foreach (ItemPrimaryCategory category in ItemFilterService.Categories)
         {
-            GUIStyle style = _itemCategory == category ? _tabActiveStyle : _tabStyle;
-            if (GUILayout.Button(category, style, GUILayout.Height(34f)))
+            GUIStyle style = _itemFilter.Category == category ? _tabActiveStyle : _tabStyle;
+            if (GUILayout.Button(ItemFilterService.GetPrimaryCategoryLabel(category), style, GUILayout.Height(34f)))
             {
-                _itemCategory = category;
+                _itemFilter.Category = category;
+                ItemFilterService.NormalizeForCategory(_itemFilter);
                 BuildItemResults();
             }
         }
@@ -680,10 +676,10 @@ internal sealed class CheatMenuUi : IDisposable
 
     private void BuildItemResults()
     {
+        _itemFilter.SearchQuery = _itemQuery;
         _itemResults.Clear();
         _itemResults.AddRange(_plugin.Catalog.Items.Where(asset =>
-            (_itemCategory == "全部" || AssetCatalog.GetItemCategory(asset) == _itemCategory)
-            && AssetCatalog.Matches(asset, asset.FriendlyName, _itemQuery)));
+            ItemFilterService.Matches(asset, _itemFilter)));
         _itemPage = 0;
     }
 

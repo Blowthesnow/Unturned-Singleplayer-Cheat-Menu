@@ -16,6 +16,7 @@ Equal(PluginLanguage.English, PluginLocalization.Resolve("invalid", "German"), "
 
 PluginLocalization.Initialize("English", "Schinese");
 Equal("Singleplayer Cheat Menu", PluginLocalization.Translate("单人作弊指令菜单"), "Static UI translation");
+Equal("Workshop", PluginLocalization.Translate("Workshop"), "English origin label should remain Workshop");
 Equal("中文", PluginLocalization.SwitchButtonLabel, "English UI should offer the Chinese switch target");
 Equal("Language switched to English.", PluginLocalization.LanguageChangedMessage(true), "English switch success message");
 Equal(
@@ -92,10 +93,11 @@ foreach (Match match in stringLiterals)
     staticChineseTemplates.Add(literal);
     Equal(false, PluginLocalization.Translate(literal) == literal, $"Static UI template should have an English translation: {literal}");
 }
-Equal(157, staticChineseTemplates.Count, "Active overlay static localization template count");
+Equal(174, staticChineseTemplates.Count, "Active overlay static localization template count");
 
 PluginLocalization.Initialize("Chinese", "English");
 Equal("单人作弊指令菜单", PluginLocalization.Translate("单人作弊指令菜单"), "Chinese source should remain unchanged");
+Equal("创意工坊", PluginLocalization.Translate("Workshop"), "Chinese origin label should translate Workshop");
 Equal("EN", PluginLocalization.SwitchButtonLabel, "Chinese UI should offer the English switch target");
 Equal("语言已切换为中文。", PluginLocalization.LanguageChangedMessage(true), "Chinese switch success message");
 Equal("语言已切换为中文，但配置文件保存失败。", PluginLocalization.LanguageChangedMessage(false), "Chinese switch persistence failure message");

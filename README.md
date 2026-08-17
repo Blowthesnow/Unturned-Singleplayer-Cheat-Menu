@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [更新日志](CHANGELOG.md) · [验收记录](ACCEPTANCE.md) · [安全说明](SECURITY.md)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。v1.6.0 新增高级物品筛选、可配置且带磁盘缓存的车辆缩略图，并修复多个输入源可能让一次快捷键触发两次的问题。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
@@ -51,7 +51,8 @@
 
 - 从 Unturned 当前资产映射自动扫描所有已加载的 `ItemAsset`。
 - 覆盖原版、Workshop 模组和地图随附内容。
-- 按物品类型分类，并支持名称、ID、GUID、来源搜索和分页。
+- 支持主分类、精确物品类型、来源、稀有度、装备槽位、枪械机制和多选射击模式筛选。
+- 支持名称、ID、GUID、来源搜索和分页；普通物品页与收藏页分别保存筛选状态。
 - 使用游戏生成的物品图标和本地化名称。
 - 每次给予数量可设置为 `1–255`。
 
@@ -61,6 +62,7 @@
 - 按陆地车辆、固定翼飞机、直升机、飞艇和船只分类。
 - 支持名称、ID、GUID、来源搜索和分页。
 - 优先使用官方车辆图标；缺失或透明时，根据实际模型自动生成缩略图。
+- 可选择 `128 × 96`、`192 × 144` 或 `256 × 192`，并调整自动取景倍率；生成结果按车辆 GUID 与渲染配置写入磁盘缓存。
 - 每次可生成 `1–20` 辆，并在玩家前方按地面阵列摆放，避免全部重叠。
 
 ### 收藏
@@ -105,7 +107,7 @@
 
 ## 兼容环境
 
-v1.5.0 已针对以下环境构建和实际验收：
+v1.6.0 已针对以下环境构建；既有单人运行证据与本轮新增功能的验证边界见 [ACCEPTANCE.md](ACCEPTANCE.md)：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -113,13 +115,13 @@ v1.5.0 已针对以下环境构建和实际验收：
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.5.0` |
+| 插件 | `1.6.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
 ## 安装
 
-GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.5.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
+GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.6.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
 
 1. 完全退出 Unturned。
 2. 安装 BepInEx `5.4.23.5` x64 到 Unturned 游戏根目录。
@@ -142,7 +144,7 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.5.0-Plugin-Only.zip` 
 
 | 文件 | 用途 |
 | --- | --- |
-| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、快捷键、UI 缩放、每页卡片数 |
+| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、快捷键、UI 缩放、每页卡片数、车辆缩略图尺寸与取景倍率 |
 | `UnturnedSingleplayerCheatMenu.favorites.json` | 物品与车辆收藏 |
 | `UnturnedSingleplayerCheatMenu.teleports.json` | 具名传送点 |
 | `BepInEx/LogOutput.log` | BepInEx 与插件运行日志 |
@@ -173,29 +175,33 @@ BepInEx\plugins\UnturnedSingleplayerCheatMenu
 .\scripts\Prepare-References.ps1 -GameRoot 'C:\Program Files (x86)\Steam\steamapps\common\Unturned'
 dotnet build .\UnturnedSingleplayerCheatMenu.slnx -c Release
 dotnet run --project .\tests\FavoritesSerializationSmoke\FavoritesSerializationSmoke.csproj -c Release
+dotnet run --project .\tests\ItemFilteringSmoke\ItemFilteringSmoke.csproj -c Release
 dotnet run --project .\tests\LocalizationSmoke\LocalizationSmoke.csproj -c Release
+dotnet run --project .\tests\ShortcutToggleSmoke\ShortcutToggleSmoke.csproj -c Release
 dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmoke.csproj -c Release
+dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSettingsSmoke.csproj -c Release
 ```
 
 `Prepare-References.ps1` 只会把编译所需程序集复制到被 Git 忽略的本地 `lib/` 目录。Release DLL 输出到 `artifacts/UnturnedSingleplayerCheatMenu.dll`。
 
 主要模块：
 
-- `CheatMenuPlugin`：生命周期、快捷键、单人守卫、菜单状态和资产刷新。
+- `CheatMenuPlugin` / `ShortcutToggleGate`：生命周期、快捷键去重、单人守卫、菜单状态和资产刷新。
 - `CheatMenuOverlayUi`：运行时 Overlay UI 与输入隔离。
-- `AssetCatalog` / `IconCache` / `VehicleIconRenderer`：资产扫描、图标缓存和车辆模型缩略图。
+- `AssetCatalog` / `ItemFilterService`：资产扫描、物品分类与高级筛选。
+- `IconCache` / `VehicleIconDiskCache` / `VehicleIconRenderer`：内存与磁盘图标缓存、车辆模型缩略图和渲染设置。
 - `CheatActions`：角色、物品、车辆、时间、天气和事件操作。
 - `FavoriteStore` / `TeleportStore`：原子化 JSON 持久化与失败回滚。
 - `GodModePatch`：当前版本 `PlayerLife.doDamage` 的 Harmony 单人保护补丁。
 
 ## 验证
 
-v1.5.0 的 Release 构建为 `0` 警告、`0` 错误。本地化、收藏与传送冒烟测试通过。本版本加入地图传送安全落点、传送点标记形状与颜色、界面状态记忆、UI 视觉反馈优化和右前方载具缩略图取景；真实运行截图与剩余运行边界见 [ACCEPTANCE.md](ACCEPTANCE.md)。
+v1.6.0 的 Release 构建、全部烟囱测试、发布包校验及哈希记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。本版本加入高级物品筛选、车辆缩略图三档尺寸与取景倍率、按配置区分的 PNG 磁盘缓存，以及跨输入源的快捷键重复触发保护；既有真实单人运行证据与本轮仍需区分的运行边界也在验收矩阵中单独标注。
 
 已发布插件 DLL：
 
 ```text
-SHA-256: 121FC8425178DB70D57C6514DE6B751A7E391C420D5C7C7DE11002D0A2DDB44C
+SHA-256: ABEB9EA6D5B35F86B247ECF0C5F0118531871655627EF23D833DCAE41ED5B6E2
 ```
 
 ## 免责声明

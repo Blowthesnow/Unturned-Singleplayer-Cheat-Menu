@@ -55,9 +55,48 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         Error
     }
 
-    private static readonly string[] ItemCategories =
+    private static readonly ItemOriginFilter[] ItemOriginFilters =
     {
-        "全部", "武器", "弹药与配件", "衣物", "食物与饮料", "医疗与防护", "建筑与放置物", "工具", "其他"
+        ItemOriginFilter.Official,
+        ItemOriginFilter.Workshop,
+        ItemOriginFilter.MapOrOther
+    };
+
+    private static readonly EItemRarity[] ItemRarities =
+    {
+        EItemRarity.COMMON,
+        EItemRarity.UNCOMMON,
+        EItemRarity.RARE,
+        EItemRarity.EPIC,
+        EItemRarity.LEGENDARY,
+        EItemRarity.MYTHICAL
+    };
+
+    private static readonly ESlotType[] ItemSlots =
+    {
+        ESlotType.NONE,
+        ESlotType.PRIMARY,
+        ESlotType.SECONDARY,
+        ESlotType.ANY
+    };
+
+    private static readonly EAction[] GunActions =
+    {
+        EAction.Trigger,
+        EAction.Bolt,
+        EAction.Pump,
+        EAction.Break,
+        EAction.String,
+        EAction.Rocket,
+        EAction.Rail,
+        EAction.Minigun
+    };
+
+    private static readonly GunFireModeFilter[] GunFireModes =
+    {
+        GunFireModeFilter.Semi,
+        GunFireModeFilter.Auto,
+        GunFireModeFilter.Burst
     };
 
     private static readonly string[] VehicleCategories =
@@ -87,6 +126,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     }
 
     private readonly CheatMenuPlugin _plugin;
+    private readonly ItemFilterState _itemFilter = new();
+    private readonly ItemFilterState _favoriteItemFilter = new();
     private readonly List<ItemAsset> _itemResults = new();
     private readonly List<VehicleAsset> _vehicleResults = new();
     private readonly List<ItemAsset> _favoriteItemResults = new();
@@ -111,6 +152,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     private InputField _itemAmountInput;
     private InputField _vehicleAmountInput;
     private GameObject _confirmRoot;
+    private GameObject _itemFilterRoot;
+    private ItemFilterState _itemFilterDraft;
+    private bool _itemFilterForFavorites;
+    private GameObject _vehicleThumbnailSettingsRoot;
+    private Slider _vehicleThumbnailFramingSlider;
+    private Text _vehicleThumbnailFramingText;
+    private int _vehicleThumbnailDraftWidth;
+    private float _vehicleThumbnailDraftFraming;
     private Font _font;
     private Texture2D _sliderGripTexture;
     private Texture2D _closeGlyphTexture;
@@ -121,12 +170,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     private Sprite _favoriteFilledSprite;
     private Sprite _favoriteOutlineSprite;
     private MenuTab _activeTab;
-    private string _itemQuery = string.Empty;
     private string _vehicleQuery = string.Empty;
-    private string _itemCategory = "全部";
     private string _vehicleCategory = "全部";
     private string _favoriteQuery = string.Empty;
-    private string _favoriteItemCategory = "全部";
     private string _favoriteVehicleCategory = "全部";
     private string _teleportName = string.Empty;
     private string _lastHeaderMap = string.Empty;
@@ -190,6 +236,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     {
         HideConfirmDialog();
         HideTeleportColorPicker();
+        HideItemFilterPanel();
+        HideVehicleThumbnailSettings();
         if (_root != null)
             _root.SetActive(false);
     }
@@ -203,6 +251,18 @@ internal sealed class CheatMenuOverlayUi : IDisposable
             && _root.activeSelf
             && (_activeTab == MenuTab.Items || _activeTab == MenuTab.Vehicles || _activeTab == MenuTab.Favorites))
             ShowTab(_activeTab);
+    }
+
+    internal void OnVehicleThumbnailSettingsApplied()
+    {
+        if (_root == null || !_root.activeSelf)
+            return;
+
+        if (_activeTab == MenuTab.Vehicles
+            || (_activeTab == MenuTab.Favorites && _favoriteKind == FavoriteKind.Vehicles))
+        {
+            ShowTab(_activeTab);
+        }
     }
 
     public void Maintain()
@@ -274,6 +334,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         _itemAmountInput = null;
         _vehicleAmountInput = null;
         _confirmRoot = null;
+        _itemFilterRoot = null;
+        _itemFilterDraft = null;
         _teleportColorPickerRoot = null;
         _teleportColorPreview = null;
         _teleportColorHexPreview = null;
@@ -595,9 +657,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
         GameObject toolbar = CreateRow(_contentHost.transform, 38f, 7f);
         CreateLabel(toolbar.transform, "搜索", 13, CheatMenuStyle.Text, 48f);
-        CreateInput(toolbar.transform, _itemQuery, value =>
+        CreateInput(toolbar.transform, _itemFilter.SearchQuery, value =>
         {
-            _itemQuery = value;
+            _itemFilter.SearchQuery = value;
             _searchDebouncer.Schedule(() =>
             {
                 BuildItemResults();
@@ -624,19 +686,28 @@ internal sealed class CheatMenuOverlayUi : IDisposable
             _itemAmountText = _giveAmount.ToString();
             UpdateItemAmountInput();
         }, 36f, 34f);
+        CreateButton(
+            toolbar.transform,
+            _itemFilter.ActiveFilterCount == 0
+                ? "筛选"
+                : $"筛选 {_itemFilter.ActiveFilterCount}",
+            () => ShowItemFilterPanel(false),
+            92f,
+            34f);
         CreateFlexibleSpacer(toolbar.transform);
         CreateButton(toolbar.transform, "重新扫描", () =>
         {
             _plugin.RefreshCatalog();
             SetStatus("已重新扫描当前加载的原版与模组资产。", 4f);
         }, 105f, 34f);
-        CreateLabel(_contentHost.transform, $"显示 {_itemResults.Count} / {_plugin.Catalog.Items.Count}；模组物品 {_plugin.Catalog.WorkshopItemCount}。搜索支持名称、ID、GUID 和来源。", 12, CheatMenuStyle.Muted);
+        CreateItemFilterSummary(_contentHost.transform, _itemFilter, _itemResults.Count, _plugin.Catalog.Items.Count);
 
         GameObject body = CreateRow(_contentHost.transform, 0f, 10f);
         SetLayout(body, flexibleHeight: 1f);
-        BuildCategorySidebar(body.transform, "物品分类", ItemCategories, _itemCategory, category =>
+        BuildItemCategorySidebar(body.transform, "物品分类", _itemFilter, category =>
         {
-            _itemCategory = category;
+            _itemFilter.Category = category;
+            ItemFilterService.NormalizeForCategory(_itemFilter);
             BuildItemResults();
             ShowTab(MenuTab.Items);
         });
@@ -677,6 +748,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
             _vehicleAmountText = _spawnVehicleAmount.ToString();
             UpdateVehicleAmountInput();
         }, 36f, 34f);
+        CreateButton(toolbar.transform, "⚙ 渲染设置", ShowVehicleThumbnailSettings, 116f, 34f);
         CreateFlexibleSpacer(toolbar.transform);
         CreateButton(toolbar.transform, "重新扫描", () =>
         {
@@ -736,9 +808,15 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
         GameObject toolbar = CreateRow(_contentHost.transform, 38f, 7f);
         CreateLabel(toolbar.transform, "搜索", 13, CheatMenuStyle.Text, 48f);
-        CreateInput(toolbar.transform, _favoriteQuery, value =>
+        string favoriteSearch = _favoriteKind == FavoriteKind.Items
+            ? _favoriteItemFilter.SearchQuery
+            : _favoriteQuery;
+        CreateInput(toolbar.transform, favoriteSearch, value =>
         {
-            _favoriteQuery = value;
+            if (_favoriteKind == FavoriteKind.Items)
+                _favoriteItemFilter.SearchQuery = value;
+            else
+                _favoriteQuery = value;
             _searchDebouncer.Schedule(() =>
             {
                 BuildFavoriteResults();
@@ -768,6 +846,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
                 _itemAmountText = _giveAmount.ToString();
                 UpdateItemAmountInput();
             }, 36f, 34f);
+            CreateButton(
+                toolbar.transform,
+                _favoriteItemFilter.ActiveFilterCount == 0
+                    ? "筛选"
+                    : $"筛选 {_favoriteItemFilter.ActiveFilterCount}",
+                () => ShowItemFilterPanel(true),
+                92f,
+                34f);
         }
         else
         {
@@ -800,11 +886,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
         if (_favoriteKind == FavoriteKind.Items)
         {
-            CreateLabel(
+            CreateItemFilterSummary(
                 _contentHost.transform,
-                $"显示 {_favoriteItemResults.Count} 个已加载收藏物品。搜索支持名称、ID、GUID 和来源。",
-                12,
-                CheatMenuStyle.Muted);
+                _favoriteItemFilter,
+                _favoriteItemResults.Count,
+                loadedFavoriteItems);
         }
         else
         {
@@ -819,12 +905,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         SetLayout(body, flexibleHeight: 1f);
         if (_favoriteKind == FavoriteKind.Items)
         {
-            BuildCategorySidebar(body.transform, "收藏物品分类", ItemCategories, _favoriteItemCategory, category =>
+            BuildItemCategorySidebar(body.transform, "收藏物品分类", _favoriteItemFilter, category =>
             {
-                _favoriteItemCategory = category;
+                _favoriteItemFilter.Category = category;
+                ItemFilterService.NormalizeForCategory(_favoriteItemFilter);
                 BuildFavoriteResults();
                 ShowTab(MenuTab.Favorites);
-            });
+            }, _plugin.Favorites.IsItemFavorite);
         }
         else
         {
@@ -852,6 +939,380 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         }
     }
 
+    private void BuildItemCategorySidebar(
+        Transform parent,
+        string title,
+        ItemFilterState filter,
+        System.Action<ItemPrimaryCategory> select,
+        Func<ItemAsset, bool> includeItem = null)
+    {
+        GameObject sidebar = CreateObject("Categories", parent, typeof(Image));
+        sidebar.GetComponent<Image>().color = CheatMenuStyle.Surface;
+        AddVerticalLayout(sidebar, 5f, new RectOffset(7, 7, 7, 7));
+        SetLayout(sidebar, preferredWidth: 165f, flexibleWidth: 0f);
+        CreateLabel(sidebar.transform, title, 16, CheatMenuStyle.Text);
+        foreach (ItemPrimaryCategory category in ItemFilterService.Categories)
+        {
+            ItemPrimaryCategory captured = category;
+            ItemFilterState categoryFilter = filter.Clone();
+            categoryFilter.Category = category;
+            ItemFilterService.NormalizeForCategory(categoryFilter);
+            int count = _plugin.Catalog.Items.Count(asset =>
+                (includeItem == null || includeItem(asset))
+                && ItemFilterService.Matches(asset, categoryFilter));
+            string label =
+                $"{PluginLocalization.Translate(ItemFilterService.GetPrimaryCategoryLabel(category))}  {count:N0}";
+            CreateButton(
+                sidebar.transform,
+                label,
+                () => select(captured),
+                0f,
+                34f,
+                category == filter.Category ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover,
+                12);
+        }
+    }
+
+    private void CreateItemFilterSummary(
+        Transform parent,
+        ItemFilterState filter,
+        int resultCount,
+        int sourceCount)
+    {
+        CreateLabel(
+            parent,
+            $"显示 {resultCount:N0} / {sourceCount:N0}；搜索支持名称、ID、GUID 和来源。",
+            12,
+            CheatMenuStyle.Muted);
+
+        if (filter.ActiveFilterCount == 0)
+            return;
+
+        GameObject row = CreateRow(parent, 32f, 6f);
+        AddItemFilterChip(row.transform, filter.ItemType.HasValue
+            ? ItemFilterService.GetItemTypeLabel(filter.ItemType.Value)
+            : null, () =>
+        {
+            filter.ItemType = null;
+            ItemFilterService.NormalizeForCategory(filter);
+            ApplyItemFilterFromChip();
+        });
+        AddItemFilterChip(row.transform, filter.Origin != ItemOriginFilter.All
+            ? ItemFilterService.GetOriginLabel(filter.Origin)
+            : null, () =>
+        {
+            filter.Origin = ItemOriginFilter.All;
+            ApplyItemFilterFromChip();
+        });
+        AddItemFilterChip(row.transform, filter.Rarity.HasValue
+            ? ItemFilterService.GetRarityLabel(filter.Rarity.Value)
+            : null, () =>
+        {
+            filter.Rarity = null;
+            ApplyItemFilterFromChip();
+        });
+        AddItemFilterChip(row.transform, filter.Slot.HasValue
+            ? ItemFilterService.GetSlotLabel(filter.Slot.Value)
+            : null, () =>
+        {
+            filter.Slot = null;
+            ApplyItemFilterFromChip();
+        });
+        AddItemFilterChip(row.transform, filter.GunAction.HasValue
+            ? ItemFilterService.GetGunActionLabel(filter.GunAction.Value)
+            : null, () =>
+        {
+            filter.GunAction = null;
+            ApplyItemFilterFromChip();
+        });
+        AddItemFilterChip(row.transform, filter.FireModes != GunFireModeFilter.None
+            ? ItemFilterService.GetFireModeLabel(filter.FireModes)
+            : null, () =>
+        {
+            filter.FireModes = GunFireModeFilter.None;
+            ApplyItemFilterFromChip();
+        });
+        CreateFlexibleSpacer(row.transform);
+        CreateButton(row.transform, "清除筛选", () =>
+        {
+            filter.ResetAdvanced();
+            ApplyItemFilterFromChip();
+        }, 100f, 30f, CheatMenuStyle.SurfaceHover, 12);
+    }
+
+    private void AddItemFilterChip(Transform parent, string label, System.Action remove)
+    {
+        if (string.IsNullOrEmpty(label))
+            return;
+        string[] parts = label.Split(new[] { " / " }, StringSplitOptions.None);
+        for (int index = 0; index < parts.Length; index++)
+            parts[index] = PluginLocalization.Translate(parts[index]);
+        string chipLabel = string.Join(" / ", parts) + " ×";
+        CreateButton(
+            parent,
+            chipLabel,
+            remove,
+            Mathf.Clamp(48f + chipLabel.Length * 11f, 92f, 280f),
+            30f,
+            CheatMenuStyle.SurfaceHover,
+            11);
+    }
+
+    private void ApplyItemFilterFromChip()
+    {
+        BuildItemResults();
+        BuildFavoriteResults();
+        ShowTab(_activeTab);
+    }
+
+    private void ShowItemFilterPanel(bool forFavorites)
+    {
+        HideItemFilterPanel();
+        _itemFilterForFavorites = forFavorites;
+        _itemFilterDraft = (forFavorites ? _favoriteItemFilter : _itemFilter).Clone();
+        BuildItemFilterPanel();
+    }
+
+    private void BuildItemFilterPanel()
+    {
+        if (_itemFilterDraft == null)
+            return;
+
+        _itemFilterRoot = CreateObject("ItemFilterOverlay", _root.transform, typeof(Image));
+        Stretch(_itemFilterRoot.GetComponent<RectTransform>());
+        _itemFilterRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
+
+        GameObject dialog = CreateObject("ItemFilterDialog", _itemFilterRoot.transform, typeof(Image));
+        dialog.GetComponent<Image>().color = CheatMenuStyle.Panel;
+        Outline outline = dialog.AddComponent<Outline>();
+        outline.effectColor = CheatMenuStyle.InputBorder;
+        outline.effectDistance = Vector2.one;
+        outline.useGraphicAlpha = false;
+        RectTransform dialogRect = dialog.GetComponent<RectTransform>();
+        dialogRect.anchorMin = dialogRect.anchorMax = new Vector2(0.5f, 0.5f);
+        dialogRect.pivot = new Vector2(0.5f, 0.5f);
+        dialogRect.sizeDelta = new Vector2(860f, 610f);
+
+        VerticalLayoutGroup layout = dialog.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(24, 24, 18, 18);
+        layout.spacing = 8f;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+
+        GameObject header = CreateRow(dialog.transform, 42f, 8f);
+        CreateText(header.transform, "筛选", 20, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+        CreateFlexibleSpacer(header.transform);
+        CreateButton(header.transform, "×", HideItemFilterPanel, 42f, 38f, CheatMenuStyle.Surface, 22);
+
+        CreateLabel(
+            dialog.transform,
+            $"当前分类：{PluginLocalization.Translate(ItemFilterService.GetPrimaryCategoryLabel(_itemFilterDraft.Category))}",
+            12,
+            CheatMenuStyle.Muted);
+
+        IReadOnlyList<EItemType> itemTypes = ItemFilterService.GetItemTypes(_itemFilterDraft.Category);
+        if (itemTypes.Count > 0)
+        {
+            List<string> labels = new() { "全部" };
+            foreach (EItemType itemType in itemTypes)
+                labels.Add(ItemFilterService.GetItemTypeLabel(itemType));
+            CreateFilterOptionGrid(
+                dialog.transform,
+                "物品类型",
+                labels,
+                6,
+                index =>
+                {
+                    _itemFilterDraft.ItemType = index == 0 ? null : itemTypes[index - 1];
+                    ItemFilterService.NormalizeForCategory(_itemFilterDraft);
+                    RebuildItemFilterPanel();
+                },
+                index => index == 0
+                    ? !_itemFilterDraft.ItemType.HasValue
+                    : _itemFilterDraft.ItemType == itemTypes[index - 1]);
+        }
+
+        CreateFilterOptionGrid(
+            dialog.transform,
+            "来源",
+            new List<string>
+            {
+                "全部来源",
+                ItemFilterService.GetOriginLabel(ItemOriginFilter.Official),
+                ItemFilterService.GetOriginLabel(ItemOriginFilter.Workshop),
+                ItemFilterService.GetOriginLabel(ItemOriginFilter.MapOrOther)
+            },
+            4,
+            index =>
+            {
+                _itemFilterDraft.Origin = index == 0 ? ItemOriginFilter.All : ItemOriginFilters[index - 1];
+                RebuildItemFilterPanel();
+            },
+            index => index == 0
+                ? _itemFilterDraft.Origin == ItemOriginFilter.All
+                : _itemFilterDraft.Origin == ItemOriginFilters[index - 1]);
+
+        List<string> rarityLabels = new() { "全部" };
+        foreach (EItemRarity rarity in ItemRarities)
+            rarityLabels.Add(ItemFilterService.GetRarityLabel(rarity));
+        CreateFilterOptionGrid(
+            dialog.transform,
+            "稀有度",
+            rarityLabels,
+            7,
+            index =>
+            {
+                _itemFilterDraft.Rarity = index == 0 ? null : ItemRarities[index - 1];
+                RebuildItemFilterPanel();
+            },
+            index => index == 0
+                ? !_itemFilterDraft.Rarity.HasValue
+                : _itemFilterDraft.Rarity == ItemRarities[index - 1]);
+
+        List<string> slotLabels = new() { "全部" };
+        foreach (ESlotType slot in ItemSlots)
+            slotLabels.Add(ItemFilterService.GetSlotLabel(slot));
+        CreateFilterOptionGrid(
+            dialog.transform,
+            "装备槽位",
+            slotLabels,
+            5,
+            index =>
+            {
+                _itemFilterDraft.Slot = index == 0 ? null : ItemSlots[index - 1];
+                RebuildItemFilterPanel();
+            },
+            index => index == 0
+                ? !_itemFilterDraft.Slot.HasValue
+                : _itemFilterDraft.Slot == ItemSlots[index - 1]);
+
+        if (_itemFilterDraft.ItemType == EItemType.GUN)
+        {
+            List<string> actionLabels = new() { "全部" };
+            foreach (EAction action in GunActions)
+                actionLabels.Add(ItemFilterService.GetGunActionLabel(action));
+            CreateFilterOptionGrid(
+                dialog.transform,
+                "射击机制",
+                actionLabels,
+                5,
+                index =>
+                {
+                    _itemFilterDraft.GunAction = index == 0 ? null : GunActions[index - 1];
+                    RebuildItemFilterPanel();
+                },
+                index => index == 0
+                    ? !_itemFilterDraft.GunAction.HasValue
+                    : _itemFilterDraft.GunAction == GunActions[index - 1]);
+
+            List<string> fireModeLabels = new() { "全部", "半自动", "全自动", "点射" };
+            CreateFilterOptionGrid(
+                dialog.transform,
+                "射击模式（可多选）",
+                fireModeLabels,
+                4,
+                index =>
+                {
+                    if (index == 0)
+                        _itemFilterDraft.FireModes = GunFireModeFilter.None;
+                    else
+                    {
+                        GunFireModeFilter mode = GunFireModes[index - 1];
+                        _itemFilterDraft.FireModes = _itemFilterDraft.FireModes.HasFlag(mode)
+                            ? _itemFilterDraft.FireModes & ~mode
+                            : _itemFilterDraft.FireModes | mode;
+                    }
+                    RebuildItemFilterPanel();
+                },
+                index => index == 0
+                    ? _itemFilterDraft.FireModes == GunFireModeFilter.None
+                    : _itemFilterDraft.FireModes.HasFlag(GunFireModes[index - 1]));
+        }
+
+        CreateFlexibleSpacer(dialog.transform);
+        GameObject actions = CreateRow(dialog.transform, 40f, 8f);
+        CreateFlexibleSpacer(actions.transform);
+        CreateButton(actions.transform, "重置", () =>
+        {
+            _itemFilterDraft.ResetAdvanced();
+            RebuildItemFilterPanel();
+        }, 90f, 36f);
+        CreateButton(actions.transform, "取消", HideItemFilterPanel, 90f, 36f);
+        CreateButton(actions.transform, "应用", ApplyItemFilterPanel, 90f, 36f, CheatMenuStyle.Accent);
+    }
+
+    private void CreateFilterOptionGrid(
+        Transform parent,
+        string title,
+        IReadOnlyList<string> labels,
+        int columns,
+        System.Action<int> select,
+        Func<int, bool> selected)
+    {
+        CreateLabel(parent, title, 13, CheatMenuStyle.Text);
+        GameObject gridObject = CreateObject("FilterOptions", parent);
+        GridLayoutGroup grid = gridObject.AddComponent<GridLayoutGroup>();
+        const float availableWidth = 812f;
+        const float defaultCellWidth = 112f;
+        const float horizontalSpacing = 4f;
+        int safeColumns = Math.Max(1, columns);
+        float cellWidth = Mathf.Min(
+            defaultCellWidth,
+            (availableWidth - horizontalSpacing * (safeColumns - 1)) / safeColumns);
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = safeColumns;
+        grid.cellSize = new Vector2(cellWidth, 32f);
+        grid.spacing = new Vector2(horizontalSpacing, 5f);
+        grid.childAlignment = TextAnchor.UpperLeft;
+        int rows = Mathf.CeilToInt(labels.Count / (float)safeColumns);
+        SetLayout(gridObject, preferredHeight: rows * 37f - 5f);
+        for (int index = 0; index < labels.Count; index++)
+        {
+            int captured = index;
+            CreateButton(
+                gridObject.transform,
+                labels[index],
+                () => select(captured),
+                cellWidth,
+                32f,
+                selected(index) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover,
+                11);
+        }
+    }
+
+    private void RebuildItemFilterPanel()
+    {
+        if (_itemFilterRoot == null)
+            return;
+        bool forFavorites = _itemFilterForFavorites;
+        GameObject previous = _itemFilterRoot;
+        _itemFilterRoot = null;
+        QueueForDestroy(previous);
+        BuildItemFilterPanel();
+    }
+
+    private void ApplyItemFilterPanel()
+    {
+        ItemFilterState target = _itemFilterForFavorites ? _favoriteItemFilter : _itemFilter;
+        target.CopyFrom(_itemFilterDraft);
+        ItemFilterService.NormalizeForCategory(target);
+        HideItemFilterPanel();
+        BuildItemResults();
+        BuildFavoriteResults();
+        ShowTab(_activeTab);
+    }
+
+    private void HideItemFilterPanel()
+    {
+        if (_itemFilterRoot == null)
+            return;
+        QueueForDestroy(_itemFilterRoot);
+        _itemFilterRoot = null;
+        _itemFilterDraft = null;
+    }
+
     private void BuildItemGrid(Transform parent)
     {
         GameObject column = CreateObject("ItemGridColumn", parent);
@@ -865,8 +1326,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         {
             CreateEmptyState(
                 column.transform,
-                string.IsNullOrWhiteSpace(_itemQuery) ? "当前分类没有可用物品。" : "没有匹配的物品。",
-                string.IsNullOrWhiteSpace(_itemQuery)
+                string.IsNullOrWhiteSpace(_itemFilter.SearchQuery) ? "当前分类没有可用物品。" : "没有匹配的物品。",
+                string.IsNullOrWhiteSpace(_itemFilter.SearchQuery)
                     ? "请选择其他分类，或重新扫描当前加载的资产。"
                     : "请清空搜索或尝试其他关键词。");
             return;
@@ -1840,6 +2301,169 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         return button;
     }
 
+    private void ShowVehicleThumbnailSettings()
+    {
+        HideVehicleThumbnailSettings();
+        VehicleThumbnailRenderSettings current = _plugin.VehicleThumbnailSettings;
+        _vehicleThumbnailDraftWidth = current?.Width ?? VehicleThumbnailRenderSettings.DefaultWidth;
+        _vehicleThumbnailDraftFraming = current?.Framing ?? VehicleThumbnailRenderSettings.DefaultFraming;
+
+        _vehicleThumbnailSettingsRoot =
+            CreateObject("VehicleThumbnailSettingsOverlay", _root.transform, typeof(Image));
+        Stretch(_vehicleThumbnailSettingsRoot.GetComponent<RectTransform>());
+        _vehicleThumbnailSettingsRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
+
+        GameObject dialog = CreateObject(
+            "VehicleThumbnailSettingsDialog",
+            _vehicleThumbnailSettingsRoot.transform,
+            typeof(Image));
+        Image dialogImage = dialog.GetComponent<Image>();
+        dialogImage.color = CheatMenuStyle.Panel;
+        Outline dialogOutline = dialog.AddComponent<Outline>();
+        dialogOutline.effectColor = CheatMenuStyle.InputBorder;
+        dialogOutline.effectDistance = Vector2.one;
+        dialogOutline.useGraphicAlpha = false;
+        RectTransform dialogRect = dialog.GetComponent<RectTransform>();
+        dialogRect.anchorMin = dialogRect.anchorMax = new Vector2(0.5f, 0.5f);
+        dialogRect.pivot = new Vector2(0.5f, 0.5f);
+        dialogRect.sizeDelta = new Vector2(680f, 560f);
+
+        VerticalLayoutGroup dialogLayout = dialog.AddComponent<VerticalLayoutGroup>();
+        dialogLayout.padding = new RectOffset(28, 28, 20, 20);
+        dialogLayout.spacing = 12f;
+        dialogLayout.childControlWidth = true;
+        dialogLayout.childControlHeight = true;
+        dialogLayout.childForceExpandWidth = true;
+        dialogLayout.childForceExpandHeight = false;
+
+        GameObject header = CreateRow(dialog.transform, 44f, 10f);
+        CreateText(
+            header.transform,
+            "载具渲染设置",
+            20,
+            CheatMenuStyle.Text,
+            TextAnchor.MiddleLeft,
+            FontStyle.Bold);
+        CreateFlexibleSpacer(header.transform);
+        CreateButton(header.transform, "×", HideVehicleThumbnailSettings, 44f, 42f, CheatMenuStyle.Surface, 23);
+
+        CreateLabel(
+            dialog.transform,
+            "缩略图尺寸只影响车辆卡片，不会修改游戏全局画质。已生成的缩略图会进入缓存，重复打开不会重复实例化车辆。",
+            12,
+            CheatMenuStyle.Muted);
+
+        CreateLabel(dialog.transform, "尺寸", 15, CheatMenuStyle.Text);
+        GameObject resolutionRow = CreateRow(dialog.transform, 38f, 8f);
+        List<Button> resolutionButtons = new();
+        int[] resolutions = { 128, 192, 256 };
+        string[] resolutionLabels = { "128 × 96（低开销）", "192 × 144（平衡）", "256 × 192（更清晰）" };
+        for (int index = 0; index < resolutions.Length; index++)
+        {
+            int capturedResolution = resolutions[index];
+            Button button = CreateButton(
+                resolutionRow.transform,
+                resolutionLabels[index],
+                () =>
+                {
+                    _vehicleThumbnailDraftWidth = capturedResolution;
+                    for (int buttonIndex = 0; buttonIndex < resolutionButtons.Count; buttonIndex++)
+                    {
+                        bool selected = resolutions[buttonIndex] == _vehicleThumbnailDraftWidth;
+                        resolutionButtons[buttonIndex].targetGraphic.color =
+                            selected ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover;
+                    }
+                },
+                0f,
+                34f,
+                capturedResolution == _vehicleThumbnailDraftWidth
+                    ? CheatMenuStyle.Accent
+                    : CheatMenuStyle.SurfaceHover,
+                12);
+            SetLayout(button.gameObject, flexibleWidth: 1f);
+            resolutionButtons.Add(button);
+        }
+
+        CreateLabel(
+            dialog.transform,
+            "128 × 96 为默认，生成更快且占用更低；192 × 144 是清晰度与开销的折中；256 × 192 的输出像素约为默认的 4 倍，首次生成更慢。",
+            12,
+            CheatMenuStyle.Muted);
+
+        GameObject framingRow = CreateRow(dialog.transform, 34f, 12f);
+        _vehicleThumbnailFramingText = CreateText(
+            framingRow.transform,
+            string.Empty,
+            13,
+            CheatMenuStyle.Text,
+            TextAnchor.MiddleLeft,
+            localize: false);
+        SetLayout(_vehicleThumbnailFramingText.gameObject, preferredWidth: 125f);
+        _vehicleThumbnailFramingSlider = CreateTimeSlider(
+            framingRow.transform,
+            (VehicleThumbnailRenderSettings.NormalizeFraming(_vehicleThumbnailDraftFraming)
+                - VehicleThumbnailRenderSettings.MinimumFraming)
+                / (VehicleThumbnailRenderSettings.MaximumFraming - VehicleThumbnailRenderSettings.MinimumFraming),
+            normalized =>
+            {
+                _vehicleThumbnailDraftFraming = Mathf.Lerp(
+                    VehicleThumbnailRenderSettings.MinimumFraming,
+                    VehicleThumbnailRenderSettings.MaximumFraming,
+                    Mathf.Clamp01(normalized));
+                UpdateVehicleThumbnailFramingText();
+            });
+        UpdateVehicleThumbnailFramingText();
+
+        CreateLabel(
+            dialog.transform,
+            "取景倍率 0.5：主体更大、留白更少，可能接近裁切边界；1.0：默认平衡值；1.5：留白更多、主体更小，裁切风险更低。",
+            12,
+            CheatMenuStyle.Muted);
+
+        GameObject actions = CreateRow(dialog.transform, 42f, 8f);
+        CreateFlexibleSpacer(actions.transform);
+        CreateButton(actions.transform, "取消", HideVehicleThumbnailSettings, 96f, 36f);
+        CreateButton(
+            actions.transform,
+            "应用",
+            () =>
+            {
+                bool persisted = _plugin.ApplyVehicleThumbnailSettings(
+                    _vehicleThumbnailDraftWidth,
+                    _vehicleThumbnailDraftFraming);
+                HideVehicleThumbnailSettings();
+                SetStatus(
+                    persisted
+                        ? "车辆缩略图设置已应用并保存。"
+                        : "车辆缩略图设置已应用，但配置文件保存失败。",
+                    5f,
+                    persisted ? StatusKind.Success : StatusKind.Warning);
+            },
+            96f,
+            36f,
+            CheatMenuStyle.Accent);
+    }
+
+    private void UpdateVehicleThumbnailFramingText()
+    {
+        if (_vehicleThumbnailFramingText != null)
+        {
+            _vehicleThumbnailFramingText.text =
+                $"{PluginLocalization.Translate("取景倍率")}：{_vehicleThumbnailDraftFraming:0.00}";
+        }
+    }
+
+    private void HideVehicleThumbnailSettings()
+    {
+        if (_vehicleThumbnailSettingsRoot == null)
+            return;
+
+        QueueForDestroy(_vehicleThumbnailSettingsRoot);
+        _vehicleThumbnailSettingsRoot = null;
+        _vehicleThumbnailFramingSlider = null;
+        _vehicleThumbnailFramingText = null;
+    }
+
     private void ShowTeleportColorPicker()
     {
         HideTeleportColorPicker();
@@ -2465,8 +3089,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     {
         _itemResults.Clear();
         _itemResults.AddRange(_plugin.Catalog.Items.Where(asset =>
-            (_itemCategory == "全部" || AssetCatalog.GetItemCategory(asset) == _itemCategory)
-            && AssetCatalog.Matches(asset, asset.FriendlyName, _itemQuery)));
+            ItemFilterService.Matches(asset, _itemFilter)));
         _itemPage = 0;
     }
 
@@ -2484,8 +3107,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         _favoriteItemResults.Clear();
         _favoriteItemResults.AddRange(_plugin.Catalog.Items.Where(asset =>
             _plugin.Favorites.IsItemFavorite(asset)
-            && (_favoriteItemCategory == "全部" || AssetCatalog.GetItemCategory(asset) == _favoriteItemCategory)
-            && AssetCatalog.Matches(asset, asset.FriendlyName, _favoriteQuery)));
+            && ItemFilterService.Matches(asset, _favoriteItemFilter)));
 
         _favoriteVehicleResults.Clear();
         _favoriteVehicleResults.AddRange(_plugin.Catalog.Vehicles.Where(asset =>

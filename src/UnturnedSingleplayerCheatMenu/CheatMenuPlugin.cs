@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx;
@@ -18,22 +19,24 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.codex.unturned.singleplayer-cheat-menu";
     public const string PluginName = "Unturned Singleplayer Cheat Menu";
-    public const string PluginVersion = "1.5.0";
+    public const string PluginVersion = "1.6.0";
 
     private Harmony _harmony;
     private ConfigEntry<string> _language;
     private ConfigEntry<KeyboardShortcut> _toggleShortcut;
     private ConfigEntry<float> _uiScale;
     private ConfigEntry<int> _pageSize;
+    private ConfigEntry<int> _vehicleIconResolution;
+    private ConfigEntry<float> _vehicleIconFraming;
     private ConfigEntry<string> _lastMainTab;
     private ConfigEntry<string> _lastTeleportView;
     private CheatMenuOverlayUi _ui;
     private PluginRuntimeHost _runtimeHost;
     private VehicleIconRenderer _vehicleIconRenderer;
     private readonly NativeShortcutDetector _nativeShortcut = new();
+    private readonly ShortcutToggleGate _shortcutToggleGate = new();
     private float _nextMaintenanceTime;
     private int _lastRuntimeUpdateFrame = -1;
-    private int _lastToggleFrame = -1;
     private int _lastGuiCallbackFrame = -1;
     private EventType _lastGuiEventType = EventType.Ignore;
     private bool _menuOpen;
@@ -44,6 +47,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     private bool _hasLoggedVehicleIconResult;
     private bool _hasLoggedVehicleIconCache;
     private bool _hasLoggedVehicleIconBound;
+    private bool _hasLoggedVehicleIconCacheWriteFailure;
     private SleekWindow _capturedWindow;
     private bool _windowWasEnabled;
     private bool _windowWasShowingCursor;
@@ -64,6 +68,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     internal bool IsMenuOpen => _menuOpen;
     internal string LastMainTab => _lastMainTab?.Value ?? "Character";
     internal string LastTeleportView => _lastTeleportView?.Value ?? "Map";
+    internal VehicleThumbnailRenderSettings VehicleThumbnailSettings { get; private set; }
 
     internal bool SetLastMainTab(string value)
     {
@@ -73,6 +78,39 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     internal bool SetLastTeleportView(string value)
     {
         return PersistInterfaceState(_lastTeleportView, value);
+    }
+
+    internal bool ApplyVehicleThumbnailSettings(int width, float framing)
+    {
+        VehicleThumbnailRenderSettings settings =
+            VehicleThumbnailRenderSettings.Normalize(width, framing);
+
+        // Cancel old-key work before publishing the new immutable snapshot.
+        Icons?.ClearVehicleMemory();
+        VehicleThumbnailSettings = settings;
+
+        bool persisted = true;
+        bool saveOnConfigSet = Config.SaveOnConfigSet;
+        try
+        {
+            Config.SaveOnConfigSet = false;
+            _vehicleIconResolution.Value = settings.Width;
+            _vehicleIconFraming.Value = settings.Framing;
+            Config.Save();
+        }
+        catch (Exception ex)
+        {
+            persisted = false;
+            Logger.LogWarning(
+                $"车辆缩略图设置已在本次运行中更新，但配置文件保存失败。\n{ex}");
+        }
+        finally
+        {
+            Config.SaveOnConfigSet = saveOnConfigSet;
+        }
+
+        _ui?.OnVehicleThumbnailSettingsApplied();
+        return persisted;
     }
 
     internal bool ToggleLanguageFromUi()
@@ -158,7 +196,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
             $"尺寸={texture.width}x{texture.height}。");
     }
 
-    internal void LogVehicleIconCached(VehicleAsset asset, Texture2D texture)
+    internal void LogVehicleIconCached(
+        VehicleAsset asset,
+        VehicleThumbnailRenderSettings settings,
+        string path)
     {
         if (_hasLoggedVehicleIconCache)
             return;
@@ -166,7 +207,23 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
         _hasLoggedVehicleIconCache = true;
         Logger.LogInfo(
             $"车辆缩略图已写入缓存：{asset?.vehicleName ?? "未知车辆"}；" +
-            $"尺寸={texture?.width ?? 0}x{texture?.height ?? 0}。");
+            $"配置={settings?.Width ?? 0}x{settings?.Height ?? 0}/f{settings?.GetFramingMilli() ?? 0}；" +
+            $"路径={path}。");
+    }
+
+    internal void LogVehicleIconCacheWriteFailure(
+        VehicleAsset asset,
+        VehicleThumbnailRenderSettings settings,
+        string failure)
+    {
+        if (_hasLoggedVehicleIconCacheWriteFailure)
+            return;
+
+        _hasLoggedVehicleIconCacheWriteFailure = true;
+        Logger.LogWarning(
+            $"车辆缩略图磁盘缓存写入失败，将继续使用内存缓存。示例：{asset?.vehicleName ?? "未知车辆"}；" +
+            $"配置={settings?.Width ?? 0}x{settings?.Height ?? 0}/f{settings?.GetFramingMilli() ?? 0}；" +
+            $"原因={failure ?? "未知原因"}。");
     }
 
     internal void LogVehicleIconBound(Texture2D texture)
@@ -207,6 +264,16 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
             "CardsPerPage",
             32,
             PluginLocalization.Translate("物品/车辆每页卡片数量，范围 12 到 80。"));
+        _vehicleIconResolution = Config.Bind(
+            "Interface",
+            "VehicleIconResolution",
+            VehicleThumbnailRenderSettings.DefaultWidth,
+            PluginLocalization.Translate("车辆缩略图宽度：128、192 或 256；高度自动使用 4:3 比例。"));
+        _vehicleIconFraming = Config.Bind(
+            "Interface",
+            "VehicleIconFraming",
+            VehicleThumbnailRenderSettings.DefaultFraming,
+            PluginLocalization.Translate("自动取景倍率，范围 0.5 到 1.5，默认 1.0。"));
         _lastMainTab = Config.Bind(
             "Interface",
             "LastMainTab",
@@ -218,9 +285,23 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
             "Map",
             "Last selected teleport subview: Map or Points.");
 
+        VehicleThumbnailSettings = VehicleThumbnailRenderSettings.Normalize(
+            _vehicleIconResolution.Value,
+            _vehicleIconFraming.Value);
+        if (VehicleThumbnailSettings.Width != _vehicleIconResolution.Value
+            || Math.Abs(VehicleThumbnailSettings.Framing - _vehicleIconFraming.Value) > 0.0001f)
+        {
+            Logger.LogWarning(
+                $"车辆缩略图配置无效，当前运行已规范化为 {VehicleThumbnailSettings.Width}x{VehicleThumbnailSettings.Height}，" +
+                $"取景倍率 {VehicleThumbnailSettings.Framing:0.00}。");
+        }
+
         Catalog = new AssetCatalog();
         _vehicleIconRenderer = new VehicleIconRenderer(this);
-        Icons = new IconCache(_vehicleIconRenderer);
+        Icons = new IconCache(
+            _vehicleIconRenderer,
+            new VehicleIconDiskCache(),
+            () => VehicleThumbnailSettings);
         Favorites = new FavoriteStore(Logger);
         Teleports = new TeleportStore(Logger);
         TeleportMaps = new TeleportMapService(Logger);
@@ -238,12 +319,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
         Logger.LogInfo($"检测环境：Unturned {Provider.APP_VERSION}，Unity {Application.unityVersion}，BepInEx {bepinExVersion}。");
     }
 
-    private bool PersistInterfaceState(ConfigEntry<string> entry, string value)
+    private bool PersistInterfaceState<T>(ConfigEntry<T> entry, T value)
     {
-        if (entry == null || string.IsNullOrWhiteSpace(value))
+        if (entry == null)
             return false;
 
-        if (string.Equals(entry.Value, value, StringComparison.Ordinal))
+        if (EqualityComparer<T>.Default.Equals(entry.Value, value))
             return true;
 
         bool saveOnConfigSet = Config.SaveOnConfigSet;
@@ -286,7 +367,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
         // scene transition on current builds. Harmony update callbacks remain
         // reliable, so pump both the vehicle icon queue and the UI binders from
         // this path rather than relying only on MonoBehaviour.Update.
-        _vehicleIconRenderer?.PumpOne();
+        if (!(Icons?.PumpOne() ?? false))
+            _vehicleIconRenderer?.PumpOne();
         OverlayIconBinder.PumpPending();
 
         bool unityShortcutPressed = IsToggleShortcutDown();
@@ -380,10 +462,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
     private void HandleToggleShortcut(string inputSource)
     {
-        if (_lastToggleFrame == Time.frameCount)
+        if (!_shortcutToggleGate.TryAccept(Time.frameCount, Time.realtimeSinceStartup))
             return;
-
-        _lastToggleFrame = Time.frameCount;
         if (!SingleplayerGuard.IsReady)
         {
             Logger.LogWarning($"未打开菜单：{SingleplayerGuard.RejectionReason}");

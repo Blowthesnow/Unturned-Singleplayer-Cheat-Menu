@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-17
+
+### Added
+
+- Advanced item filters for primary category, exact item type, origin, rarity, equipment slot, gun action, and multi-select fire modes.
+- Configurable vehicle thumbnail output at `128 × 96`, `192 × 144`, or `256 × 192`, with an adjustable automatic-framing multiplier.
+- Persistent vehicle-thumbnail PNG caching keyed by vehicle GUID, cache format, resolution, and framing.
+- Smoke-test projects for item filtering, shortcut de-duplication, and vehicle-thumbnail setting normalization.
+
+### Improved
+
+- Item and favorite-item pages now keep independent filter state and show the number of active advanced filters.
+- Vehicle icon loading remains lazy, processes at most one disk decode or render request per update budget, and falls back from corrupt cache entries to a fresh render.
+- Predefined vehicle icon paths avoid unnecessary LOD forcing and full-texture transparency scans; those costs are limited to generated framing.
+
+### Fixed
+
+- Prevented one physical shortcut press from opening and immediately closing the menu when Unity and native input paths report it in adjacent frames.
+- Preserved explicit user vehicle-thumbnail settings while normalizing invalid resolutions and framing values safely.
+
+### Verified
+
+- Release build, six smoke-test projects, version-metadata checks, package validation, and final hashes are recorded in `ACCEPTANCE.md`.
+- Existing v1.5.0 singleplayer runtime evidence is retained; the new item-filter and shortcut behavior is not mislabeled as fresh in-game acceptance.
+
 ## [1.5.0] - 2026-08-16
 
 ### Added

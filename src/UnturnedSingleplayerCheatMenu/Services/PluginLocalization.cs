@@ -116,6 +116,91 @@ internal static class PluginLocalization
         ["全部技能满级"] = "Max All Skills",
         ["搜索"] = "Search",
         ["数量"] = "Amount",
+        ["筛选"] = "Filter",
+        ["清除筛选"] = "Clear Filters",
+        ["全部来源"] = "All Sources",
+        ["物品类型"] = "Item Type",
+        ["来源"] = "Source",
+        ["稀有度"] = "Rarity",
+        ["装备槽位"] = "Equipment Slot",
+        ["射击机制"] = "Firing Mechanism",
+        ["射击模式（可多选）"] = "Fire Mode (multi-select)",
+        ["重置"] = "Reset",
+        ["枪械"] = "Gun",
+        ["近战"] = "Melee",
+        ["投掷物"] = "Throwable",
+        ["弹匣"] = "Magazine",
+        ["瞄具"] = "Sight",
+        ["战术配件"] = "Tactical",
+        ["握把"] = "Grip",
+        ["枪管"] = "Barrel",
+        ["光学配件"] = "Optic",
+        ["帽子"] = "Hat",
+        ["上衣"] = "Shirt",
+        ["裤子"] = "Pants",
+        ["背包"] = "Backpack",
+        ["背心"] = "Vest",
+        ["面罩"] = "Mask",
+        ["眼镜"] = "Glasses",
+        ["饮料"] = "Drinks",
+        ["滤芯"] = "Filter",
+        ["建筑"] = "Structure",
+        ["路障"] = "Barricade",
+        ["储物"] = "Storage",
+        ["陷阱"] = "Trap",
+        ["农作物"] = "Farm",
+        ["种植器"] = "Grower",
+        ["发电机"] = "Generator",
+        ["油泵"] = "Oil Pump",
+        ["信标"] = "Beacon",
+        ["哨戒炮"] = "Sentry",
+        ["通用工具"] = "Tool",
+        ["燃料"] = "Fuel",
+        ["容器"] = "Refill",
+        ["钓具"] = "Fishing Gear",
+        ["轮胎"] = "Tire",
+        ["维修工具"] = "Vehicle Repair Tool",
+        ["喷漆工具"] = "Vehicle Paint Tool",
+        ["开锁工具"] = "Vehicle Lockpick Tool",
+        ["地图 / 其他"] = "Map / Other",
+        ["普通"] = "Common",
+        ["罕见"] = "Uncommon",
+        ["稀有"] = "Rare",
+        ["史诗"] = "Epic",
+        ["传奇"] = "Legendary",
+        ["神话"] = "Mythical",
+        ["快捷栏"] = "Hotkey",
+        ["主武器"] = "Primary",
+        ["副武器"] = "Secondary",
+        ["第三槽位"] = "Tertiary",
+        ["任意槽位"] = "Any",
+        ["常规枪械"] = "Trigger",
+        ["栓动"] = "Bolt",
+        ["泵动"] = "Pump",
+        ["轨道武器"] = "Rail",
+        ["弓 / 弩"] = "Bow / Crossbow",
+        ["折管"] = "Break-Action",
+        ["火箭 / 发射器"] = "Rocket / Launcher",
+        ["旋转机枪"] = "Minigun",
+        ["半自动"] = "Semi-Automatic",
+        ["全自动"] = "Automatic",
+        ["点射"] = "Burst",
+        ["⚙ 渲染设置"] = "⚙ Render Settings",
+        ["载具渲染设置"] = "Vehicle Render Settings",
+        ["尺寸"] = "Size",
+        ["取景倍率"] = "Framing",
+        ["128 × 96（低开销）"] = "128 × 96 (Low Cost)",
+        ["192 × 144（平衡）"] = "192 × 144 (Balanced)",
+        ["256 × 192（更清晰）"] = "256 × 192 (Sharper)",
+        ["缩略图尺寸只影响车辆卡片，不会修改游戏全局画质。已生成的缩略图会进入缓存，重复打开不会重复实例化车辆。"] =
+            "Thumbnail size only affects vehicle cards and does not change global game quality. Generated thumbnails are cached, so reopening does not instantiate vehicles again.",
+        ["128 × 96 为默认，生成更快且占用更低；192 × 144 是清晰度与开销的折中；256 × 192 的输出像素约为默认的 4 倍，首次生成更慢。"] =
+            "128 × 96 is the default with faster generation and lower usage; 192 × 144 balances clarity and cost; 256 × 192 produces about 4x the default pixels and takes longer the first time.",
+        ["取景倍率 0.5：主体更大、留白更少，可能接近裁切边界；1.0：默认平衡值；1.5：留白更多、主体更小，裁切风险更低。"] =
+            "Framing 0.5: larger subject and less padding, closer to the crop boundary; 1.0: balanced default; 1.5: more padding, smaller subject, and lower crop risk.",
+        ["车辆缩略图设置已应用并保存。"] = "Vehicle thumbnail settings applied and saved.",
+        ["车辆缩略图设置已应用，但配置文件保存失败。"] =
+            "Vehicle thumbnail settings applied, but the config file could not be saved.",
         ["重新扫描"] = "Rescan",
         ["已重新扫描当前加载的原版与模组资产。"] = "Rescanned the currently loaded vanilla and mod assets.",
         ["物品分类"] = "Item Categories",
@@ -204,8 +289,14 @@ internal static class PluginLocalization
         ["物品/车辆每页卡片数量，范围 12 到 80。"] = "Item/vehicle cards per page from 12 to 80."
     };
 
+    private static readonly IReadOnlyDictionary<string, string> Chinese = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["Workshop"] = "创意工坊"
+    };
+
     private static readonly PatternTranslation[] EnglishPatterns =
     {
+        new(@"^筛选 (\d+)$", "Filter $1"),
         new(@"^自动扫描完成：(\d+) 个物品、(\d+) 辆载具。$", "Scan complete: $1 items and $2 vehicles."),
         new(@"^生命 (.+?)/100    饱食 (.+?)/100    水分 (.+?)/100    免疫 (.+?)/100    体力 (.+?)/100    氧气 (.+?)/100$", "Health $1/100    Food $2/100    Water $3/100    Immunity $4/100    Stamina $5/100    Oxygen $6/100"),
         new(@"^经验 (.+?)    声望 (.+?)$", "Experience $1    Reputation $2"),
@@ -213,10 +304,13 @@ internal static class PluginLocalization
         new(@"^已变更 (.+?) 声望。$", "Changed reputation by $1."),
         new(@"^技能已处理，实际变更 (\d+) 项。$", "Skills processed; $1 levels changed."),
         new(@"^显示 (\d+) / (\d+)；模组物品 (\d+)。搜索支持名称、ID、GUID 和来源。$", "Showing $1 / $2; mod items: $3. Search supports name, ID, GUID, and source."),
+        new(@"^显示 (\d+) / (\d+)；搜索支持名称、ID、GUID 和来源。$", "Showing $1 / $2; search supports name, ID, GUID, and source."),
         new(@"^显示 (\d+) / (\d+)；模组车辆 (\d+)。每次生成 1–20 辆。$", "Showing $1 / $2; mod vehicles: $3. Spawn 1–20 at a time."),
         new(@"^物品收藏  (\d+)/(\d+)$", "Item Favorites  $1/$2"),
         new(@"^车辆收藏  (\d+)/(\d+)$", "Vehicle Favorites  $1/$2"),
         new(@"^显示 (\d+) 个已加载收藏物品；收藏记录 (\d+) 个。搜索支持名称、ID、GUID 和来源。$", "Showing $1 loaded favorite items; $2 saved favorites. Search supports name, ID, GUID, and source."),
+        new(@"^显示 (\d+) 个已加载收藏物品。$", "Showing $1 loaded favorite items."),
+        new(@"^当前分类：(.+)$", "Current category: $1"),
         new(@"^显示 (\d+) 辆已加载收藏车辆；收藏记录 (\d+) 辆。$", "Showing $1 loaded favorite vehicles; $2 saved favorites."),
         new(@"^已给予 (\d+) × (.+)。$", "Gave $1 × $2."),
         new(@"^无法给予 (.+)。$", "Could not give $1."),
@@ -267,8 +361,11 @@ internal static class PluginLocalization
 
     public static string Translate(string source)
     {
-        if (CurrentLanguage != PluginLanguage.English || string.IsNullOrEmpty(source))
+        if (string.IsNullOrEmpty(source))
             return source;
+
+        if (CurrentLanguage == PluginLanguage.Chinese)
+            return Chinese.TryGetValue(source, out string chineseTranslation) ? chineseTranslation : source;
 
         if (English.TryGetValue(source, out string translation))
             return translation;

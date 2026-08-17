@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\ItemFilterState.cs" Link="ItemFilterState.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\ItemFilterSnapshot.cs" Link="ItemFilterSnapshot.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\ItemFilterService.cs" Link="ItemFilterService.cs" />
+    <Reference Include="Assembly-CSharp" HintPath="I:\Steam\steamapps\common\Unturned\Unturned_Data\Managed\Assembly-CSharp.dll" Private="true" />
+    <Reference Include="UnturnedDat" HintPath="I:\Steam\steamapps\common\Unturned\Unturned_Data\Managed\UnturnedDat.dll" Private="true" />
+    <Reference Include="UnityEngine" HintPath="I:\Steam\steamapps\common\Unturned\Unturned_Data\Managed\UnityEngine.dll" Private="true" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="I:\Steam\steamapps\common\Unturned\Unturned_Data\Managed\UnityEngine.CoreModule.dll" Private="true" />
+  </ItemGroup>
+</Project>

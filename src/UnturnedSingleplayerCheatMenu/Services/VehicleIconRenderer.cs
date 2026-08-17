@@ -8,7 +8,7 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 internal sealed class VehicleIconRenderer
 {
     private const int PreviewLayer = 26;
-    private const float PreviewAspect = 128f / 96f;
+    private const float PreviewAspect = 4f / 3f;
     private const float MaximumBoundsRadius = 6f;
     private const byte VisibleAlphaThreshold = 16;
     private const int MinimumVisiblePixelCount = 12;
@@ -21,9 +21,12 @@ internal sealed class VehicleIconRenderer
         _plugin = plugin;
     }
 
-    internal bool TryEnqueue(VehicleAsset asset, Action<Texture2D> callback)
+    internal bool TryEnqueue(
+        VehicleAsset asset,
+        VehicleThumbnailRenderSettings settings,
+        Action<Texture2D> callback)
     {
-        if (asset == null || callback == null)
+        if (asset == null || settings == null || callback == null)
             return false;
 
         // VehicleTool.getIcon only enqueues work for VehicleTool.Update. That
@@ -31,20 +34,20 @@ internal sealed class VehicleIconRenderer
         // transition, which previously left every card as a white placeholder.
         // Own the queue here and capture one vehicle per reliable Harmony frame.
         _plugin?.LogVehicleIconRequest(asset, "插件直接离屏渲染");
-        _requests.Enqueue(new Request(asset, callback));
+        _requests.Enqueue(new Request(asset, settings, callback));
         return true;
     }
 
-    internal void PumpOne()
+    internal bool PumpOne()
     {
         if (_requests.Count == 0)
-            return;
+            return false;
 
         Request request = _requests.Dequeue();
         Texture2D texture = null;
         try
         {
-            texture = Render(request.Asset);
+            texture = Render(request.Asset, request.Settings);
         }
         catch (Exception exception)
         {
@@ -53,6 +56,7 @@ internal sealed class VehicleIconRenderer
 
         _plugin?.LogVehicleIconResult(request.Asset, texture, "插件直接离屏渲染");
         request.Callback(texture);
+        return true;
     }
 
     internal void CancelPending()
@@ -61,18 +65,22 @@ internal sealed class VehicleIconRenderer
             _requests.Dequeue().Callback(null);
     }
 
-    private Texture2D Render(VehicleAsset asset)
+    private Texture2D Render(VehicleAsset asset, VehicleThumbnailRenderSettings settings)
     {
-        Texture2D texture = RenderAttempt(asset, forceGeneratedCamera: false, out bool usedGeneratedCamera);
+        Texture2D texture = RenderAttempt(
+            asset,
+            settings,
+            forceGeneratedCamera: false,
+            out bool usedGeneratedCamera);
+        if (!usedGeneratedCamera)
+            return texture;
+
         if (TryFinalizeTexture(texture))
             return texture;
 
         DestroyTexture(texture);
-        if (usedGeneratedCamera)
-            return null;
-
         _plugin?.LogVehicleIconFallback(asset, "透明图检测后的自动取景重拍");
-        texture = RenderAttempt(asset, forceGeneratedCamera: true, out _);
+        texture = RenderAttempt(asset, settings, forceGeneratedCamera: true, out _);
         if (TryFinalizeTexture(texture))
             return texture;
 
@@ -82,6 +90,7 @@ internal sealed class VehicleIconRenderer
 
     private Texture2D RenderAttempt(
         VehicleAsset asset,
+        VehicleThumbnailRenderSettings settings,
         bool forceGeneratedCamera,
         out bool usedGeneratedCamera)
     {
@@ -93,7 +102,6 @@ internal sealed class VehicleIconRenderer
         try
         {
             model.position = new Vector3(-256f, -256f, 0f);
-            ForceHighestLod(model);
             Renderer[] renderers = model.GetComponentsInChildren<Renderer>(true);
             SetPreviewLayers(renderers);
 
@@ -104,29 +112,40 @@ internal sealed class VehicleIconRenderer
                 icon = forceGeneratedCamera ? null : model.Find("Icon");
                 if (icon == null)
                 {
-                    icon = CreateGeneratedIconTransform(model, renderers, out orthoSize);
+                    icon = CreateGeneratedIconTransform(model, renderers, settings, out orthoSize);
                     usedGeneratedCamera = true;
                     if (!forceGeneratedCamera)
                         _plugin?.LogVehicleIconFallback(asset, "缺少可用 Icon2 时的自动取景");
                 }
                 else
                 {
-                    orthoSize = CalculateOrthoSize(icon, GetRenderableBounds(renderers));
+                    orthoSize = CalculateOrthoSize(
+                        icon,
+                        GetRenderableBounds(renderers),
+                        framing: 1f);
                     _plugin?.LogVehicleIconFallback(asset, "旧版 Icon 取景");
                 }
             }
             else if (!IsUsableSize(orthoSize))
             {
-                orthoSize = CalculateOrthoSize(icon, GetRenderableBounds(renderers));
+                orthoSize = CalculateOrthoSize(
+                    icon,
+                    GetRenderableBounds(renderers),
+                    framing: 1f);
             }
+
+            // Only generated framing needs the extra geometry/LOD work. Preset
+            // Icon2/Icon captures keep the authored preview path intact.
+            if (usedGeneratedCamera)
+                ForceHighestLod(model);
 
             Texture2D texture = ItemTool.captureIcon(
                 asset.id,
                 0,
                 model,
                 icon,
-                128,
-                96,
+                settings.Width,
+                settings.Height,
                 Mathf.Max(0.25f, orthoSize),
                 true);
 
@@ -156,7 +175,10 @@ internal sealed class VehicleIconRenderer
             visiblePixels++;
             if (visiblePixels >= MinimumVisiblePixelCount)
             {
-                texture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+                // Keep the capture readable until the disk-cache encoder has
+                // consumed it. The texture is still owned by the icon cache,
+                // which destroys it when the vehicle memory cache is cleared.
+                texture.Apply(updateMipmaps: false, makeNoLongerReadable: false);
                 return true;
             }
         }
@@ -190,6 +212,7 @@ internal sealed class VehicleIconRenderer
     private static Transform CreateGeneratedIconTransform(
         Transform model,
         Renderer[] renderers,
+        VehicleThumbnailRenderSettings settings,
         out float orthoSize)
     {
         Bounds bounds = GetRenderableBounds(renderers);
@@ -210,7 +233,7 @@ internal sealed class VehicleIconRenderer
         float distance = Mathf.Clamp(radius + 1.5f, 2.5f, 7.5f);
         icon.position = bounds.center + cameraOffset * distance;
         icon.rotation = Quaternion.LookRotation(bounds.center - icon.position, Vector3.up);
-        orthoSize = CalculateOrthoSize(icon, bounds);
+        orthoSize = CalculateOrthoSize(icon, bounds, settings.Framing);
         return icon;
     }
 
@@ -242,7 +265,10 @@ internal sealed class VehicleIconRenderer
         return bounds;
     }
 
-    private static float CalculateOrthoSize(Transform cameraTransform, Bounds bounds)
+    private static float CalculateOrthoSize(
+        Transform cameraTransform,
+        Bounds bounds,
+        float framing)
     {
         Vector3 center = bounds.center;
         Vector3 extents = bounds.extents;
@@ -259,7 +285,8 @@ internal sealed class VehicleIconRenderer
             halfHeight = Mathf.Max(halfHeight, Mathf.Abs(local.y));
         }
 
-        return Mathf.Max(halfHeight, halfWidth / PreviewAspect) * 1.12f;
+        float safeHalfExtent = Mathf.Max(0.01f, Mathf.Max(halfHeight, halfWidth / PreviewAspect));
+        return Mathf.Max(0.25f, safeHalfExtent * framing);
     }
 
     private static void SetPreviewLayers(Renderer[] renderers)
@@ -273,13 +300,18 @@ internal sealed class VehicleIconRenderer
 
     private sealed class Request
     {
-        internal Request(VehicleAsset asset, Action<Texture2D> callback)
+        internal Request(
+            VehicleAsset asset,
+            VehicleThumbnailRenderSettings settings,
+            Action<Texture2D> callback)
         {
             Asset = asset;
+            Settings = settings;
             Callback = callback;
         }
 
         internal VehicleAsset Asset { get; }
+        internal VehicleThumbnailRenderSettings Settings { get; }
         internal Action<Texture2D> Callback { get; }
     }
 }

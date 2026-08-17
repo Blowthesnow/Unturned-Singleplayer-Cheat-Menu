@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SDG.Unturned;
+using UnturnedSingleplayerCheatMenu.Models;
 
 namespace UnturnedSingleplayerCheatMenu.Services;
 
@@ -37,66 +38,8 @@ internal sealed class AssetCatalog
         IsDirty = false;
     }
 
-    public static string GetItemCategory(ItemAsset asset)
-    {
-        switch (asset.type)
-        {
-            case EItemType.GUN:
-            case EItemType.MELEE:
-            case EItemType.THROWABLE:
-                return "武器";
-
-            case EItemType.MAGAZINE:
-            case EItemType.SIGHT:
-            case EItemType.TACTICAL:
-            case EItemType.GRIP:
-            case EItemType.BARREL:
-            case EItemType.OPTIC:
-                return "弹药与配件";
-
-            case EItemType.HAT:
-            case EItemType.PANTS:
-            case EItemType.SHIRT:
-            case EItemType.MASK:
-            case EItemType.BACKPACK:
-            case EItemType.VEST:
-            case EItemType.GLASSES:
-                return "衣物";
-
-            case EItemType.FOOD:
-            case EItemType.WATER:
-                return "食物与饮料";
-
-            case EItemType.MEDICAL:
-            case EItemType.FILTER:
-                return "医疗与防护";
-
-            case EItemType.BARRICADE:
-            case EItemType.STORAGE:
-            case EItemType.BEACON:
-            case EItemType.FARM:
-            case EItemType.TRAP:
-            case EItemType.STRUCTURE:
-            case EItemType.GROWER:
-            case EItemType.GENERATOR:
-            case EItemType.OIL_PUMP:
-            case EItemType.SENTRY:
-                return "建筑与放置物";
-
-            case EItemType.FUEL:
-            case EItemType.TOOL:
-            case EItemType.REFILL:
-            case EItemType.FISHER:
-            case EItemType.VEHICLE_REPAIR_TOOL:
-            case EItemType.VEHICLE_PAINT_TOOL:
-            case EItemType.VEHICLE_LOCKPICK_TOOL:
-            case EItemType.TIRE:
-                return "工具";
-
-            default:
-                return "其他";
-        }
-    }
+    public static ItemPrimaryCategory GetItemCategory(ItemAsset asset) =>
+        ItemFilterService.GetPrimaryCategory(asset.type);
 
     public static string GetVehicleCategory(VehicleAsset asset)
     {
@@ -142,7 +85,7 @@ internal sealed class AssetCatalog
 
     private static int CompareItems(ItemAsset left, ItemAsset right)
     {
-        int category = string.Compare(GetItemCategory(left), GetItemCategory(right), StringComparison.CurrentCulture);
+        int category = GetItemCategory(left).CompareTo(GetItemCategory(right));
         return category != 0 ? category : string.Compare(left.FriendlyName, right.FriendlyName, StringComparison.CurrentCultureIgnoreCase);
     }
 
