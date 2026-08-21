@@ -2,7 +2,7 @@
 
 [中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md)
 
-A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. Version 1.7.0 adds a crosshair interaction tool, native-simulation flight and noclip, safer map teleport landing, live time-slider preview, and duplicate-plugin deployment protection.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. It brings player controls, item and vehicle discovery, favorites, map-scoped teleports, world-time and weather controls, crosshair interaction, and native-simulation movement into one focused overlay.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 
@@ -39,18 +39,62 @@ A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Untu
 
 ## Features
 
-- Player controls: god mode, infinite survival stats, healing, configurable health/food/water/immunity/stamina/oxygen, experience, reputation, and max skills.
-- Items: automatic loaded-asset scan, primary and exact-type filters, origin, rarity, equipment slot, gun-action and multi-select fire-mode filters, name/ID/GUID/source search, pagination, game-generated icons, and quantities from `1–255`.
-- Vehicles: automatic loaded-asset scan, engine categories, search, pagination, official or model-rendered thumbnails, configurable `128 × 96`, `192 × 144`, or `256 × 192` output with framing control and per-configuration disk caching, and batches from `1–20` placed in front of the player.
-- Favorites: persistent item and vehicle favorites keyed by asset GUID, with direct actions from the favorites tab.
-- Teleports: map and list views, zoom/pan, player and saved-point markers, safe map-click landing on terrain or available building tops, customizable marker shapes/colors, and persistent map-scoped positions.
-- World controls: time slider, day/night, time freeze, full moon, airdrop, rain, snow, weather clearing, and asset rescan.
-- Tools: crosshair interaction with Smart, Inspect, Repair, Teleport, Utility, and Delete modes; middle-mouse activation; configurable target HUD fields; and Shift-guarded deletion.
-- Movement: native-simulation flight and noclip with separate horizontal/vertical speed multipliers and safe-exit recovery.
+### Player controls
+
+- God mode and unlimited survival state.
+- One-click healing, injury handling, and survival-stat refill.
+- Independent health, food, water, immunity, stamina, and oxygen values.
+- Custom experience and reputation changes, plus one-click max skills.
+
+### Items
+
+- Scans every loaded `ItemAsset` exposed by Unturned's current asset map, including vanilla, Workshop, and map-provided content.
+- Filters by primary category, exact item type, origin, rarity, equipment slot, gun action, and multi-select fire mode.
+- Searches by name, ID, GUID, or source, with pagination, game-generated icons, and quantities from `1–255`.
+
+### Vehicles
+
+- Scans loaded `VehicleAsset` entries and groups them by land vehicle, fixed-wing aircraft, helicopter, blimp, and boat.
+- Uses official icons when available and renders model thumbnails when an icon is missing or unusable.
+- Supports `128 × 96`, `192 × 144`, and `256 × 192` output, adjustable framing, per-configuration disk caching, and batches from `1–20` placed in front of the player.
+
+### Favorites
+
+- Persists item and vehicle favorites by asset GUID and keeps independent filters for the regular and favorites pages.
+- Gives items and spawns vehicles directly from favorite cards; unavailable Workshop assets remain saved until they are loaded again.
+
+### Teleports
+
+- Provides map and list views with zoom, pan, player and saved-point markers, customizable marker shapes/colors, and map-scoped JSON persistence.
+- Map-click teleport validates terrain or available building-top surfaces, checks standing clearance, and tries nearby safe candidates when the requested point is blocked.
+
+### World controls
+
+- Controls time, day/night, time freeze, full moon, airdrops, rain, snow, weather clearing, and loaded-asset rescanning.
+- Dragging the time slider updates a live percentage preview immediately; the time change is applied through a short debounce so the control remains responsive.
+
+### Crosshair interaction
+
+- The Tools page supports Smart, Inspect, Repair, Teleport, Utility, and Delete modes, activated with the middle mouse button.
+- Smart mode separates semantic target recognition from teleport coordinates, so a surface can still be inspected and a safe coordinate fallback can be used when no semantic target is available.
+- The target HUD can show name, ID/GUID, and health/durability independently; range and deletion protection are configurable. Delete requires holding `Shift` while pressing the middle mouse button.
+
+### Flight and noclip
+
+- Uses Unturned's native movement-simulation path rather than repeatedly teleporting the player.
+- Provides separate horizontal and vertical speed multipliers; default controls are `WASD` to move, `Space` to rise, and `Ctrl` to descend.
+- Optional safe-exit recovery searches for a standable position when noclip is disabled inside blocked geometry.
+
+### Overlay input and shortcut behavior
+
+- While the menu is open, the plugin captures the native cursor and gameplay input; it reasserts that isolation after `PlayerUI` updates and restores the previous state when the menu closes or the singleplayer boundary ends.
+- The menu shortcut accepts Unity polling, native input, and GUI-event paths with cross-frame de-duplication, preventing one physical press from toggling twice.
+- Shortcut capture accepts keyboard keys, middle mouse, and side mouse buttons. Left and right mouse buttons are rejected, while `Ctrl`, `Alt`, `Shift`, and `Win` can be used as modifiers.
+- The last main tab and teleport subview are persisted and restored the next time the menu opens.
+
+## Runtime boundary
 
 The menu only opens after confirming a loaded local player in a true `Singleplayer_` world where the current process is both client and server. It closes automatically if that condition stops being true.
-
-The last main tab and teleport subview are persisted and restored the next time the menu opens.
 
 The map setup checkbox named **singleplayer cheats** is not required. It controls Unturned's built-in command system; this plugin does not depend on `Provider.hasCheats`.
 
@@ -92,7 +136,7 @@ Files are created under `BepInEx/config` after first use:
 - `UnturnedSingleplayerCheatMenu.favorites.json`
 - `UnturnedSingleplayerCheatMenu.teleports.json`
 
-The default shortcut is `End` and can be changed through `ToggleShortcut`.
+The default shortcut is `End` and can be changed through `ToggleShortcut` or recaptured from the in-menu shortcut settings. The capture dialog accepts keyboard keys, middle mouse, and side mouse buttons; left and right mouse buttons are unavailable. Unsupported values are normalized back to `End`.
 
 The top-right `EN` / `中文` button switches the language immediately and writes the choice back to `Interface.Language`; no restart is required.
 
@@ -121,7 +165,7 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-Version 1.7.0 adds the point tool, native-simulation movement, safer teleport landing, live time preview, and duplicate-DLL deployment protection. Release build, nine solution projects, Plugin-Only package validation, retained runtime evidence, and remaining runtime boundaries are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md). No complete BepInEx package is published.
+Release build, nine solution projects including eight Smoke projects, Plugin-Only package validation, retained runtime evidence, and remaining runtime boundaries are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md). Source/build/Smoke/package evidence is kept separate from fresh in-game interaction acceptance. No complete BepInEx package is published.
 
 Published plugin DLL:
 

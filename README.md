@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [更新日志](CHANGELOG.md) · [验收记录](ACCEPTANCE.md) · [安全说明](SECURITY.md)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。v1.7.0 新增准星交互工具、原生模拟飞行/穿墙、传送安全落点增强、时间滑条实时预览和重复插件 DLL 部署保护。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、物品、载具、收藏、传送、世界时间、天气和事件控制。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
@@ -22,13 +22,6 @@
 ### 载具浏览与生成
 
 ![载具页：自动扫描载具并生成模型缩略图](docs/images/vehicles-tab.png)
-
-### 工具
-
-- 准星交互工具支持智能、检查、维修、传送、实用和删除模式；中键触发，删除需要同时按住 `Shift`。
-- Smart 模式将语义目标识别与传送坐标分开处理；没有可用目标时仍可检查世界表面或使用安全坐标回退。
-- 飞行与穿墙使用游戏原生移动模拟路径，支持水平/垂直速度倍率和关闭穿墙后的安全脱困搜索。
-
 ### 收藏
 
 ![收藏页：物品与车辆收藏及空状态](docs/images/favorites-tab.png)
@@ -92,11 +85,30 @@
 
 ### 其他
 
-- 时间滑条、切换白天/夜晚、冻结时间。
+- 时间滑条、切换白天/夜晚、冻结时间；拖动滑条时会即时更新预览百分比，避免盲调时间。
 - 强制满月。
 - 请求空投。
 - 雨、雪、清除天气和关闭天气调度。
 - 手动重新扫描当前已加载资产。
+
+### 准星交互工具
+
+- 在“工具”页启用后，用鼠标中键对准目标执行操作；支持 Smart、检查、维修、传送、实用和删除模式。
+- Smart 模式会先判断目标语义，再决定执行原生交互、检查、维修或传送；没有可识别目标时仍可检查世界表面，并回退到安全坐标。
+- 目标 HUD 可分别显示名称、ID/GUID、生命或耐久；最大作用距离可配置。
+- 删除操作必须同时按住 `Shift` 再点击中键，减少误删风险。
+
+### 飞行与穿墙
+
+- 飞行与穿墙沿 Unturned 的原生移动模拟路径运行，而不是单独瞬移玩家位置。
+- 支持水平速度和垂直速度分别调节；默认操作为 `WASD` 移动、`Space` 上升、`Ctrl` 下降。
+- 关闭穿墙时可启用安全退出搜索，在当前位置被障碍物占用时寻找可站立位置。
+
+### 界面与输入
+
+- 菜单打开时接管原生光标和角色输入；`PlayerUI` 更新后会重新维护输入隔离，关闭菜单或离开单人世界时恢复原状态。
+- 菜单快捷键同时兼容 Unity、原生输入和 GUI 事件路径，并进行跨帧去重，避免一次按键造成重复开关。
+- 快捷键捕获支持键盘、鼠标中键和鼠标侧键；鼠标左键、右键不可用，可组合 `Ctrl` / `Alt` / `Shift` / `Win`。
 
 ## 运行边界
 
@@ -113,7 +125,7 @@
 
 ## 兼容环境
 
-v1.7.0 已针对以下环境构建；既有单人运行证据与本轮新增功能的验证边界见 [ACCEPTANCE.md](ACCEPTANCE.md)：
+已针对以下环境构建；版本号和验收边界见 [ACCEPTANCE.md](ACCEPTANCE.md)：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -152,12 +164,12 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` 
 
 | 文件 | 用途 |
 | --- | --- |
-| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、快捷键、UI 缩放、每页卡片数、车辆缩略图、准星工具和移动设置 |
+| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、菜单快捷键、UI 缩放、每页卡片数、车辆缩略图、准星工具和移动设置 |
 | `UnturnedSingleplayerCheatMenu.favorites.json` | 物品与车辆收藏 |
 | `UnturnedSingleplayerCheatMenu.teleports.json` | 具名传送点 |
 | `BepInEx/LogOutput.log` | BepInEx 与插件运行日志 |
 
-默认快捷键是 `End`，可以在配置文件中的 `ToggleShortcut` 修改。修改前请退出游戏。
+默认快捷键是 `End`，可以在配置文件中的 `ToggleShortcut` 修改，也可以在菜单的快捷键设置界面重新捕获。修改前请退出游戏；若输入了不支持的鼠标左键或右键，插件会恢复为 `End`。
 
 插件窗口右上角提供 `EN` / `中文` 语言切换按钮，点击后立即刷新界面并写回 `Interface.Language`，不需要重启游戏。
 
@@ -206,7 +218,7 @@ dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSetti
 
 ## 验证
 
-v1.7.0 的 Release 构建、九个解决方案项目、Plugin-Only 发布包校验及哈希记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。本版本加入准星交互工具、原生模拟飞行/穿墙、传送安全落点增强、时间滑条实时预览和重复 DLL 部署保护。
+Release 构建、九个解决方案项目（含八个 Smoke 项目）、Plugin-Only 发布包校验及哈希记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。源码、构建、Smoke、发布包证据与真实游戏运行证据分开记录；本轮未重新执行的游戏内交互边界不会被 README 误标为完整验收。
 
 已发布插件 DLL：
 
