@@ -16,7 +16,7 @@ namespace UnturnedSingleplayerCheatMenu.UI;
 /// even with a very low GUI.depth. A top-sorted uGUI Canvas participates in the
 /// final UI render pass and remains visible without hiding the native HUD.
 /// </summary>
-internal sealed class CheatMenuOverlayUi : IDisposable
+internal sealed partial class CheatMenuOverlayUi : IDisposable
 {
     // Unturned's Glazier uGUI cursor has its own nested Canvas at 30000.
     // Keep the menu directly below it, while remaining above the ordinary
@@ -32,6 +32,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         Vehicles,
         Favorites,
         Teleports,
+        Tools,
         Other
     }
 
@@ -147,6 +148,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     private Text _statusText;
     private Image _statusAccent;
     private TeleportMapSurface _teleportMapSurface;
+    private Text _timeCurrentText;
     private Text _timePreviewText;
     private Slider _timeSlider;
     private InputField _itemAmountInput;
@@ -187,7 +189,6 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     private string _reputationAmount = "100";
     private string _itemAmountText = "1";
     private string _vehicleAmountText = "1";
-    private string _timePercentText = "50";
     private int _itemPage;
     private int _vehiclePage;
     private int _favoritePage;
@@ -197,6 +198,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     private TeleportMarkerKind _teleportMarkerKind = TeleportMarkerKind.Star;
     private Color _teleportMarkerColor = new(0.96f, 0.77f, 0.26f, 1f);
     private bool _teleportMarkerDrawerOpen;
+    private GameObject _teleportMarkerDrawerRoot;
+    private RectTransform _teleportMarkerDrawerPopup;
+    private Button _teleportMarkerTriggerButton;
     private GameObject _teleportColorPickerRoot;
     private Color _teleportColorDraft;
     private Image _teleportColorPreview;
@@ -235,7 +239,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     public void OnClosed()
     {
         HideConfirmDialog();
+        HideTeleportMarkerDrawer();
         HideTeleportColorPicker();
+        HidePointToolModeDrawer();
         HideItemFilterPanel();
         HideVehicleThumbnailSettings();
         if (_root != null)
@@ -274,6 +280,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
         _searchDebouncer.Tick();
         _timeApplyDebouncer.Tick();
+        if (_activeTab == MenuTab.Other)
+            RefreshOtherTime();
 
         Canvas canvas = _root.GetComponent<Canvas>();
         if (canvas != null && canvas.sortingOrder != OverlaySortingOrder)
@@ -281,9 +289,30 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         if (_panel != null)
             _panel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
 
+        if (_teleportMarkerDrawerRoot != null)
+        {
+            PositionTeleportMarkerDrawer();
+            if (Input.GetMouseButtonDown(0)
+                && _teleportMarkerTriggerButton != null
+                && _teleportMarkerDrawerPopup != null
+                && !RectTransformUtility.RectangleContainsScreenPoint(
+                    _teleportMarkerDrawerPopup,
+                    Input.mousePosition,
+                    null)
+                && !RectTransformUtility.RectangleContainsScreenPoint(
+                    _teleportMarkerTriggerButton.GetComponent<RectTransform>(),
+                    Input.mousePosition,
+                    null))
+            {
+                HideTeleportMarkerDrawer();
+            }
+        }
+
         RefreshHeader();
         if (_activeTab == MenuTab.Teleports && _teleportMapSurface != null && Player.LocalPlayer != null)
             _teleportMapSurface.RefreshPlayerMarker(Player.LocalPlayer.transform.position);
+
+        MaintainPointToolModeDrawer();
 
         if (_statusUntil > 0f && Time.unscaledTime > _statusUntil)
         {
@@ -321,6 +350,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         _teleportMarkerTextures.Clear();
         if (_confirmRoot != null)
             UnityEngine.Object.Destroy(_confirmRoot);
+        if (_teleportMarkerDrawerRoot != null)
+            UnityEngine.Object.Destroy(_teleportMarkerDrawerRoot);
+        if (_pointToolModeDrawerRoot != null)
+            UnityEngine.Object.Destroy(_pointToolModeDrawerRoot);
         if (_teleportColorPickerRoot != null)
             UnityEngine.Object.Destroy(_teleportColorPickerRoot);
         _root = null;
@@ -329,14 +362,21 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         _statusText = null;
         _statusAccent = null;
         _teleportMapSurface = null;
+        _timeCurrentText = null;
         _timePreviewText = null;
         _timeSlider = null;
         _itemAmountInput = null;
         _vehicleAmountInput = null;
         _confirmRoot = null;
+        _teleportMarkerDrawerRoot = null;
+        _teleportMarkerDrawerPopup = null;
+        _teleportMarkerTriggerButton = null;
         _itemFilterRoot = null;
         _itemFilterDraft = null;
         _teleportColorPickerRoot = null;
+        _pointToolModeDrawerRoot = null;
+        _pointToolModeDrawerPopup = null;
+        _pointToolModeTriggerButton = null;
         _teleportColorPreview = null;
         _teleportColorHexPreview = null;
         _teleportColorHexInput = null;
@@ -516,6 +556,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         AddTab(row.transform, MenuTab.Vehicles, "载具");
         AddTab(row.transform, MenuTab.Favorites, "收藏");
         AddTab(row.transform, MenuTab.Teleports, "传送");
+        AddTab(row.transform, MenuTab.Tools, "工具");
         AddTab(row.transform, MenuTab.Other, "其他");
     }
 
@@ -558,6 +599,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
             case MenuTab.Teleports:
                 BuildTeleportsTab();
                 break;
+            case MenuTab.Tools:
+                BuildToolsTab();
+                break;
             case MenuTab.Other:
                 BuildOtherTab();
                 break;
@@ -566,6 +610,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
     private void ReplaceContentHost()
     {
+        HidePointToolModeDrawer();
         if (_contentHost != null)
         {
             QueueForDestroy(_contentHost);
@@ -1688,14 +1733,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         CreateLabel(content, $"地图 {Provider.map}    X {position.x:F1}    Y {position.y:F1}    Z {position.z:F1}", 12, CheatMenuStyle.Muted);
         GameObject saveRow = CreateRow(content, 38f, 8f);
         CreateInput(saveRow.transform, _teleportName, value => _teleportName = value, 0f, 1f);
-        CreateMarkerPickerButton(
+        Button markerPickerButton = null;
+        markerPickerButton = CreateMarkerPickerButton(
             saveRow.transform,
             _teleportMarkerKind,
-            () =>
-            {
-                _teleportMarkerDrawerOpen = !_teleportMarkerDrawerOpen;
-                ShowTab(MenuTab.Teleports);
-            },
+            () => ToggleTeleportMarkerDrawer(markerPickerButton),
             108f,
             compact: true);
         CreateColorPickerButton(saveRow.transform);
@@ -1713,26 +1755,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
             }
         }, 120f, 35f);
 
-        if (_teleportMarkerDrawerOpen)
-        {
-            GameObject markerDrawer = CreateRow(content, 58f, 7f);
-            foreach (TeleportMarkerKind markerKind in MarkerKinds)
-            {
-                TeleportMarkerKind capturedMarkerKind = markerKind;
-                CreateMarkerPickerButton(
-                    markerDrawer.transform,
-                    capturedMarkerKind,
-                    () =>
-                    {
-                        _teleportMarkerKind = capturedMarkerKind;
-                        _teleportMarkerDrawerOpen = false;
-                        ShowTab(MenuTab.Teleports);
-                    },
-                    0f,
-                    compact: false,
-                    flexibleWidth: 1f);
-            }
-        }
+
 
         string currentMap = Provider.map ?? string.Empty;
         TeleportPoint[] points = _plugin.Teleports.Points
@@ -1795,6 +1818,110 @@ internal sealed class CheatMenuOverlayUi : IDisposable
             StatusKind.Info);
     }
 
+    private void ToggleTeleportMarkerDrawer(Button trigger)
+    {
+        if (_teleportMarkerDrawerOpen)
+        {
+            HideTeleportMarkerDrawer();
+            return;
+        }
+
+        _teleportMarkerDrawerOpen = true;
+        _teleportMarkerTriggerButton = trigger;
+        BuildTeleportMarkerDrawer();
+    }
+
+    private void BuildTeleportMarkerDrawer()
+    {
+        if (_teleportMarkerTriggerButton == null || _root == null)
+            return;
+
+        if (_teleportMarkerDrawerRoot != null)
+            QueueForDestroy(_teleportMarkerDrawerRoot);
+        _teleportMarkerDrawerRoot = null;
+        _teleportMarkerDrawerPopup = null;
+        _teleportMarkerDrawerOpen = true;
+
+        _teleportMarkerDrawerRoot = CreateObject("TeleportMarkerDrawer", _root.transform, typeof(Image));
+        Image popupImage = _teleportMarkerDrawerRoot.GetComponent<Image>();
+        popupImage.color = CheatMenuStyle.Panel;
+        Outline popupOutline = _teleportMarkerDrawerRoot.AddComponent<Outline>();
+        popupOutline.effectColor = CheatMenuStyle.InputBorder;
+        popupOutline.effectDistance = Vector2.one;
+        popupOutline.useGraphicAlpha = false;
+        _teleportMarkerDrawerPopup = _teleportMarkerDrawerRoot.GetComponent<RectTransform>();
+        _teleportMarkerDrawerPopup.anchorMin = _teleportMarkerDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f);
+        _teleportMarkerDrawerPopup.pivot = new Vector2(0f, 1f);
+        _teleportMarkerDrawerPopup.sizeDelta = new Vector2(108f, 184f);
+
+        VerticalLayoutGroup popupLayout = _teleportMarkerDrawerRoot.AddComponent<VerticalLayoutGroup>();
+        popupLayout.padding = new RectOffset(4, 4, 4, 4);
+        popupLayout.spacing = 4f;
+        popupLayout.childControlWidth = true;
+        popupLayout.childControlHeight = true;
+        popupLayout.childForceExpandWidth = true;
+        popupLayout.childForceExpandHeight = false;
+
+        foreach (TeleportMarkerKind markerKind in MarkerKinds)
+        {
+            TeleportMarkerKind capturedMarkerKind = markerKind;
+            Button option = CreateMarkerPickerButton(
+                _teleportMarkerDrawerRoot.transform,
+                capturedMarkerKind,
+                () =>
+                {
+                    _teleportMarkerKind = capturedMarkerKind;
+                    HideTeleportMarkerDrawer();
+                    ShowTab(MenuTab.Teleports);
+                },
+                0f,
+                compact: true,
+                flexibleWidth: 1f);
+            SetLayout(option.gameObject, preferredHeight: 42f, flexibleWidth: 1f);
+        }
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_teleportMarkerDrawerPopup);
+        PositionTeleportMarkerDrawer();
+    }
+
+    private void PositionTeleportMarkerDrawer()
+    {
+        if (_teleportMarkerTriggerButton == null
+            || _teleportMarkerDrawerPopup == null
+            || _root == null)
+            return;
+
+        RectTransform triggerRect = _teleportMarkerTriggerButton.GetComponent<RectTransform>();
+        RectTransform rootRect = _root.GetComponent<RectTransform>();
+        Vector3[] corners = new Vector3[4];
+        triggerRect.GetWorldCorners(corners);
+        Vector2 bottomLeft = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
+        Vector2 topLeft = RectTransformUtility.WorldToScreenPoint(null, corners[1]);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(rootRect, bottomLeft, null, out Vector2 bottomLeftLocal);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(rootRect, topLeft, null, out Vector2 topLeftLocal);
+
+        Vector2 popupSize = _teleportMarkerDrawerPopup.sizeDelta;
+        popupSize.x = triggerRect.rect.width;
+        _teleportMarkerDrawerPopup.sizeDelta = popupSize;
+
+        _teleportMarkerDrawerPopup.anchorMin = _teleportMarkerDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f);
+        float spaceBelow = bottomLeftLocal.y - rootRect.rect.yMin;
+        bool openAbove = spaceBelow < _teleportMarkerDrawerPopup.rect.height + 8f;
+        _teleportMarkerDrawerPopup.pivot = openAbove ? new Vector2(0f, 0f) : new Vector2(0f, 1f);
+        _teleportMarkerDrawerPopup.anchoredPosition = openAbove ? topLeftLocal : bottomLeftLocal;
+    }
+
+    private void HideTeleportMarkerDrawer()
+    {
+        _teleportMarkerDrawerOpen = false;
+        if (_teleportMarkerDrawerRoot != null)
+            QueueForDestroy(_teleportMarkerDrawerRoot);
+
+        _teleportMarkerDrawerRoot = null;
+        _teleportMarkerDrawerPopup = null;
+        _teleportMarkerTriggerButton = null;
+    }
     private static MenuTab ParseMenuTab(string value)
     {
         return Enum.TryParse(value, true, out MenuTab tab) && Enum.IsDefined(typeof(MenuTab), tab)
@@ -1864,32 +1991,16 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         AddVerticalLayout(_contentHost, 9f, new RectOffset(12, 12, 10, 10));
         uint cycle = Math.Max(1u, LightingManager.cycle);
         float normalized = LightingManager.time / (float)cycle;
-        _timePercentText = Mathf.RoundToInt(normalized * 100f).ToString();
         CreateSection(content, "时间");
-        CreateLabel(content, $"当前时间：{LightingManager.time:N0} / {cycle:N0}（{normalized:P0}）", 14);
-        GameObject timeRow = CreateRow(content, 38f, 8f);
-        CreateLabeledInput(timeRow.transform, "时间百分比", _timePercentText, value =>
-        {
-            _timePercentText = value;
-            if (int.TryParse(value, out int percent) && _timeSlider != null)
-            {
-                percent = Mathf.Clamp(percent, 0, 99);
-                _timeSlider.SetValueWithoutNotify(percent / 100f);
-                UpdateTimePreview(percent / 100f, cycle);
-            }
-        }, 210f);
+        _timeCurrentText = CreateLabel(content, $"当前时间：{LightingManager.time:N0} / {cycle:N0}（{normalized:P0}）", 14);
+        GameObject timeRow = CreateRow(content, 38f, 10f);
         _timeSlider = CreateTimeSlider(timeRow.transform, normalized, value =>
         {
-            _timePercentText = Mathf.RoundToInt(value * 100f).ToString();
             UpdateTimePreview(value, cycle);
             int percent = Mathf.Clamp(Mathf.RoundToInt(value * 100f), 0, 99);
             _timeApplyDebouncer.Schedule(() => ApplyTimePercent(percent, cycle));
         });
-        CreateButton(timeRow.transform, "应用", () =>
-        {
-            _timeApplyDebouncer.Cancel();
-            ApplyTimePercent(ParseClamped(_timePercentText, 0, 99, 50), cycle);
-        }, 82f, 34f);
+        SetLayout(_timeSlider.gameObject, preferredWidth: 0f, flexibleWidth: 1f);
         CreateAction(timeRow.transform, "设为白天", () =>
         {
             _timeApplyDebouncer.Cancel();
@@ -2172,6 +2283,25 @@ internal sealed class CheatMenuOverlayUi : IDisposable
         return slider;
     }
 
+    private void RefreshOtherTime()
+    {
+        uint cycle = Math.Max(1u, LightingManager.cycle);
+        float normalized = Mathf.Clamp01(LightingManager.time / (float)cycle);
+        if (_timeCurrentText != null)
+            _timeCurrentText.text = $"当前时间：{LightingManager.time:N0} / {cycle:N0}（{normalized:P0}）";
+
+        bool draggingSlider = _timeSlider != null
+            && Input.GetMouseButton(0)
+            && EventSystem.current != null
+            && EventSystem.current.currentSelectedGameObject == _timeSlider.gameObject;
+        if (draggingSlider)
+            return;
+
+        if (_timeSlider != null)
+            _timeSlider.SetValueWithoutNotify(normalized);
+        UpdateTimePreview(normalized, cycle);
+    }
+
     private void UpdateTimePreview(float normalized, uint cycle)
     {
         if (_timePreviewText != null)
@@ -2181,7 +2311,6 @@ internal sealed class CheatMenuOverlayUi : IDisposable
     private void ApplyTimePercent(int percent, uint cycle)
     {
         percent = Mathf.Clamp(percent, 0, 99);
-        _timePercentText = percent.ToString();
         _plugin.Actions.SetTime((uint)(cycle * (percent / 100f)));
         if (_timeSlider != null)
             _timeSlider.SetValueWithoutNotify(percent / 100f);

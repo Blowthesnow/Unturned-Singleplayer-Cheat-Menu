@@ -276,6 +276,12 @@ internal sealed class CheatActions
 
     public bool TeleportToMapPosition(Vector3 horizontalPosition)
     {
+        return TeleportToMapPosition(horizontalPosition, out _);
+    }
+
+    internal bool TeleportToMapPosition(Vector3 horizontalPosition, out Vector3 landingPoint)
+    {
+        landingPoint = horizontalPosition;
         Player player = Player.LocalPlayer;
         if (player == null)
         {
@@ -292,7 +298,7 @@ internal sealed class CheatActions
             _log.LogWarning("地图传送失败：使用地图传送前需要离开车辆。");
             return false;
         }
-        if (!TryFindSafeLandingPoint(horizontalPosition, out Vector3 landingPoint))
+        if (!TryFindSafeLandingPoint(horizontalPosition, out landingPoint))
         {
             _log.LogWarning($"地图传送失败：未找到安全落点，水平坐标={horizontalPosition}。");
             return false;
@@ -311,12 +317,63 @@ internal sealed class CheatActions
     {
         landingPoint = horizontalPosition;
         horizontalPosition.y = 0f;
+        if (TryFindSafeLandingPointAt(horizontalPosition, out landingPoint))
+            return true;
 
-        if (!Level.checkSafeIncludingClipVolumes(horizontalPosition))
-            return false;
+        foreach (float radius in new[] { 1.5f, 3f })
+        {
+            for (int index = 0; index < 8; index++)
+            {
+                float angle = index * Mathf.PI * 2f / 8f;
+                Vector3 nearbyPosition = horizontalPosition
+                    + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+                if (TryFindSafeLandingPointAt(nearbyPosition, out landingPoint))
+                {
+                    _log.LogInfo(
+                        $"地图传送目标被占用，已使用附近安全落点：请求={horizontalPosition}，落点={landingPoint}。" );
+                    return true;
+                }
+            }
+        }
 
+        return false;
+    }
+
+    private static bool TryValidateLandingPoint(
+        Vector3 candidate,
+        Player player,
+        out Vector3 landingPoint)
+    {
+        landingPoint = candidate;
+        return Level.checkSafeIncludingClipVolumes(candidate)
+            && (player?.stance == null
+                || player.stance.wouldHaveHeightClearanceAtPosition(candidate, 0.5f));
+    }
+
+    private static bool TryValidateSurfaceLandingPoint(
+        Vector3 surfacePoint,
+        Player player,
+        out Vector3 landingPoint)
+    {
+        foreach (float offset in new[] { 0.05f, 0.15f, 0.3f })
+        {
+            Vector3 candidate = surfacePoint + Vector3.up * offset;
+            if (TryValidateLandingPoint(candidate, player, out landingPoint))
+                return true;
+        }
+
+        landingPoint = surfacePoint;
+        return false;
+    }
+
+    private bool TryFindSafeLandingPointAt(Vector3 horizontalPosition, out Vector3 landingPoint)
+    {
+        landingPoint = horizontalPosition;
+        horizontalPosition.y = 0f;
         Player player = Player.LocalPlayer;
-        float rayStart = Mathf.Max(Level.HEIGHT + 64f, player?.transform.position.y + 128f ?? Level.HEIGHT + 64f);
+        float rayStart = Mathf.Max(
+            Level.HEIGHT + 64f,
+            player?.transform.position.y + 128f ?? Level.HEIGHT + 64f);
         int landingMask = RayMasks.BLOCK_STANCE
             & ~RayMasks.CLIP
             & ~RayMasks.RESOURCE
@@ -335,27 +392,16 @@ internal sealed class CheatActions
                 continue;
             if (player != null && hit.collider.GetComponentInParent<Player>() == player)
                 continue;
-
-            Vector3 candidate = hit.point;
-            if (!Level.checkSafeIncludingClipVolumes(candidate))
-                continue;
-            if (player?.stance != null && !player.stance.wouldHaveHeightClearanceAtPosition(candidate, 0.5f))
-                continue;
-
-            landingPoint = candidate;
-            return true;
+            if (TryValidateSurfaceLandingPoint(hit.point, player, out landingPoint))
+                return true;
         }
 
         try
         {
             float groundHeight = LevelGround.getHeight(horizontalPosition);
-            Vector3 fallback = new(horizontalPosition.x, groundHeight, horizontalPosition.z);
-            if (Level.checkSafeIncludingClipVolumes(fallback)
-                && (player?.stance == null || player.stance.wouldHaveHeightClearanceAtPosition(fallback, 0.5f)))
-            {
-                landingPoint = fallback;
+            Vector3 surfacePoint = new(horizontalPosition.x, groundHeight, horizontalPosition.z);
+            if (TryValidateSurfaceLandingPoint(surfacePoint, player, out landingPoint))
                 return true;
-            }
         }
         catch (Exception ex)
         {

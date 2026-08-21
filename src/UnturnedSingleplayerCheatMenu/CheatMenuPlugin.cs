@@ -7,6 +7,7 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using SDG.Unturned;
 using UnityEngine;
+using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Patches;
 using UnturnedSingleplayerCheatMenu.Services;
 using UnturnedSingleplayerCheatMenu.UI;
@@ -19,7 +20,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.codex.unturned.singleplayer-cheat-menu";
     public const string PluginName = "Unturned Singleplayer Cheat Menu";
-    public const string PluginVersion = "1.6.0";
+    public const string PluginVersion = "1.7.0";
 
     private Harmony _harmony;
     private ConfigEntry<string> _language;
@@ -30,9 +31,20 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     private ConfigEntry<float> _vehicleIconFraming;
     private ConfigEntry<string> _lastMainTab;
     private ConfigEntry<string> _lastTeleportView;
+    private ConfigEntry<bool> _pointToolEnabled;
+    private ConfigEntry<string> _pointToolMode;
+    private ConfigEntry<float> _pointToolRange;
+    private ConfigEntry<bool> _pointToolShowTargetName;
+    private ConfigEntry<bool> _pointToolShowId;
+    private ConfigEntry<bool> _pointToolShowHealth;
+    private ConfigEntry<bool> _pointToolShowHud;
+    private ConfigEntry<float> _flightSpeed;
+    private ConfigEntry<float> _flightVerticalSpeed;
+    private ConfigEntry<bool> _noclipSafeExit;
     private CheatMenuOverlayUi _ui;
     private PluginRuntimeHost _runtimeHost;
     private VehicleIconRenderer _vehicleIconRenderer;
+    private PointToolHud _pointToolHud;
     private readonly NativeShortcutDetector _nativeShortcut = new();
     private readonly ShortcutToggleGate _shortcutToggleGate = new();
     private float _nextMaintenanceTime;
@@ -62,6 +74,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     internal TeleportStore Teleports { get; private set; }
     internal TeleportMapService TeleportMaps { get; private set; }
     internal CheatActions Actions { get; private set; }
+    internal MovementCheatService Movement { get; private set; }
+    internal PointToolService PointTool { get; private set; }
     internal float UiScale => Mathf.Clamp(_uiScale.Value, 0.75f, 1.5f);
     internal int PageSize => Mathf.Clamp(_pageSize.Value, 12, 80);
     internal string ShortcutLabel => _toggleShortcut.Value.ToString();
@@ -284,6 +298,16 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
             "LastTeleportView",
             "Map",
             "Last selected teleport subview: Map or Points.");
+        _pointToolEnabled = Config.Bind("PointTool", "Enabled", false, "Enable the crosshair interaction tool.");
+        _pointToolMode = Config.Bind("PointTool", "Mode", "Smart", "Inspect, Repair, Teleport, Utility, Delete, or Smart.");
+        _pointToolRange = Config.Bind("PointTool", "Range", 100f, "Maximum crosshair interaction range in meters.");
+        _pointToolShowTargetName = Config.Bind("PointTool", "ShowTargetName", true, "Show the target name in the point HUD.");
+        _pointToolShowId = Config.Bind("PointTool", "ShowId", true, "Show target ID and GUID in the point HUD.");
+        _pointToolShowHealth = Config.Bind("PointTool", "ShowHealth", true, "Show target health or durability in the point HUD.");
+        _pointToolShowHud = Config.Bind("Interface", "ShowPointToolHud", true, "Show the point-tool HUD.");
+        _flightSpeed = Config.Bind("Movement", "FlightSpeed", 3f, "Horizontal flight speed multiplier.");
+        _flightVerticalSpeed = Config.Bind("Movement", "FlightVerticalSpeed", 2f, "Vertical flight speed multiplier.");
+        _noclipSafeExit = Config.Bind("Movement", "NoClipSafeExit", true, "Search for a safe position when noclip is disabled.");
 
         VehicleThumbnailSettings = VehicleThumbnailRenderSettings.Normalize(
             _vehicleIconResolution.Value,
@@ -306,6 +330,23 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
         Teleports = new TeleportStore(Logger);
         TeleportMaps = new TeleportMapService(Logger);
         Actions = new CheatActions(Logger);
+        Movement = new MovementCheatService(Logger)
+        {
+            FlightSpeed = Mathf.Clamp(_flightSpeed.Value, 1f, 10f),
+            VerticalSpeed = Mathf.Clamp(_flightVerticalSpeed.Value, 1f, 10f),
+            SafeExit = _noclipSafeExit.Value
+        };
+        _pointToolHud = new PointToolHud(Logger);
+        PointTool = new PointToolService(Logger, _pointToolHud)
+        {
+            Enabled = _pointToolEnabled.Value,
+            Mode = ParsePointToolMode(_pointToolMode.Value),
+            Range = Mathf.Clamp(_pointToolRange.Value, 5f, 250f),
+            ShowTargetName = _pointToolShowTargetName.Value,
+            ShowId = _pointToolShowId.Value,
+            ShowHealth = _pointToolShowHealth.Value,
+            ShowHud = _pointToolShowHud.Value
+        };
         _ui = new CheatMenuOverlayUi(this);
         _runtimeHost = PluginRuntimeHost.Create(this);
         Favorites.Load();
@@ -384,6 +425,23 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
         {
             MaintainMenuInputCapture();
             _ui.Maintain();
+        }
+
+        if (!SingleplayerGuard.IsReady)
+        {
+            Movement?.Restore();
+            if (PointTool != null)
+                PointTool.Enabled = false;
+            _pointToolHud?.Hide();
+        }
+        else
+        {
+            Movement?.Pump();
+            PointTool?.Pump();
+            _pointToolHud?.SetMovement(
+                Movement?.FlightEnabled == true,
+                Movement?.NoclipEnabled == true,
+                Movement?.FlightSpeed ?? 0f);
         }
 
         if (Time.unscaledTime >= _nextMaintenanceTime)
@@ -489,6 +547,70 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     }
 
     internal void CloseMenu() => SetMenuOpen(false);
+
+    internal void SetPointToolEnabled(bool value)
+    {
+        PointTool.Enabled = value && SingleplayerGuard.IsReady;
+        PersistInterfaceState(_pointToolEnabled, PointTool.Enabled);
+        if (!PointTool.Enabled)
+            _pointToolHud.ClearPointIfCreated();
+    }
+
+    internal void SetPointToolMode(PointToolMode value)
+    {
+        PointTool.Mode = value;
+        PersistInterfaceState(_pointToolMode, value.ToString());
+    }
+
+    internal void SetPointToolRange(float value)
+    {
+        PointTool.Range = Mathf.Clamp(value, 5f, 250f);
+        PersistInterfaceState(_pointToolRange, PointTool.Range);
+    }
+
+    internal void SetPointToolShowTargetName(bool value)
+    {
+        PointTool.ShowTargetName = value;
+        PersistInterfaceState(_pointToolShowTargetName, value);
+    }
+
+    internal void SetPointToolShowId(bool value)
+    {
+        PointTool.ShowId = value;
+        PersistInterfaceState(_pointToolShowId, value);
+    }
+
+    internal void SetPointToolShowHealth(bool value)
+    {
+        PointTool.ShowHealth = value;
+        PersistInterfaceState(_pointToolShowHealth, value);
+    }
+
+    internal void SetFlightSpeed(float value)
+    {
+        Movement.FlightSpeed = Mathf.Clamp(value, 1f, 10f);
+        PersistInterfaceState(_flightSpeed, Movement.FlightSpeed);
+    }
+
+    internal void SetFlightVerticalSpeed(float value)
+    {
+        Movement.VerticalSpeed = Mathf.Clamp(value, 1f, 10f);
+        PersistInterfaceState(_flightVerticalSpeed, Movement.VerticalSpeed);
+    }
+
+    internal void SetNoclipSafeExit(bool value)
+    {
+        Movement.SafeExit = value;
+        PersistInterfaceState(_noclipSafeExit, value);
+    }
+
+    private static PointToolMode ParsePointToolMode(string value)
+    {
+        return Enum.TryParse(value, true, out PointToolMode mode)
+            && Enum.IsDefined(typeof(PointToolMode), mode)
+            ? mode
+            : PointToolMode.Smart;
+    }
 
     internal void RefreshCatalog()
     {
@@ -626,6 +748,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
     private void InstallRuntimePatches()
     {
         _harmony = new Harmony(PluginGuid);
+        MovementSimulationPatch.Install(_harmony, Logger);
+        PointToolInteractionPatch.Install(_harmony, Logger);
         PatchUpdateLoop(typeof(Provider));
         PatchUpdateLoop(typeof(MenuUI));
         PatchUpdateLoop(typeof(PlayerUI));

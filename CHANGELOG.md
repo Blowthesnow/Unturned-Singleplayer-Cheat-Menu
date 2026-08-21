@@ -4,6 +4,27 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-21
+
+### Added
+
+- Added a crosshair interaction tool with Smart, Inspect, Repair, Teleport, Utility, and Delete modes. Middle-mouse activation, configurable range, target HUD fields, semantic target inspection, and safe coordinate fallback are guarded by the singleplayer runtime boundary.
+- Added native-simulation flight and noclip controls with separate horizontal and vertical speed multipliers, keyboard movement, and configurable safe-exit recovery when noclip is disabled.
+- Added point-tool and movement smoke tests, and restored localization and teleport serialization regression coverage in the solution.
+
+### Improved
+
+- Hardened map-click teleport landing: surface candidates are validated for clip-volume and stance clearance, with nearby fallback positions when the requested point is blocked.
+- Kept movement changes inside Unturned's simulation path and automatically restores native movement state when leaving singleplayer, dying, entering a vehicle, or closing the runtime boundary.
+- Added live time-slider preview behavior and retained the overlay's native cursor/input isolation after PlayerUI updates.
+- The installer now backs up and disables duplicate active plugin DLLs, then verifies that exactly one canonical DLL remains under `BepInEx\\plugins\\UnturnedSingleplayerCheatMenu`.
+
+
+### Verified
+
+- Release build and nine solution projects pass with zero warnings and zero errors; live point-tool and movement gameplay acceptance remains reported separately from source/build evidence.
+- The formal release asset is Plugin-Only only. No complete BepInEx package is uploaded.
+
 ## [1.6.0] - 2026-08-17
 
 ### Added

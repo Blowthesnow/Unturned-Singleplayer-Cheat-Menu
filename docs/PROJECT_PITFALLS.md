@@ -581,7 +581,9 @@ Copy-Item -LiteralPath "$source\*" -Destination $target
 BepInEx\plugins\UnturnedSingleplayerCheatMenu\UnturnedSingleplayerCheatMenu.dll
 ```
 
-- 完整包和 Plugin-Only 包明确区分。
+- 公开 Release 只上传 Plugin-Only 包；包内不得出现 BepInEx 核心、Doorstop 或私有运行时数据。
+- 部署时只能保留这一份活动 DLL。禁止在 `BepInEx\plugins` 根目录或其他子目录留下同名 `.dll`；旧版本和备份必须使用 `.bak`、`.disabled` 等非 `.dll` 后缀，否则 BepInEx 会递归扫描并可能加载重复插件，导致新版无法覆盖生效。
+- 安装脚本必须在部署后校验：活动 DLL 数量为 `1`，且路径必须是上面的规范子目录路径。
 
 ### 9.2 包根层级和私有数据必须单独验收
 
@@ -787,7 +789,7 @@ Unturned_UI_Refactor_Codex_Living_Plan.md
 
 ### 发布
 
-- [ ] 完整包和 Plugin-Only 包边界清楚。
+- [ ] 公开 Release 资产只有 Plugin-Only 包，且包内不含 BepInEx 核心或私有数据。
 - [ ] 包可直接解压到含 `Unturned.exe` 的根目录。
 - [ ] 中文文件名清单使用 UTF-8。
 - [ ] 临时伪游戏根目录解压/布局检查通过。

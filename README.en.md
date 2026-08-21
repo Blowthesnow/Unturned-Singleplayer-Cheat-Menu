@@ -2,7 +2,7 @@
 
 [中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md)
 
-A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. Version 1.6.0 adds advanced item filtering, configurable vehicle thumbnails with a persistent disk cache, and duplicate-input protection for the menu shortcut.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. Version 1.7.0 adds a crosshair interaction tool, native-simulation flight and noclip, safer map teleport landing, live time-slider preview, and duplicate-plugin deployment protection.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 
@@ -45,6 +45,8 @@ A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Untu
 - Favorites: persistent item and vehicle favorites keyed by asset GUID, with direct actions from the favorites tab.
 - Teleports: map and list views, zoom/pan, player and saved-point markers, safe map-click landing on terrain or available building tops, customizable marker shapes/colors, and persistent map-scoped positions.
 - World controls: time slider, day/night, time freeze, full moon, airdrop, rain, snow, weather clearing, and asset rescan.
+- Tools: crosshair interaction with Smart, Inspect, Repair, Teleport, Utility, and Delete modes; middle-mouse activation; configurable target HUD fields; and Shift-guarded deletion.
+- Movement: native-simulation flight and noclip with separate horizontal/vertical speed multipliers and safe-exit recovery.
 
 The menu only opens after confirming a loaded local player in a true `Singleplayer_` world where the current process is both client and server. It closes automatically if that condition stops being true.
 
@@ -60,11 +62,11 @@ The map setup checkbox named **singleplayer cheats** is not required. It control
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `1.6.0` |
+| Plugin | `1.7.0` |
 
 ## Installation
 
-The `Unturned-Singleplayer-Cheat-Menu-v1.6.0-Plugin-Only.zip` release asset contains the plugin only.
+The `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` release asset contains the plugin only.
 
 1. Exit Unturned.
 2. Install BepInEx `5.4.23.5` x64 into the Unturned game root.
@@ -74,6 +76,8 @@ The `Unturned-Singleplayer-Cheat-Menu-v1.6.0-Plugin-Only.zip` release asset cont
    ```text
    BepInEx\plugins\UnturnedSingleplayerCheatMenu\UnturnedSingleplayerCheatMenu.dll
    ```
+
+   Deployment rule: keep exactly one active `UnturnedSingleplayerCheatMenu.dll` under `BepInEx\plugins`, at this canonical subdirectory path. Do not leave another same-named DLL in the plugins root or another subdirectory. Backups must use a non-`.dll` suffix so BepInEx cannot load duplicates and prevent future upgrades from replacing the active plugin.
 
 5. Use Steam's launch-option dialog and explicitly choose the **no BattlEye** entry.
 6. Enter a singleplayer world and press `End` after the player has loaded.
@@ -106,6 +110,8 @@ dotnet build .\UnturnedSingleplayerCheatMenu.slnx -c Release
 dotnet run --project .\tests\FavoritesSerializationSmoke\FavoritesSerializationSmoke.csproj -c Release
 dotnet run --project .\tests\ItemFilteringSmoke\ItemFilteringSmoke.csproj -c Release
 dotnet run --project .\tests\LocalizationSmoke\LocalizationSmoke.csproj -c Release
+dotnet run --project .\tests\MovementSpeedSmoke\MovementSpeedSmoke.csproj -c Release
+dotnet run --project .\tests\PointToolActionSmoke\PointToolActionSmoke.csproj -c Release
 dotnet run --project .\tests\ShortcutToggleSmoke\ShortcutToggleSmoke.csproj -c Release
 dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmoke.csproj -c Release
 dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSettingsSmoke.csproj -c Release
@@ -115,12 +121,12 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-Version 1.6.0 adds advanced item filtering, three vehicle-thumbnail resolutions with framing controls, configuration-keyed PNG disk caching, and cross-input shortcut de-duplication. Release build, smoke-test, package, hash, retained runtime evidence, and remaining runtime boundaries are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md).
+Version 1.7.0 adds the point tool, native-simulation movement, safer teleport landing, live time preview, and duplicate-DLL deployment protection. Release build, nine solution projects, Plugin-Only package validation, retained runtime evidence, and remaining runtime boundaries are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md). No complete BepInEx package is published.
 
 Published plugin DLL:
 
 ```text
-SHA-256: ABEB9EA6D5B35F86B247ECF0C5F0118531871655627EF23D833DCAE41ED5B6E2
+SHA-256: FA500D0EC9E4E927797462CB72D713C1B6E409FE698F2F945C498F64BC31B3CF
 ```
 
 ## Disclaimer and license

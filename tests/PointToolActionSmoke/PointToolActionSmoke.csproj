@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\PointToolMode.cs" Link="PointToolMode.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\PointToolAction.cs" Link="PointToolAction.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\PointToolDecisionInput.cs" Link="PointToolDecisionInput.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\PointToolRaycastSnapshot.cs" Link="PointToolRaycastSnapshot.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\PointToolActionGate.cs" Link="PointToolActionGate.cs" />
+  </ItemGroup>
+</Project>

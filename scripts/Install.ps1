@@ -73,6 +73,33 @@ try {
     Copy-Item -LiteralPath $pluginDllFull -Destination $pluginTarget -Force
     $manifest.Add("INSTALL`t$pluginRelative")
 
+    # Keep exactly one active copy of this plugin under BepInEx\plugins.
+    # Historical root-level or duplicate DLLs can otherwise be loaded beside
+    # the canonical single-DLL subdirectory installation.
+    $pluginsRoot = Join-Path $gameRootFull 'BepInEx\plugins'
+    $activePluginDlls = @(
+        Get-ChildItem -LiteralPath $pluginsRoot -Recurse -File -Filter 'UnturnedSingleplayerCheatMenu.dll' |
+            Where-Object { [IO.Path]::GetFullPath($_.FullName) -ne [IO.Path]::GetFullPath($pluginTarget) }
+    )
+    foreach ($duplicate in $activePluginDlls) {
+        $duplicateRelative = $duplicate.FullName.Substring($gameRootFull.Length).TrimStart('\')
+        Backup-TargetFile -TargetPath $duplicate.FullName -RelativePath $duplicateRelative
+        $disabledPath = $duplicate.FullName + '.disabled'
+        if (Test-Path -LiteralPath $disabledPath) {
+            $disabledPath += '-' + $timestamp
+        }
+        Move-Item -LiteralPath $duplicate.FullName -Destination $disabledPath
+        $manifest.Add("DISABLE`t$duplicateRelative`t$([IO.Path]::GetFileName($disabledPath))")
+    }
+
+    $remainingPluginDlls = @(
+        Get-ChildItem -LiteralPath $pluginsRoot -Recurse -File -Filter 'UnturnedSingleplayerCheatMenu.dll'
+    )
+    if ($remainingPluginDlls.Count -ne 1 -or
+        [IO.Path]::GetFullPath($remainingPluginDlls[0].FullName) -ne [IO.Path]::GetFullPath($pluginTarget)) {
+        throw 'Deployment invariant failed: exactly one active UnturnedSingleplayerCheatMenu.dll must remain at the canonical subdirectory path.'
+    }
+
     New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
     $manifestPath = Join-Path $backupRoot 'install-manifest.txt'
     $manifest | Set-Content -LiteralPath $manifestPath -Encoding UTF8

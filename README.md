@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [更新日志](CHANGELOG.md) · [验收记录](ACCEPTANCE.md) · [安全说明](SECURITY.md)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。v1.6.0 新增高级物品筛选、可配置且带磁盘缓存的车辆缩略图，并修复多个输入源可能让一次快捷键触发两次的问题。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。v1.7.0 新增准星交互工具、原生模拟飞行/穿墙、传送安全落点增强、时间滑条实时预览和重复插件 DLL 部署保护。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
@@ -22,6 +22,12 @@
 ### 载具浏览与生成
 
 ![载具页：自动扫描载具并生成模型缩略图](docs/images/vehicles-tab.png)
+
+### 工具
+
+- 准星交互工具支持智能、检查、维修、传送、实用和删除模式；中键触发，删除需要同时按住 `Shift`。
+- Smart 模式将语义目标识别与传送坐标分开处理；没有可用目标时仍可检查世界表面或使用安全坐标回退。
+- 飞行与穿墙使用游戏原生移动模拟路径，支持水平/垂直速度倍率和关闭穿墙后的安全脱困搜索。
 
 ### 收藏
 
@@ -107,7 +113,7 @@
 
 ## 兼容环境
 
-v1.6.0 已针对以下环境构建；既有单人运行证据与本轮新增功能的验证边界见 [ACCEPTANCE.md](ACCEPTANCE.md)：
+v1.7.0 已针对以下环境构建；既有单人运行证据与本轮新增功能的验证边界见 [ACCEPTANCE.md](ACCEPTANCE.md)：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -115,13 +121,13 @@ v1.6.0 已针对以下环境构建；既有单人运行证据与本轮新增功�
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.6.0` |
+| 插件 | `1.7.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
 ## 安装
 
-GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.6.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
+GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
 
 1. 完全退出 Unturned。
 2. 安装 BepInEx `5.4.23.5` x64 到 Unturned 游戏根目录。
@@ -132,6 +138,8 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.6.0-Plugin-Only.zip` 
    ```text
    Unturned\BepInEx\plugins\UnturnedSingleplayerCheatMenu\UnturnedSingleplayerCheatMenu.dll
    ```
+
+   部署约束：`BepInEx\plugins` 下只能保留这一份活动的 `UnturnedSingleplayerCheatMenu.dll`，不能在 `plugins` 根目录或其他子目录再放置同名 DLL。旧版本或备份文件必须改为非 `.dll` 后缀，避免 BepInEx 重复加载，造成新版覆盖安装失效。
 
 6. 从 Steam 的启动方式选择窗口中明确选择 **不使用 BattlEye Anti-Cheat**。
 7. 只进入单人世界，角色加载完成后按 `End` 打开菜单。
@@ -144,7 +152,7 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.6.0-Plugin-Only.zip` 
 
 | 文件 | 用途 |
 | --- | --- |
-| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、快捷键、UI 缩放、每页卡片数、车辆缩略图尺寸与取景倍率 |
+| `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、快捷键、UI 缩放、每页卡片数、车辆缩略图、准星工具和移动设置 |
 | `UnturnedSingleplayerCheatMenu.favorites.json` | 物品与车辆收藏 |
 | `UnturnedSingleplayerCheatMenu.teleports.json` | 具名传送点 |
 | `BepInEx/LogOutput.log` | BepInEx 与插件运行日志 |
@@ -177,6 +185,8 @@ dotnet build .\UnturnedSingleplayerCheatMenu.slnx -c Release
 dotnet run --project .\tests\FavoritesSerializationSmoke\FavoritesSerializationSmoke.csproj -c Release
 dotnet run --project .\tests\ItemFilteringSmoke\ItemFilteringSmoke.csproj -c Release
 dotnet run --project .\tests\LocalizationSmoke\LocalizationSmoke.csproj -c Release
+dotnet run --project .\tests\MovementSpeedSmoke\MovementSpeedSmoke.csproj -c Release
+dotnet run --project .\tests\PointToolActionSmoke\PointToolActionSmoke.csproj -c Release
 dotnet run --project .\tests\ShortcutToggleSmoke\ShortcutToggleSmoke.csproj -c Release
 dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmoke.csproj -c Release
 dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSettingsSmoke.csproj -c Release
@@ -196,12 +206,12 @@ dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSetti
 
 ## 验证
 
-v1.6.0 的 Release 构建、全部烟囱测试、发布包校验及哈希记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。本版本加入高级物品筛选、车辆缩略图三档尺寸与取景倍率、按配置区分的 PNG 磁盘缓存，以及跨输入源的快捷键重复触发保护；既有真实单人运行证据与本轮仍需区分的运行边界也在验收矩阵中单独标注。
+v1.7.0 的 Release 构建、九个解决方案项目、Plugin-Only 发布包校验及哈希记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。本版本加入准星交互工具、原生模拟飞行/穿墙、传送安全落点增强、时间滑条实时预览和重复 DLL 部署保护。
 
 已发布插件 DLL：
 
 ```text
-SHA-256: ABEB9EA6D5B35F86B247ECF0C5F0118531871655627EF23D833DCAE41ED5B6E2
+SHA-256: FA500D0EC9E4E927797462CB72D713C1B6E409FE698F2F945C498F64BC31B3CF
 ```
 
 ## 免责声明

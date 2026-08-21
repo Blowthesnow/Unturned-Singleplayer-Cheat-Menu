@@ -6,14 +6,57 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>UnturnedSingleplayerCheatMenu</AssemblyName>
     <RootNamespace>UnturnedSingleplayerCheatMenu</RootNamespace>
-    <Version>1.6.0</Version>
+    <Version>1.7.0</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <EnableSourceLink>false</EnableSourceLink>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\</OutputPath>
     <DebugType>portable</DebugType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="CheatMenuPlugin.cs" />
+    <Compile Include="Models\FavoriteAssetCollection.cs" />
+    <Compile Include="Models\ItemFilterSnapshot.cs" />
+    <Compile Include="Models\ItemFilterState.cs" />
+    <Compile Include="Models\TeleportPoint.cs" />
+    <Compile Include="Models\PointToolAction.cs" />
+    <Compile Include="Models\PointToolDecisionInput.cs" />
+    <Compile Include="Models\PointToolMode.cs" />
+    <Compile Include="Models\PointToolRaycastSnapshot.cs" />
+    <Compile Include="Patches\GodModePatch.cs" />
+    <Compile Include="Patches\MovementSimulationPatch.cs" />
+    <Compile Include="Patches\PointToolInteractionPatch.cs" />
+    <Compile Include="Services\AssetCatalog.cs" />
+    <Compile Include="Services\CheatActions.cs" />
+    <Compile Include="Services\FavoriteStore.cs" />
+    <Compile Include="Services\IconCache.cs" />
+    <Compile Include="Services\ItemFilterService.cs" />
+    <Compile Include="Services\MovementCheatService.cs" />
+    <Compile Include="Services\MovementSpeedProfile.cs" />
+    <Compile Include="Services\NativeShortcutDetector.cs" />
+    <Compile Include="Services\PluginLocalization.cs" />
+    <Compile Include="Services\PluginRuntimeHost.cs" />
+    <Compile Include="Services\PointToolActionGate.cs" />
+    <Compile Include="Services\PointToolService.cs" />
+    <Compile Include="Services\ShortcutToggleGate.cs" />
+    <Compile Include="Services\SingleplayerGuard.cs" />
+    <Compile Include="Services\TeleportMapService.cs" />
+    <Compile Include="Services\TeleportStore.cs" />
+    <Compile Include="Services\VehicleIconDiskCache.cs" />
+    <Compile Include="Services\VehicleIconRenderer.cs" />
+    <Compile Include="Services\VehicleThumbnailRenderSettings.cs" />
+    <Compile Include="UI\CheatMenuOverlayUi.cs" />
+    <Compile Include="UI\CheatMenuOverlayUi.PointMovement.cs" />
+    <Compile Include="UI\CheatMenuStyle.cs" />
+    <Compile Include="UI\CheatMenuUi.cs" />
+    <Compile Include="UI\PointToolHud.cs" />
+    <Compile Include="UI\TeleportMapSurface.cs" />
+    <Compile Include="UI\TeleportMarkerIconFactory.cs" />
+    <Compile Include="UI\UiDebouncer.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="BepInEx" HintPath="$(MSBuildThisFileDirectory)..\..\lib\BepInEx.dll" Private="false" />
