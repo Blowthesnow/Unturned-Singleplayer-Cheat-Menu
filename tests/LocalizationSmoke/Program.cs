@@ -14,7 +14,8 @@ Equal(PluginLanguage.Chinese, PluginLocalization.Resolve("zh-CN", "English"), "E
 Equal(PluginLanguage.Chinese, PluginLocalization.Resolve("Traditional Chinese", "English"), "Traditional Chinese alias should override Unturned");
 Equal(PluginLanguage.English, PluginLocalization.Resolve("invalid", "German"), "Invalid values should fall back to Auto");
 
-PluginLocalization.Initialize("English", "Schinese");
+PluginLocalization.Initialize("English", "Schinese");Equal("Translation API: Configured; protocol: OpenAICompatible; target language: zh-CN; model: test", PluginLocalization.Translate("机翻 API：Configured；协议：OpenAICompatible；目标语言：zh-CN；模型：test"), "Workshop API status translation");
+Equal("Translation: 已配置; provider: 腾讯云 TMT; target language: zh-CN; model: 未填写", PluginLocalization.Translate("翻译接口：已配置；供应商：腾讯云 TMT；目标语言：zh-CN；模型：未填写"), "Cloud provider status translation");
 Equal("Singleplayer Cheat Menu", PluginLocalization.Translate("单人作弊指令菜单"), "Static UI translation");
 Equal("Workshop", PluginLocalization.Translate("Workshop"), "English origin label should remain Workshop");
 Equal("中文", PluginLocalization.SwitchButtonLabel, "English UI should offer the Chinese switch target");
@@ -93,7 +94,7 @@ foreach (Match match in stringLiterals)
     staticChineseTemplates.Add(literal);
     Equal(false, PluginLocalization.Translate(literal) == literal, $"Static UI template should have an English translation: {literal}");
 }
-Equal(174, staticChineseTemplates.Count, "Active overlay static localization template count");
+Equal(189, staticChineseTemplates.Count, "Active overlay static localization template count");
 
 PluginLocalization.Initialize("Chinese", "English");
 Equal("单人作弊指令菜单", PluginLocalization.Translate("单人作弊指令菜单"), "Chinese source should remain unchanged");

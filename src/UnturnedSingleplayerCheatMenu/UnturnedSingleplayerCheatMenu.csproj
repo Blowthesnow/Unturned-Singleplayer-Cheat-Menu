@@ -17,6 +17,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="InventoryArrange\InventoryArrangeModels.cs" />
+    <Compile Include="InventoryArrange\InventoryArrangePatch.cs" />
+    <Compile Include="InventoryArrange\InventoryStateReader.cs" />
+    <Compile Include="InventoryArrange\InventoryArrangePlanner.cs" />
+    <Compile Include="InventoryArrange\InventoryArrangeFeature.cs" />
+    <Compile Include="InventoryArrange\InventoryQuickTransferIdentity.cs" />
+
     <Compile Include="CheatMenuPlugin.cs" />
     <Compile Include="Models\FavoriteAssetCollection.cs" />
     <Compile Include="Models\ItemFilterSnapshot.cs" />
@@ -26,12 +33,20 @@
     <Compile Include="Models\PointToolDecisionInput.cs" />
     <Compile Include="Models\PointToolMode.cs" />
     <Compile Include="Models\PointToolRaycastSnapshot.cs" />
+    <Compile Include="Models\WorkshopLocalizationProgress.cs" />
+    <Compile Include="Models\WorkshopLocalizationSnapshot.cs" />
+    <Compile Include="Models\WorkshopTextField.cs" />
+    <Compile Include="Models\WorkshopTextRecord.cs" />
+    <Compile Include="Models\WorkshopTranslationCacheDocument.cs" />
+    <Compile Include="Models\WorkshopTranslationCacheEntry.cs" />
     <Compile Include="Patches\GodModePatch.cs" />
     <Compile Include="Patches\MovementSimulationPatch.cs" />
     <Compile Include="Patches\PointToolInteractionPatch.cs" />
+    <Compile Include="Patches\WorkshopLocalizationPatch.cs" />
     <Compile Include="Services\AssetCatalog.cs" />
     <Compile Include="Services\CheatActions.cs" />
     <Compile Include="Services\FavoriteStore.cs" />
+    <Compile Include="Services\GlobalShortcutManager.cs" />
     <Compile Include="Services\IconCache.cs" />
     <Compile Include="Services\ItemFilterService.cs" />
     <Compile Include="Services\MovementCheatService.cs" />
@@ -48,6 +63,12 @@
     <Compile Include="Services\VehicleIconDiskCache.cs" />
     <Compile Include="Services\VehicleIconRenderer.cs" />
     <Compile Include="Services\VehicleThumbnailRenderSettings.cs" />
+    <Compile Include="Services\MachineTranslationClient.cs" />
+    <Compile Include="Services\WorkshopLocalizationScanner.cs" />
+    <Compile Include="Services\WorkshopLocalizationService.cs" />
+    <Compile Include="Services\WorkshopRichTextProtector.cs" />
+    <Compile Include="Services\WorkshopTextIdentity.cs" />
+    <Compile Include="Services\WorkshopTranslationCache.cs" />
     <Compile Include="UI\CheatMenuOverlayUi.cs" />
     <Compile Include="UI\CheatMenuOverlayUi.PointMovement.cs" />
     <Compile Include="UI\CheatMenuStyle.cs" />
@@ -56,6 +77,9 @@
     <Compile Include="UI\TeleportMapSurface.cs" />
     <Compile Include="UI\TeleportMarkerIconFactory.cs" />
     <Compile Include="UI\UiDebouncer.cs" />
+    <Compile Include="UI\AssetTooltipFormatter.cs" />
+    <Compile Include="UI\AssetCardTooltipTrigger.cs" />
+    <Compile Include="UI\ScrollWheelPageHandler.cs" />
   </ItemGroup>
 
   <ItemGroup>

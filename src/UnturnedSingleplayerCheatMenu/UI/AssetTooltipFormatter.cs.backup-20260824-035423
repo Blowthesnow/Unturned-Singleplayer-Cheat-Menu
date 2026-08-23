@@ -1,0 +1,86 @@
+﻿using SDG.Unturned;
+using System.Text;
+
+namespace UnturnedSingleplayerCheatMenu.UI
+{
+    /// <summary>
+    /// Formats rich tooltip text for item and vehicle asset cards.
+    /// </summary>
+    internal static class AssetTooltipFormatter
+    {
+        public static string FormatItemTooltip(ItemAsset asset)
+        {
+            if (asset == null)
+                return string.Empty;
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"<b>{asset.itemName}</b>");
+            sb.AppendLine($"<color=#888888>ID: {asset.id}</color>");
+            
+            // Type-specific details
+            if (asset is ItemGunAsset gun)
+            {
+                sb.AppendLine($"\n<color=#FFD700>武器</color>");
+                sb.AppendLine($"射程: {gun.range}m");
+                // Skip magazine info as API is unclear
+            }
+            else if (asset.type == EItemType.FOOD)
+            {
+                sb.AppendLine($"\n<color=#90EE90>食物</color>");
+            }
+            else if (asset.type == EItemType.MEDICAL)
+            {
+                sb.AppendLine($"\n<color=#FF6B6B>医疗</color>");
+            }
+            else if (asset.type == EItemType.MELEE)
+            {
+                sb.AppendLine($"\n<color=#FFA500>近战</color>");
+            }
+
+            // Rarity
+            if (asset.rarity != EItemRarity.COMMON)
+            {
+                sb.AppendLine($"稀有度: {GetRarityName(asset.rarity)}");
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        public static string FormatVehicleTooltip(VehicleAsset asset)
+        {
+            if (asset == null)
+                return string.Empty;
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"<b>{asset.vehicleName}</b>");
+            sb.AppendLine($"<color=#888888>ID: {asset.id}</color>");
+            
+            sb.AppendLine($"\n<color=#87CEEB>载具</color>");
+            
+            // Use correct property name
+            if (asset.TargetForwardVelocity > 0f)
+            {
+                float kmh = asset.TargetForwardVelocity * 3.6f;
+                sb.AppendLine($"最高速度: {kmh:F0} km/h");
+            }
+            
+            // Skip passenger count as API is unclear
+
+            return sb.ToString().TrimEnd();
+        }
+
+        private static string GetRarityName(EItemRarity rarity)
+        {
+            return rarity switch
+            {
+                EItemRarity.COMMON => "普通",
+                EItemRarity.UNCOMMON => "罕见",
+                EItemRarity.RARE => "稀有",
+                EItemRarity.EPIC => "史诗",
+                EItemRarity.LEGENDARY => "传说",
+                EItemRarity.MYTHICAL => "神话",
+                _ => rarity.ToString()
+            };
+        }
+    }
+}

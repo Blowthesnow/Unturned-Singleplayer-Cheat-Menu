@@ -1,0 +1,34 @@
+﻿--- a/src/UnturnedSingleplayerCheatMenu/UI/CheatMenuOverlayUi.cs
++++ b/src/UnturnedSingleplayerCheatMenu/UI/CheatMenuOverlayUi.cs
+@@ -1593,6 +1593,14 @@
+         AddFavoriteButton(
+             button.transform,
+             _plugin.Favorites.IsItemFavorite(asset),
+             () => ToggleItemFavorite(asset));
++
++        // Add tooltip trigger
++        string tooltipText = AssetTooltipFormatter.FormatItemTooltip(asset);
++        if (!string.IsNullOrWhiteSpace(tooltipText))
++        {
++            AssetCardTooltipTrigger trigger = button.gameObject.AddComponent<AssetCardTooltipTrigger>();
++            trigger.Initialize(tooltipText, ShowHoverExplanation, HideHoverExplanation);
++        }
+     }
+ 
+     private void CreateVehicleCard(Transform parent, VehicleAsset asset)
+@@ -1619,6 +1627,14 @@
+         AddFavoriteButton(
+             button.transform,
+             _plugin.Favorites.IsVehicleFavorite(asset),
+             () => ToggleVehicleFavorite(asset));
++
++        // Add tooltip trigger
++        string tooltipText = AssetTooltipFormatter.FormatVehicleTooltip(asset);
++        if (!string.IsNullOrWhiteSpace(tooltipText))
++        {
++            AssetCardTooltipTrigger trigger = button.gameObject.AddComponent<AssetCardTooltipTrigger>();
++            trigger.Initialize(tooltipText, ShowHoverExplanation, HideHoverExplanation);
++        }
+     }
+ 
+     private void AddFavoriteButton(Transform parent, bool isFavorite, System.Action toggle)

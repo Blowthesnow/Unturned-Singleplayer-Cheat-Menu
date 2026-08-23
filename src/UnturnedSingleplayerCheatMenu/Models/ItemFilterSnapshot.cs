@@ -19,7 +19,8 @@ internal readonly struct ItemFilterSnapshot
         string assetName,
         string id,
         string guid,
-        string originName)
+        string originName,
+        string originalName = null)
     {
         Category = category;
         ItemType = itemType;
@@ -32,6 +33,7 @@ internal readonly struct ItemFilterSnapshot
         Auto = auto;
         Bursts = bursts;
         DisplayName = displayName;
+        OriginalName = originalName ?? displayName;
         AssetName = assetName;
         Id = id;
         Guid = guid;
@@ -49,6 +51,7 @@ internal readonly struct ItemFilterSnapshot
     public bool Auto { get; }
     public int Bursts { get; }
     public string DisplayName { get; }
+    public string OriginalName { get; }
     public string AssetName { get; }
     public string Id { get; }
     public string Guid { get; }

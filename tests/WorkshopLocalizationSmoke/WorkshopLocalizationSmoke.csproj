@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\WorkshopLocalizationProgress.cs" Link="WorkshopLocalizationProgress.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\WorkshopLocalizationSnapshot.cs" Link="WorkshopLocalizationSnapshot.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\WorkshopTextField.cs" Link="WorkshopTextField.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\WorkshopTextRecord.cs" Link="WorkshopTextRecord.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\WorkshopTranslationCacheDocument.cs" Link="WorkshopTranslationCacheDocument.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\WorkshopTranslationCacheEntry.cs" Link="WorkshopTranslationCacheEntry.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\MachineTranslationClient.cs" Link="MachineTranslationClient.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopRichTextProtector.cs" Link="WorkshopRichTextProtector.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopTextIdentity.cs" Link="WorkshopTextIdentity.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopTranslationCache.cs" Link="WorkshopTranslationCache.cs" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(MSBuildSDKsPath)\..\Newtonsoft.Json.dll" Private="true" />
+  </ItemGroup>
+</Project>

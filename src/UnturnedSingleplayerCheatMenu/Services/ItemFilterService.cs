@@ -143,6 +143,11 @@ internal static class ItemFilterService
 
     public static bool Matches(ItemAsset asset, ItemFilterState filter)
     {
+        return Matches(asset, filter, null);
+    }
+
+    public static bool Matches(ItemAsset asset, ItemFilterState filter, string originalName)
+    {
         if (asset == null || filter == null)
             return false;
 
@@ -162,10 +167,10 @@ internal static class ItemFilterService
             asset.name,
             asset.id.ToString(),
             asset.GUID.ToString("N"),
-            asset.GetOriginName());
+            asset.GetOriginName(),
+            originalName);
         return Matches(snapshot, filter);
     }
-
     internal static bool Matches(ItemFilterSnapshot item, ItemFilterState filter)
     {
         if (filter.Category != ItemPrimaryCategory.All && item.Category != filter.Category)
@@ -359,6 +364,7 @@ internal static class ItemFilterService
 
         query = query.Trim();
         return Contains(item.DisplayName, query)
+            || Contains(item.OriginalName, query)
             || Contains(item.AssetName, query)
             || Contains(item.Id, query)
             || Contains(item.Guid, query)

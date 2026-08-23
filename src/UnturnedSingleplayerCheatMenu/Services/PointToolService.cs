@@ -14,6 +14,8 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 internal sealed class PointToolService
 {
     private static readonly KeyboardShortcut MiddleMouseShortcut = new(KeyCode.Mouse2);
+    private const ushort VehicleBatteryMaxCharge = 10000;
+    private const ushort VehicleBatteryDisplayedFullThreshold = 9950;
 
     private const int TeleportCoordinateMask = RayMasks.DEFAULT
         | RayMasks.LARGE
@@ -83,9 +85,10 @@ internal sealed class PointToolService
             ClearTarget();
             return;
         }
-        if (!Enabled || CheatMenuPlugin.Instance?.IsMenuOpen == true)
+        if (!Enabled || IsInteractionPaused())
         {
             ClearTarget();
+            _hud.Hide();
             return;
         }
 
@@ -114,6 +117,12 @@ internal sealed class PointToolService
 
         RefreshRaycast();
         ShowCurrentHud();
+    }
+
+    private static bool IsInteractionPaused()
+    {
+        return CheatMenuPlugin.Instance?.IsMenuOpen == true
+            || PlayerUI.window?.showCursor == true;
     }
 
     private void RefreshRaycast()
@@ -1062,11 +1071,84 @@ internal sealed class PointToolService
 
     private static bool RepairVehicle(InteractableVehicle vehicle)
     {
-        if (!IsRegisteredVehicle(vehicle) || vehicle.asset.health == 0 || vehicle.health >= vehicle.asset.health)
+        if (!IsRegisteredVehicle(vehicle))
             return false;
 
-        vehicle.askRepair((ushort)(vehicle.asset.health - vehicle.health));
-        return vehicle.health >= vehicle.asset.health;
+        bool repaired = false;
+
+        if (vehicle.asset.health != 0 && vehicle.health < vehicle.asset.health)
+        {
+            vehicle.askRepair((ushort)(vehicle.asset.health - vehicle.health));
+            repaired |= vehicle.health >= vehicle.asset.health;
+        }
+
+        if (vehicle.usesFuel && vehicle.fuel < vehicle.asset.fuel)
+        {
+            vehicle.askFillFuel((ushort)(vehicle.asset.fuel - vehicle.fuel));
+            repaired |= vehicle.fuel >= vehicle.asset.fuel;
+        }
+
+        if (IsVehicleBatteryBelowDisplayedFull(vehicle))
+        {
+            vehicle.askChargeBattery((ushort)(VehicleBatteryMaxCharge - vehicle.batteryCharge));
+            vehicle.sendBatteryChargeUpdate();
+            repaired |= vehicle.batteryCharge >= VehicleBatteryMaxCharge;
+        }
+
+        Wheel[] tires = vehicle.tires;
+        if (tires != null)
+        {
+            for (int i = 0; i < tires.Length; i++)
+            {
+                if (tires[i] != null && !tires[i].isAlive)
+                {
+                    vehicle.askRepairTire(i);
+                    repaired |= tires[i].isAlive;
+                }
+            }
+        }
+
+        return UprightVehicle(vehicle) || repaired;
+    }
+
+    private static bool UprightVehicle(InteractableVehicle vehicle)
+    {
+        if (!TryGetUprightRotation(vehicle, out Quaternion uprightRotation))
+            return false;
+
+        Transform transform = vehicle.transform;
+        Rigidbody rigidbody = vehicle.GetComponent<Rigidbody>();
+        if (rigidbody != null)
+        {
+            rigidbody.velocity = Vector3.zero;
+            rigidbody.angularVelocity = Vector3.zero;
+            rigidbody.rotation = uprightRotation;
+        }
+        else
+        {
+            transform.rotation = uprightRotation;
+        }
+
+        vehicle.MarkForReplicationUpdate();
+        return true;
+    }
+
+    private static bool TryGetUprightRotation(InteractableVehicle vehicle, out Quaternion uprightRotation)
+    {
+        uprightRotation = default;
+        if (vehicle?.asset == null || vehicle.asset.engine == EEngine.TRAIN)
+            return false;
+
+        Transform transform = vehicle.transform;
+        if (transform == null || transform.up.y >= 0.5f)
+            return false;
+
+        Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        if (flatForward.sqrMagnitude < 0.0001f)
+            return false;
+
+        uprightRotation = Quaternion.LookRotation(flatForward.normalized, Vector3.up);
+        return Quaternion.Angle(transform.rotation, uprightRotation) > 0.5f;
     }
 
     private static bool DeleteVehicle(InteractableVehicle vehicle)
@@ -1212,7 +1294,7 @@ internal sealed class PointToolService
         switch (target?.Value)
         {
             case InteractableVehicle vehicle:
-                return vehicle.asset != null && vehicle.health < vehicle.asset.health;
+                return IsRegisteredVehicle(vehicle) && VehicleNeedsRepair(vehicle);
             case BarricadeDrop barricade:
                 Barricade barricadeData = barricade.GetServersideData()?.barricade;
                 return barricadeData != null
@@ -1231,6 +1313,35 @@ internal sealed class PointToolService
                 return parentStructure != null
                     && NeedsRepair(new Target(TargetKind.Structure, parentStructure, parentStructure.model));
         }
+    }
+
+    private static bool VehicleNeedsRepair(InteractableVehicle vehicle)
+    {
+        if (vehicle.asset.health != 0 && vehicle.health < vehicle.asset.health)
+            return true;
+
+        if (vehicle.usesFuel && vehicle.fuel < vehicle.asset.fuel)
+            return true;
+
+        if (IsVehicleBatteryBelowDisplayedFull(vehicle))
+            return true;
+
+        Wheel[] tires = vehicle.tires;
+        if (tires != null)
+        {
+            for (int i = 0; i < tires.Length; i++)
+            {
+                if (tires[i] != null && !tires[i].isAlive)
+                    return true;
+            }
+        }
+
+        return TryGetUprightRotation(vehicle, out _);
+    }
+
+    private static bool IsVehicleBatteryBelowDisplayedFull(InteractableVehicle vehicle)
+    {
+        return vehicle.usesBattery && vehicle.batteryCharge < VehicleBatteryDisplayedFullThreshold;
     }
 
     private static bool CanUse(Target target)

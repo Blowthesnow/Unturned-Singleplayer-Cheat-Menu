@@ -57,24 +57,29 @@ internal sealed class AssetCatalog
 
     public static bool Matches(Asset asset, string displayName, string query)
     {
+        return Matches(asset, displayName, null, query);
+    }
+
+    public static bool Matches(Asset asset, string displayName, string originalName, string query)
+    {
         if (string.IsNullOrWhiteSpace(query))
             return true;
 
         query = query.Trim();
         return Contains(displayName, query)
+            || Contains(originalName, query)
             || Contains(asset.name, query)
             || Contains(asset.id.ToString(), query)
             || Contains(asset.GUID.ToString("N"), query)
             || Contains(asset.GetOriginName(), query);
     }
-
     public static string GetOriginLabel(Asset asset)
     {
         if (IsWorkshopAsset(asset))
             return PluginLocalization.Translate("模组");
 
         string origin = asset.GetOriginName();
-        if (Contains(origin, "core") || Contains(origin, "official"))
+        if (Contains(origin, "core") || Contains(origin, "official") || Contains(origin, "vanilla"))
             return PluginLocalization.Translate("原版");
         return string.IsNullOrWhiteSpace(origin) ? PluginLocalization.Translate("未知来源") : origin;
     }

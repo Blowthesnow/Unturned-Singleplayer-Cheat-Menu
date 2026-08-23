@@ -23,7 +23,8 @@ ItemFilterSnapshot gun = new(
     "rifle_asset",
     "123",
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "Workshop");
+    "Workshop",
+    originalName: "Original Rifle");
 
 ItemFilterState filter = new();
 Check(ItemFilterService.Matches(gun, filter), "Default filter should match the snapshot.");
@@ -50,6 +51,8 @@ Check(!ItemFilterService.Matches(gun, filter), "Gun action should be exact.");
 filter.GunAction = EAction.Trigger;
 filter.SearchQuery = "workshop";
 Check(ItemFilterService.Matches(gun, filter), "Search should include origin text.");
+filter.SearchQuery = "original";
+Check(ItemFilterService.Matches(gun, filter), "Search should include the untranslated original name.");
 filter.SearchQuery = "missing";
 Check(!ItemFilterService.Matches(gun, filter), "Unmatched search should exclude the snapshot.");
 

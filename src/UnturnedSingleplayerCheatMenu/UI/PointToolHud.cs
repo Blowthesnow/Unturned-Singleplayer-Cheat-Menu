@@ -83,7 +83,7 @@ internal sealed class PointToolHud
 
     internal void Hide()
     {
-        if (!EnsureCreated())
+        if (_root == null || _movementText == null || _pointText == null)
             return;
 
         _movementText.text = string.Empty;
@@ -196,6 +196,26 @@ internal sealed class PointToolHud
         }
     }
 
+    private static void CreateHudBorderEdge(
+        Transform parent,
+        string name,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Vector2 offsetMin,
+        Vector2 offsetMax)
+    {
+        GameObject edge = new(name, typeof(RectTransform), typeof(Image));
+        edge.transform.SetParent(parent, false);
+        RectTransform edgeRect = edge.GetComponent<RectTransform>();
+        edgeRect.anchorMin = anchorMin;
+        edgeRect.anchorMax = anchorMax;
+        edgeRect.offsetMin = offsetMin;
+        edgeRect.offsetMax = offsetMax;
+        Image image = edge.GetComponent<Image>();
+        image.color = CheatMenuStyle.Accent;
+        image.raycastTarget = false;
+    }
+
     private Font CreateFont()
     {
         Font font = Font.CreateDynamicFontFromOSFont(
@@ -231,7 +251,26 @@ internal sealed class PointToolHud
         containerRect.anchoredPosition = anchoredPosition;
         containerRect.sizeDelta = size;
 
-        Image background = container.GetComponent<Image>();
+        Image border = container.GetComponent<Image>();
+        border.color = Color.clear;
+        border.raycastTarget = false;
+
+        Canvas canvas = _root.GetComponent<Canvas>();
+        float canvasScale = canvas != null ? Mathf.Max(0.01f, canvas.scaleFactor) : 1f;
+        float borderPixels = 3f / canvasScale;
+        CreateHudBorderEdge(container.transform, $"{name}.BorderTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -borderPixels), Vector2.zero);
+        CreateHudBorderEdge(container.transform, $"{name}.BorderBottom", Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, borderPixels));
+        CreateHudBorderEdge(container.transform, $"{name}.BorderLeft", Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(borderPixels, 0f));
+        CreateHudBorderEdge(container.transform, $"{name}.BorderRight", new Vector2(1f, 0f), Vector2.one, new Vector2(-borderPixels, 0f), Vector2.zero);
+
+        GameObject backgroundObject = new($"{name}.Background", typeof(RectTransform), typeof(Image));
+        backgroundObject.transform.SetParent(container.transform, false);
+        RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
+        backgroundRect.anchorMin = Vector2.zero;
+        backgroundRect.anchorMax = Vector2.one;
+        backgroundRect.offsetMin = new Vector2(borderPixels, borderPixels);
+        backgroundRect.offsetMax = new Vector2(-borderPixels, -borderPixels);
+        Image background = backgroundObject.GetComponent<Image>();
         background.color = new Color(0.02f, 0.025f, 0.035f, 0.50f);
         background.raycastTarget = false;
 
