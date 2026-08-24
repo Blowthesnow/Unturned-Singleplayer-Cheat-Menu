@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="System.Security.Permissions" Version="8.0.0" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\TeleportPoint.cs" Link="TeleportPoint.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\TeleportMarkerKind.cs" Link="TeleportMarkerKind.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\TeleportPointCollection.cs" Link="TeleportPointCollection.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="..\..\lib\Newtonsoft.Json.dll" Private="true" />
     <Reference Include="UnityEngine.CoreModule" HintPath="..\..\lib\UnityEngine.CoreModule.dll" Private="true" />
   </ItemGroup>

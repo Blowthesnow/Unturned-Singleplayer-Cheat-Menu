@@ -4,38 +4,37 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 
 public sealed class PluginRuntimeHost : MonoBehaviour
 {
-    private CheatMenuPlugin _plugin;
+	private CheatMenuPlugin _plugin;
 
-    internal static PluginRuntimeHost Create(CheatMenuPlugin plugin)
-    {
-        GameObject hostObject = new("UnturnedSingleplayerCheatMenu.RuntimeHost");
-        DontDestroyOnLoad(hostObject);
+	internal static PluginRuntimeHost Create(CheatMenuPlugin plugin)
+	{
+		GameObject obj = new GameObject("UnturnedSingleplayerCheatMenu.RuntimeHost");
+		Object.DontDestroyOnLoad(obj);
+		PluginRuntimeHost pluginRuntimeHost = obj.AddComponent<PluginRuntimeHost>();
+		pluginRuntimeHost._plugin = plugin;
+		pluginRuntimeHost.enabled = true;
+		obj.SetActive(value: true);
+		plugin.LogRuntimeHostCreated(pluginRuntimeHost);
+		return pluginRuntimeHost;
+	}
 
-        PluginRuntimeHost host = hostObject.AddComponent<PluginRuntimeHost>();
-        host._plugin = plugin;
-        host.enabled = true;
-        hostObject.SetActive(true);
-        plugin.LogRuntimeHostCreated(host);
-        return host;
-    }
+	public void Start()
+	{
+		_plugin?.LogRuntimeHostStarted();
+	}
 
-    public void Start()
-    {
-        _plugin?.LogRuntimeHostStarted();
-    }
+	public void Update()
+	{
+		_plugin?.RunUpdateCallback("独立 RuntimeHost.Update");
+	}
 
-    public void Update()
-    {
-        _plugin?.RunUpdateCallback("独立 RuntimeHost.Update");
-    }
+	public void OnGUI()
+	{
+		_plugin?.RunGuiCallback("独立 RuntimeHost.OnGUI");
+	}
 
-    public void OnGUI()
-    {
-        _plugin?.RunGuiCallback("独立 RuntimeHost.OnGUI");
-    }
-
-    private void OnDestroy()
-    {
-        _plugin = null;
-    }
+	private void OnDestroy()
+	{
+		_plugin = null;
+	}
 }

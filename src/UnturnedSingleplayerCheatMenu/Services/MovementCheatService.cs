@@ -1,3 +1,4 @@
+using System;
 using BepInEx.Logging;
 using SDG.Unturned;
 using UnityEngine;
@@ -6,330 +7,342 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal sealed class MovementCheatService
 {
-    private readonly ManualLogSource _log;
-    private bool _hasOriginalMultipliers;
-    private float _originalItemGravity;
-    private float _originalGravity;
-    private float _originalSpeed;
-    private float _originalJump;
-    private bool _controllerWasEnabled;
-    private CharacterController _controller;
-    private bool _isResimulating;
+	private readonly ManualLogSource _log;
 
-    internal MovementCheatService(ManualLogSource log)
-    {
-        _log = log;
-    }
+	private bool _hasOriginalMultipliers;
 
-    internal bool FlightEnabled { get; private set; }
-    internal bool NoclipEnabled { get; private set; }
-    internal float FlightSpeed { get; set; } = 3f;
-    internal float VerticalSpeed { get; set; } = 2f;
-    internal float HorizontalMetersPerSecond =>
-        MovementSpeedProfile.GetMetersPerSecond(FlightSpeed);
-    internal float VerticalMetersPerSecond =>
-        MovementSpeedProfile.GetMetersPerSecond(VerticalSpeed);
-    internal bool SafeExit { get; set; } = true;
+	private float _originalItemGravity;
 
-    internal void SetSimulationResimulating(bool value)
-    {
-        _isResimulating = value;
-    }
+	private float _originalGravity;
 
-    internal void SetFlight(bool enabled)
-    {
-        if (enabled == FlightEnabled)
-            return;
-        if (enabled && !SingleplayerGuard.IsReady)
-            return;
+	private float _originalSpeed;
 
-        FlightEnabled = enabled;
-        if (enabled)
-        {
-            SaveOriginalMultipliers();
-            ApplyNativeMovementState(Player.LocalPlayer?.movement);
-            _log.LogInfo(
-                $"[Movement] Flight 已开启：水平 {FlightSpeed:0.0}x，"
-                + $"垂直 {VerticalSpeed:0.0}x；已切换到原生模拟移动。");
-        }
-        else
-        {
-            RestoreMultipliers();
-            if (NoclipEnabled)
-                SetNoclip(false);
-            _log.LogInfo("[Movement] Flight 已关闭，移动倍率已恢复。");
-        }
-    }
+	private float _originalJump;
 
-    internal void SetNoclip(bool enabled)
-    {
-        if (enabled == NoclipEnabled)
-            return;
-        if (enabled && !SingleplayerGuard.IsReady)
-            return;
-        if (enabled && !FlightEnabled)
-            SetFlight(true);
+	private bool _controllerWasEnabled;
 
-        NoclipEnabled = enabled;
-        CharacterController controller = Player.LocalPlayer?.movement?.controller;
-        if (enabled)
-        {
-            if (controller != null)
-            {
-                _controller = controller;
-                _controllerWasEnabled = controller.enabled;
-                controller.enabled = false;
-            }
-            _log.LogInfo("[Movement] Noclip 已开启。");
-        }
-        else
-        {
-            CharacterController restoreController = controller ?? _controller;
-            if (restoreController != null)
-                restoreController.enabled = _controllerWasEnabled;
-            _controller = null;
-            if (SafeExit)
-                TrySafeExit();
-            _log.LogInfo("[Movement] Noclip 已关闭。");
-        }
-    }
+	private CharacterController _controller;
 
-    internal void Pump()
-    {
-        if (!FlightEnabled && !NoclipEnabled)
-            return;
-        if (!SingleplayerGuard.IsReady
-            || Player.LocalPlayer.life?.isDead == true
-            || Player.LocalPlayer.movement?.getVehicle() != null)
-        {
-            Restore();
-            return;
-        }
+	private bool _isResimulating;
 
-        Player player = Player.LocalPlayer;
-        PlayerMovement movement = player.movement;
-        if (movement == null)
-        {
-            Restore();
-            return;
-        }
+	internal bool FlightEnabled { get; private set; }
 
-        ApplyNativeMovementState(movement);
-        if (NoclipEnabled)
-            MaintainNoclipControllerDisabled(movement);
-    }
+	internal bool NoclipEnabled { get; private set; }
 
-    /// <summary>
-    /// Applies the plugin's native movement state before PlayerMovement.simulate.
-    /// The actual displacement is performed by the game's simulation loop, not by
-    /// the render-frame maintenance callback.
-    /// </summary>
-    internal void PrepareNativeSimulation(PlayerMovement movement)
-    {
-        if (!IsLocalMovement(movement) || !FlightEnabled && !NoclipEnabled)
-            return;
+	internal float FlightSpeed { get; set; } = 3f;
 
-        ApplyNativeMovementState(movement);
-        if (NoclipEnabled)
-            MaintainNoclipControllerDisabled(movement);
-    }
+	internal float VerticalSpeed { get; set; } = 2f;
 
-    /// <summary>
-    /// Runs after the game's native movement simulation. Flight keeps native
-    /// horizontal movement and adds only vertical input here. Noclip moves the
-    /// complete vector at the same fixed simulation cadence while the controller
-    /// remains disabled.
-    /// </summary>
-    internal void SimulateMovement(PlayerMovement movement, float deltaTime)
-    {
-        if (!IsLocalMovement(movement)
-            || (!FlightEnabled && !NoclipEnabled)
-            || _isResimulating
-            || !SingleplayerGuard.IsReady
-            || Player.LocalPlayer.life?.isDead == true
-            || Player.LocalPlayer.movement?.getVehicle() != null)
-            return;
+	internal float HorizontalMetersPerSecond => MovementSpeedProfile.GetMetersPerSecond(FlightSpeed);
 
-        Player player = Player.LocalPlayer;
-        if (NoclipEnabled)
-        {
-            MaintainNoclipControllerDisabled(movement);
-            if (IsMovementInputBlocked())
-                return;
+	internal float VerticalMetersPerSecond => MovementSpeedProfile.GetMetersPerSecond(VerticalSpeed);
 
-            Vector3 horizontal = GetHorizontalInput(player);
-            float vertical = GetVerticalInput();
-            Vector3 delta =
-                (horizontal * HorizontalMetersPerSecond
-                 + Vector3.up * (vertical * VerticalMetersPerSecond))
-                * Mathf.Max(deltaTime, 0.001f);
-            if (delta.sqrMagnitude > 0f)
-                player.transform.position += delta;
-            return;
-        }
+	internal bool SafeExit { get; set; } = true;
 
-        if (movement.controller == null
-            || !movement.controller.enabled
-            || IsMovementInputBlocked())
-            return;
+	internal MovementCheatService(ManualLogSource log)
+	{
+		_log = log;
+	}
 
-        float verticalInput = GetVerticalInput();
-        if (Mathf.Abs(verticalInput) > 0.001f)
-        {
-            movement.controller.Move(
-                Vector3.up
-                * (verticalInput * VerticalMetersPerSecond)
-                * Mathf.Max(deltaTime, 0.001f));
-        }
-    }
+	internal void SetSimulationResimulating(bool value)
+	{
+		_isResimulating = value;
+	}
 
-    internal void Restore()
-    {
-        if (NoclipEnabled)
-            SetNoclip(false);
-        if (FlightEnabled)
-            SetFlight(false);
-    }
+	internal void SetFlight(bool enabled)
+	{
+		if (enabled == FlightEnabled || (enabled && !SingleplayerGuard.IsReady))
+		{
+			return;
+		}
+		FlightEnabled = enabled;
+		if (enabled)
+		{
+			SaveOriginalMultipliers();
+			ApplyNativeMovementState(Player.LocalPlayer?.movement);
+			_log.LogInfo($"[Movement] Flight 已开启：水平 {FlightSpeed:0.0}x，" + $"垂直 {VerticalSpeed:0.0}x；已切换到原生模拟移动。");
+			return;
+		}
+		RestoreMultipliers();
+		if (NoclipEnabled)
+		{
+			SetNoclip(enabled: false);
+		}
+		_log.LogInfo("[Movement] Flight 已关闭，移动倍率已恢复。");
+	}
 
-    private void SaveOriginalMultipliers()
-    {
-        if (_hasOriginalMultipliers)
-            return;
-        PlayerMovement movement = Player.LocalPlayer?.movement;
-        if (movement == null)
-            return;
-        _originalItemGravity = movement.itemGravityMultiplier;
-        _originalGravity = movement.pluginGravityMultiplier;
-        _originalSpeed = movement.pluginSpeedMultiplier;
-        _originalJump = movement.pluginJumpMultiplier;
-        _hasOriginalMultipliers = true;
-    }
+	internal void SetNoclip(bool enabled)
+	{
+		if (enabled == NoclipEnabled || (enabled && !SingleplayerGuard.IsReady))
+		{
+			return;
+		}
+		if (enabled && !FlightEnabled)
+		{
+			SetFlight(enabled: true);
+		}
+		NoclipEnabled = enabled;
+		CharacterController characterController = Player.LocalPlayer?.movement?.controller;
+		if (enabled)
+		{
+			if (characterController != null)
+			{
+				_controller = characterController;
+				_controllerWasEnabled = characterController.enabled;
+				characterController.enabled = false;
+			}
+			_log.LogInfo("[Movement] Noclip 已开启。");
+			return;
+		}
+		CharacterController characterController2 = characterController ?? _controller;
+		if (characterController2 != null)
+		{
+			characterController2.enabled = _controllerWasEnabled;
+		}
+		_controller = null;
+		if (SafeExit)
+		{
+			TrySafeExit();
+		}
+		_log.LogInfo("[Movement] Noclip 已关闭。");
+	}
 
-    private void ApplyNativeMovementState(PlayerMovement movement)
-    {
-        if (movement == null)
-            return;
+	internal void Pump()
+	{
+		if (!FlightEnabled && !NoclipEnabled)
+		{
+			return;
+		}
+		if (SingleplayerGuard.IsReady)
+		{
+			PlayerLife life = Player.LocalPlayer.life;
+			if (((object)life == null || !life.isDead) && !(Player.LocalPlayer.movement?.getVehicle() != null))
+			{
+				PlayerMovement movement = Player.LocalPlayer.movement;
+				if (movement == null)
+				{
+					Restore();
+					return;
+				}
+				ApplyNativeMovementState(movement);
+				if (NoclipEnabled)
+				{
+					MaintainNoclipControllerDisabled(movement);
+				}
+				return;
+			}
+		}
+		Restore();
+	}
 
-        // Follow the Workshop levitation tools' architecture: keep movement in
-        // Unturned's PlayerMovement.simulate loop. Gravity is neutralized here
-        // so Space/Ctrl can provide a separately controlled vertical speed in
-        // SimulateMovement, while WASD uses Unturned's native speed calculation.
-        movement.itemGravityMultiplier = 0f;
-        if (!Mathf.Approximately(movement.pluginGravityMultiplier, 0f))
-            movement.sendPluginGravityMultiplier(0f);
-        float normalizedSpeed = MovementSpeedProfile.NormalizeMultiplier(FlightSpeed);
-        if (!Mathf.Approximately(movement.pluginSpeedMultiplier, normalizedSpeed))
-            movement.sendPluginSpeedMultiplier(normalizedSpeed);
-        if (!Mathf.Approximately(movement.pluginJumpMultiplier, 0f))
-            movement.sendPluginJumpMultiplier(0f);
-    }
+	internal void PrepareNativeSimulation(PlayerMovement movement)
+	{
+		if (IsLocalMovement(movement) && (FlightEnabled || NoclipEnabled))
+		{
+			ApplyNativeMovementState(movement);
+			if (NoclipEnabled)
+			{
+				MaintainNoclipControllerDisabled(movement);
+			}
+		}
+	}
 
-    private void MaintainNoclipControllerDisabled(PlayerMovement movement)
-    {
-        CharacterController controller = movement?.controller;
-        if (controller == null)
-            return;
+	internal void SimulateMovement(PlayerMovement movement, float deltaTime)
+	{
+		if (!IsLocalMovement(movement) || (!FlightEnabled && !NoclipEnabled) || _isResimulating || !SingleplayerGuard.IsReady)
+		{
+			return;
+		}
+		PlayerLife life = Player.LocalPlayer.life;
+		if (((object)life != null && life.isDead) || Player.LocalPlayer.movement?.getVehicle() != null)
+		{
+			return;
+		}
+		Player localPlayer = Player.LocalPlayer;
+		if (NoclipEnabled)
+		{
+			MaintainNoclipControllerDisabled(movement);
+			if (!IsMovementInputBlocked())
+			{
+				Vector3 horizontalInput = GetHorizontalInput(localPlayer);
+				float verticalInput = GetVerticalInput();
+				Vector3 vector = (horizontalInput * HorizontalMetersPerSecond + Vector3.up * (verticalInput * VerticalMetersPerSecond)) * Mathf.Max(deltaTime, 0.001f);
+				if (vector.sqrMagnitude > 0f)
+				{
+					localPlayer.transform.position += vector;
+				}
+			}
+		}
+		else if (!(movement.controller == null) && movement.controller.enabled && !IsMovementInputBlocked())
+		{
+			float verticalInput2 = GetVerticalInput();
+			if (Mathf.Abs(verticalInput2) > 0.001f)
+			{
+				movement.controller.Move(Vector3.up * (verticalInput2 * VerticalMetersPerSecond) * Mathf.Max(deltaTime, 0.001f));
+			}
+		}
+	}
 
-        if (_controller == null)
-        {
-            _controller = controller;
-            _controllerWasEnabled = controller.enabled;
-        }
+	internal void Restore()
+	{
+		if (NoclipEnabled)
+		{
+			SetNoclip(enabled: false);
+		}
+		if (FlightEnabled)
+		{
+			SetFlight(enabled: false);
+		}
+	}
 
-        if (controller.enabled)
-            controller.enabled = false;
-    }
+	private void SaveOriginalMultipliers()
+	{
+		if (!_hasOriginalMultipliers)
+		{
+			PlayerMovement playerMovement = Player.LocalPlayer?.movement;
+			if (!(playerMovement == null))
+			{
+				_originalItemGravity = playerMovement.itemGravityMultiplier;
+				_originalGravity = playerMovement.pluginGravityMultiplier;
+				_originalSpeed = playerMovement.pluginSpeedMultiplier;
+				_originalJump = playerMovement.pluginJumpMultiplier;
+				_hasOriginalMultipliers = true;
+			}
+		}
+	}
 
-    private void RestoreMultipliers()
-    {
-        PlayerMovement movement = Player.LocalPlayer?.movement;
-        if (!_hasOriginalMultipliers)
-            return;
+	private void ApplyNativeMovementState(PlayerMovement movement)
+	{
+		if (!(movement == null))
+		{
+			movement.itemGravityMultiplier = 0f;
+			if (!Mathf.Approximately(movement.pluginGravityMultiplier, 0f))
+			{
+				movement.sendPluginGravityMultiplier(0f);
+			}
+			float num = MovementSpeedProfile.NormalizeMultiplier(FlightSpeed);
+			if (!Mathf.Approximately(movement.pluginSpeedMultiplier, num))
+			{
+				movement.sendPluginSpeedMultiplier(num);
+			}
+			if (!Mathf.Approximately(movement.pluginJumpMultiplier, 0f))
+			{
+				movement.sendPluginJumpMultiplier(0f);
+			}
+		}
+	}
 
-        if (movement != null)
-        {
-            movement.itemGravityMultiplier = _originalItemGravity;
-            movement.sendPluginGravityMultiplier(_originalGravity);
-            movement.sendPluginSpeedMultiplier(_originalSpeed);
-            movement.sendPluginJumpMultiplier(_originalJump);
-        }
+	private void MaintainNoclipControllerDisabled(PlayerMovement movement)
+	{
+		CharacterController characterController = movement?.controller;
+		if (!(characterController == null))
+		{
+			if (_controller == null)
+			{
+				_controller = characterController;
+				_controllerWasEnabled = characterController.enabled;
+			}
+			if (characterController.enabled)
+			{
+				characterController.enabled = false;
+			}
+		}
+	}
 
-        // When the player object has already been destroyed there is no target
-        // left to restore. Clear the snapshot so it cannot leak into the next
-        // singleplayer world.
-        _hasOriginalMultipliers = false;
-    }
+	private void RestoreMultipliers()
+	{
+		PlayerMovement playerMovement = Player.LocalPlayer?.movement;
+		if (_hasOriginalMultipliers)
+		{
+			if (playerMovement != null)
+			{
+				playerMovement.itemGravityMultiplier = _originalItemGravity;
+				playerMovement.sendPluginGravityMultiplier(_originalGravity);
+				playerMovement.sendPluginSpeedMultiplier(_originalSpeed);
+				playerMovement.sendPluginJumpMultiplier(_originalJump);
+			}
+			_hasOriginalMultipliers = false;
+		}
+	}
 
-    private bool IsLocalMovement(PlayerMovement movement)
-    {
-        return movement != null && ReferenceEquals(movement, Player.LocalPlayer?.movement);
-    }
+	private bool IsLocalMovement(PlayerMovement movement)
+	{
+		if (movement != null)
+		{
+			return (object)movement == Player.LocalPlayer?.movement;
+		}
+		return false;
+	}
 
-    private bool IsMovementInputBlocked()
-    {
-        return CheatMenuPlugin.Instance?.IsMenuOpen == true
-            || PlayerUI.window?.showCursor == true;
-    }
+	private bool IsMovementInputBlocked()
+	{
+		CheatMenuPlugin instance = CheatMenuPlugin.Instance;
+		if ((object)instance == null || !instance.IsMenuOpen)
+		{
+			return PlayerUI.window?.showCursor ?? false;
+		}
+		return true;
+	}
 
-    private static Vector3 GetHorizontalInput(Player player)
-    {
-        Vector3 forward = player.look?.aim?.forward ?? player.transform.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 0.001f)
-            forward = player.transform.forward;
-        forward.Normalize();
-        Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
-        Vector3 horizontal =
-            forward * (Input.GetKey(KeyCode.W) ? 1f : 0f)
-            - forward * (Input.GetKey(KeyCode.S) ? 1f : 0f)
-            + right * (Input.GetKey(KeyCode.D) ? 1f : 0f)
-            - right * (Input.GetKey(KeyCode.A) ? 1f : 0f);
-        if (horizontal.sqrMagnitude > 1f)
-            horizontal.Normalize();
-        return horizontal;
-    }
+	private static Vector3 GetHorizontalInput(Player player)
+	{
+		Vector3 vector = player.look?.aim?.forward ?? player.transform.forward;
+		vector.y = 0f;
+		if (vector.sqrMagnitude < 0.001f)
+		{
+			vector = player.transform.forward;
+		}
+		vector.Normalize();
+		Vector3 normalized = Vector3.Cross(Vector3.up, vector).normalized;
+		Vector3 result = vector * (Input.GetKey(KeyCode.W) ? 1f : 0f) - vector * (Input.GetKey(KeyCode.S) ? 1f : 0f) + normalized * (Input.GetKey(KeyCode.D) ? 1f : 0f) - normalized * (Input.GetKey(KeyCode.A) ? 1f : 0f);
+		if (result.sqrMagnitude > 1f)
+		{
+			result.Normalize();
+		}
+		return result;
+	}
 
-    private static float GetVerticalInput()
-    {
-        bool ascend = Input.GetKey(KeyCode.Space);
-        bool descend = Input.GetKey(KeyCode.LeftControl)
-            || Input.GetKey(KeyCode.RightControl);
-        if (ascend == descend)
-            return 0f;
-        return ascend ? 1f : -1f;
-    }
+	private static float GetVerticalInput()
+	{
+		bool key = Input.GetKey(KeyCode.Space);
+		bool flag = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+		if (key == flag)
+		{
+			return 0f;
+		}
+		if (!key)
+		{
+			return -1f;
+		}
+		return 1f;
+	}
 
-    private void TrySafeExit()
-    {
-        Player player = Player.LocalPlayer;
-        if (player == null)
-            return;
-
-        if (player.adjustStanceOrTeleportIfStuck())
-            return;
-        if (player.stance.wouldHaveHeightClearanceAtPosition(player.transform.position, 0.5f))
-            return;
-
-        Vector3 origin = player.transform.position;
-        for (int radius = 0; radius <= 4; radius++)
-        {
-            int samples = radius == 0 ? 1 : 8;
-            for (int sample = 0; sample < samples; sample++)
-            {
-                float angle = sample * Mathf.PI * 2f / samples;
-                Vector3 horizontal = new(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
-                for (int vertical = 0; vertical <= 6; vertical++)
-                {
-                    Vector3 candidate = origin + horizontal + Vector3.up * vertical;
-                    if (!Level.checkSafeIncludingClipVolumes(candidate)
-                        || !player.stance.wouldHaveHeightClearanceAtPosition(candidate, 0.5f))
-                        continue;
-                    player.teleportToLocation(candidate, player.transform.rotation.eulerAngles.y);
-                    return;
-                }
-            }
-        }
-
-        _log.LogWarning("[Movement] 关闭 Noclip 后未找到安全落点；保留当前位置，请使用传送功能脱困。");
-    }
+	private void TrySafeExit()
+	{
+		Player localPlayer = Player.LocalPlayer;
+		if (localPlayer == null || localPlayer.adjustStanceOrTeleportIfStuck() || localPlayer.stance.wouldHaveHeightClearanceAtPosition(localPlayer.transform.position, 0.5f))
+		{
+			return;
+		}
+		Vector3 position = localPlayer.transform.position;
+		for (int i = 0; i <= 4; i++)
+		{
+			int num = ((i == 0) ? 1 : 8);
+			for (int j = 0; j < num; j++)
+			{
+				float f = (float)j * MathF.PI * 2f / (float)num;
+				Vector3 vector = new Vector3(Mathf.Cos(f) * (float)i, 0f, Mathf.Sin(f) * (float)i);
+				for (int k = 0; k <= 6; k++)
+				{
+					Vector3 vector2 = position + vector + Vector3.up * k;
+					if (Level.checkSafeIncludingClipVolumes(vector2) && localPlayer.stance.wouldHaveHeightClearanceAtPosition(vector2, 0.5f))
+					{
+						localPlayer.teleportToLocation(vector2, localPlayer.transform.rotation.eulerAngles.y);
+						return;
+					}
+				}
+			}
+		}
+		_log.LogWarning("[Movement] 关闭 Noclip 后未找到安全落点；保留当前位置，请使用传送功能脱困。");
+	}
 }

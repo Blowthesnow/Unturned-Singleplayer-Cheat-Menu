@@ -5,38 +5,40 @@ namespace UnturnedSingleplayerCheatMenu.UI;
 
 internal sealed class UiDebouncer : IDisposable
 {
-    private readonly float _delaySeconds;
-    private Action _pending;
-    private float _dueTime;
+	private readonly float _delaySeconds;
 
-    internal UiDebouncer(float delaySeconds)
-    {
-        _delaySeconds = Mathf.Clamp(delaySeconds, 0.1f, 0.2f);
-    }
+	private Action _pending;
 
-    internal void Schedule(Action action)
-    {
-        _pending = action;
-        _dueTime = Time.unscaledTime + _delaySeconds;
-    }
+	private float _dueTime;
 
-    internal void Tick()
-    {
-        if (_pending == null || Time.unscaledTime < _dueTime)
-            return;
+	internal UiDebouncer(float delaySeconds)
+	{
+		_delaySeconds = Mathf.Clamp(delaySeconds, 0.1f, 0.2f);
+	}
 
-        Action action = _pending;
-        _pending = null;
-        action();
-    }
+	internal void Schedule(Action action)
+	{
+		_pending = action;
+		_dueTime = Time.unscaledTime + _delaySeconds;
+	}
 
-    internal void Cancel()
-    {
-        _pending = null;
-    }
+	internal void Tick()
+	{
+		if (_pending != null && !(Time.unscaledTime < _dueTime))
+		{
+			Action pending = _pending;
+			_pending = null;
+			pending();
+		}
+	}
 
-    public void Dispose()
-    {
-        Cancel();
-    }
+	internal void Cancel()
+	{
+		_pending = null;
+	}
+
+	public void Dispose()
+	{
+		Cancel();
+	}
 }

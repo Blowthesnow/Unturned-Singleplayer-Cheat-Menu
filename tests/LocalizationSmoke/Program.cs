@@ -93,7 +93,7 @@ foreach (Match match in stringLiterals)
     staticChineseTemplates.Add(literal);
     Equal(false, PluginLocalization.Translate(literal) == literal, $"Static UI template should have an English translation: {literal}");
 }
-Equal(174, staticChineseTemplates.Count, "Active overlay static localization template count");
+Equal(352, staticChineseTemplates.Count, "Active overlay static localization template count");
 
 PluginLocalization.Initialize("Chinese", "English");
 Equal("单人作弊指令菜单", PluginLocalization.Translate("单人作弊指令菜单"), "Chinese source should remain unchanged");

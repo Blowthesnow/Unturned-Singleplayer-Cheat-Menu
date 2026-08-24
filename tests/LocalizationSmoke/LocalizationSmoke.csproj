@@ -9,5 +9,6 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\PluginLocalization.cs" Link="PluginLocalization.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\PluginLanguage.cs" Link="PluginLanguage.cs" />
   </ItemGroup>
 </Project>

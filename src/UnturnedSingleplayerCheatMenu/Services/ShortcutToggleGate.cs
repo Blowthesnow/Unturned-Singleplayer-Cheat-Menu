@@ -2,22 +2,25 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal sealed class ShortcutToggleGate
 {
-    internal const float DuplicateInputWindowSeconds = 0.25f;
+	internal const float DuplicateInputWindowSeconds = 0.25f;
 
-    private int _lastAcceptedFrame = -1;
-    private float _lastAcceptedTime = float.NegativeInfinity;
+	private int _lastAcceptedFrame = -1;
 
-    internal bool TryAccept(int frame, float realtimeSinceStartup)
-    {
-        if (_lastAcceptedFrame == frame)
-            return false;
+	private float _lastAcceptedTime = float.NegativeInfinity;
 
-        float elapsed = realtimeSinceStartup - _lastAcceptedTime;
-        if (elapsed >= 0f && elapsed < DuplicateInputWindowSeconds)
-            return false;
-
-        _lastAcceptedFrame = frame;
-        _lastAcceptedTime = realtimeSinceStartup;
-        return true;
-    }
+	internal bool TryAccept(int frame, float realtimeSinceStartup)
+	{
+		if (_lastAcceptedFrame == frame)
+		{
+			return false;
+		}
+		float num = realtimeSinceStartup - _lastAcceptedTime;
+		if (num >= 0f && num < 0.25f)
+		{
+			return false;
+		}
+		_lastAcceptedFrame = frame;
+		_lastAcceptedTime = realtimeSinceStartup;
+		return true;
+	}
 }

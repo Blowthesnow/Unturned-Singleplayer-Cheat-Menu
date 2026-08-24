@@ -8,95 +8,127 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal sealed class AssetCatalog
 {
-    private readonly List<ItemAsset> _items = new();
-    private readonly List<VehicleAsset> _vehicles = new();
+	private readonly List<ItemAsset> _items = new List<ItemAsset>();
 
-    public IReadOnlyList<ItemAsset> Items => _items;
-    public IReadOnlyList<VehicleAsset> Vehicles => _vehicles;
-    public bool IsDirty { get; private set; } = true;
-    public int WorkshopItemCount { get; private set; }
-    public int WorkshopVehicleCount { get; private set; }
+	private readonly List<VehicleAsset> _vehicles = new List<VehicleAsset>();
 
-    public void MarkDirty() => IsDirty = true;
+	public IReadOnlyList<ItemAsset> Items => _items;
 
-    public void Refresh()
-    {
-        _items.Clear();
-        _vehicles.Clear();
+	public IReadOnlyList<VehicleAsset> Vehicles => _vehicles;
 
-        Assets.find(_items);
-        Assets.find(_vehicles);
+	public bool IsDirty { get; private set; } = true;
 
-        // Assets.find reads the current mapping, so replaced assets are already absent.
-        _items.RemoveAll(asset => asset == null || asset.id == 0 || asset.isPro);
-        _vehicles.RemoveAll(asset => asset == null);
+	public int WorkshopItemCount { get; private set; }
 
-        _items.Sort(CompareItems);
-        _vehicles.Sort(CompareVehicles);
-        WorkshopItemCount = _items.Count(IsWorkshopAsset);
-        WorkshopVehicleCount = _vehicles.Count(IsWorkshopAsset);
-        IsDirty = false;
-    }
+	public int WorkshopVehicleCount { get; private set; }
 
-    public static ItemPrimaryCategory GetItemCategory(ItemAsset asset) =>
-        ItemFilterService.GetPrimaryCategory(asset.type);
+	public void MarkDirty()
+	{
+		IsDirty = true;
+	}
 
-    public static string GetVehicleCategory(VehicleAsset asset)
-    {
-        switch (asset.engine)
-        {
-            case EEngine.CAR: return "陆地车辆";
-            case EEngine.PLANE: return "固定翼飞机";
-            case EEngine.HELICOPTER: return "直升机";
-            case EEngine.BLIMP: return "飞艇";
-            case EEngine.BOAT: return "船只";
-            case EEngine.TRAIN: return "火车";
-            default: return "其他";
-        }
-    }
+	public void Refresh()
+	{
+		_items.Clear();
+		_vehicles.Clear();
+		Assets.find(_items);
+		Assets.find(_vehicles);
+		_items.RemoveAll((ItemAsset asset) => asset == null || asset.id == 0 || asset.isPro);
+		_vehicles.RemoveAll((VehicleAsset asset) => asset == null);
+		_items.Sort(CompareItems);
+		_vehicles.Sort(CompareVehicles);
+		WorkshopItemCount = _items.Count(IsWorkshopAsset);
+		WorkshopVehicleCount = _vehicles.Count(IsWorkshopAsset);
+		IsDirty = false;
+	}
 
-    public static bool Matches(Asset asset, string displayName, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-            return true;
+	public static ItemPrimaryCategory GetItemCategory(ItemAsset asset)
+	{
+		return ItemFilterService.GetPrimaryCategory(asset.type);
+	}
 
-        query = query.Trim();
-        return Contains(displayName, query)
-            || Contains(asset.name, query)
-            || Contains(asset.id.ToString(), query)
-            || Contains(asset.GUID.ToString("N"), query)
-            || Contains(asset.GetOriginName(), query);
-    }
+	public static string GetVehicleCategory(VehicleAsset asset)
+	{
+		return asset.engine switch
+		{
+			EEngine.CAR => "陆地车辆",
+			EEngine.PLANE => "固定翼飞机",
+			EEngine.HELICOPTER => "直升机",
+			EEngine.BLIMP => "飞艇",
+			EEngine.BOAT => "船只",
+			EEngine.TRAIN => "火车",
+			_ => "其他",
+		};
+	}
 
-    public static string GetOriginLabel(Asset asset)
-    {
-        if (IsWorkshopAsset(asset))
-            return PluginLocalization.Translate("模组");
+	public static bool Matches(Asset asset, string displayName, string query)
+	{
+		return Matches(asset, displayName, null, query);
+	}
 
-        string origin = asset.GetOriginName();
-        if (Contains(origin, "core") || Contains(origin, "official"))
-            return PluginLocalization.Translate("原版");
-        return string.IsNullOrWhiteSpace(origin) ? PluginLocalization.Translate("未知来源") : origin;
-    }
+	public static bool Matches(Asset asset, string displayName, string originalName, string query)
+	{
+		if (string.IsNullOrWhiteSpace(query))
+		{
+			return true;
+		}
+		query = query.Trim();
+		if (!Contains(displayName, query) && !Contains(originalName, query) && !Contains(asset.name, query) && !Contains(asset.id.ToString(), query) && !Contains(asset.GUID.ToString("N"), query))
+		{
+			return Contains(asset.GetOriginName(), query);
+		}
+		return true;
+	}
 
-#pragma warning disable CS0618
-    public static bool IsWorkshopAsset(Asset asset) => asset.assetOrigin == EAssetOrigin.WORKSHOP;
-#pragma warning restore CS0618
+	public static string GetOriginLabel(Asset asset)
+	{
+		if (IsWorkshopAsset(asset))
+		{
+			return PluginLocalization.Translate("模组");
+		}
+		string originName = asset.GetOriginName();
+		if (Contains(originName, "core") || Contains(originName, "official") || Contains(originName, "vanilla"))
+		{
+			return PluginLocalization.Translate("原版");
+		}
+		if (!string.IsNullOrWhiteSpace(originName))
+		{
+			return originName;
+		}
+		return PluginLocalization.Translate("未知来源");
+	}
 
-    private static int CompareItems(ItemAsset left, ItemAsset right)
-    {
-        int category = GetItemCategory(left).CompareTo(GetItemCategory(right));
-        return category != 0 ? category : string.Compare(left.FriendlyName, right.FriendlyName, StringComparison.CurrentCultureIgnoreCase);
-    }
+	public static bool IsWorkshopAsset(Asset asset)
+	{
+		return asset.assetOrigin == EAssetOrigin.WORKSHOP;
+	}
 
-    private static int CompareVehicles(VehicleAsset left, VehicleAsset right)
-    {
-        int category = string.Compare(GetVehicleCategory(left), GetVehicleCategory(right), StringComparison.CurrentCulture);
-        return category != 0 ? category : string.Compare(left.FriendlyName, right.FriendlyName, StringComparison.CurrentCultureIgnoreCase);
-    }
+	private static int CompareItems(ItemAsset left, ItemAsset right)
+	{
+		int num = GetItemCategory(left).CompareTo(GetItemCategory(right));
+		if (num == 0)
+		{
+			return string.Compare(left.FriendlyName, right.FriendlyName, StringComparison.CurrentCultureIgnoreCase);
+		}
+		return num;
+	}
 
-    private static bool Contains(string text, string value)
-    {
-        return !string.IsNullOrEmpty(text) && text.IndexOf(value, StringComparison.CurrentCultureIgnoreCase) >= 0;
-    }
+	private static int CompareVehicles(VehicleAsset left, VehicleAsset right)
+	{
+		int num = string.Compare(GetVehicleCategory(left), GetVehicleCategory(right), StringComparison.CurrentCulture);
+		if (num == 0)
+		{
+			return string.Compare(left.FriendlyName, right.FriendlyName, StringComparison.CurrentCultureIgnoreCase);
+		}
+		return num;
+	}
+
+	private static bool Contains(string text, string value)
+	{
+		if (!string.IsNullOrEmpty(text))
+		{
+			return text.IndexOf(value, StringComparison.CurrentCultureIgnoreCase) >= 0;
+		}
+		return false;
+	}
 }

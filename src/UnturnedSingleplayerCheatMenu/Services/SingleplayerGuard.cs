@@ -5,33 +5,49 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal static class SingleplayerGuard
 {
-    private const string ServerIdPrefix = "Singleplayer_";
+	private const string ServerIdPrefix = "Singleplayer_";
 
-    public static bool IsSingleplayerWorld
-    {
-        get
-        {
-            return Provider.isConnected
-                && Provider.isServer
-                && Provider.isClient
-                && Provider.serverID != null
-                && Provider.serverID.StartsWith(ServerIdPrefix, StringComparison.Ordinal);
-        }
-    }
+	public static bool IsSingleplayerWorld
+	{
+		get
+		{
+			if (Provider.isConnected && Provider.isServer && Provider.isClient && Provider.serverID != null)
+			{
+				return Provider.serverID.StartsWith("Singleplayer_", StringComparison.Ordinal);
+			}
+			return false;
+		}
+	}
 
-    public static bool IsReady => IsSingleplayerWorld && Player.LocalPlayer != null;
+	public static bool IsReady
+	{
+		get
+		{
+			if (IsSingleplayerWorld)
+			{
+				return Player.LocalPlayer != null;
+			}
+			return false;
+		}
+	}
 
-    public static string RejectionReason
-    {
-        get
-        {
-            if (!Provider.isConnected)
-                return PluginLocalization.Translate("尚未进入世界。");
-            if (!IsSingleplayerWorld)
-                return PluginLocalization.Translate("此菜单只允许在真正的单人世界中使用。");
-            if (Player.LocalPlayer == null)
-                return PluginLocalization.Translate("本地玩家尚未生成。");
-            return string.Empty;
-        }
-    }
+	public static string RejectionReason
+	{
+		get
+		{
+			if (!Provider.isConnected)
+			{
+				return PluginLocalization.Translate("尚未进入世界。");
+			}
+			if (!IsSingleplayerWorld)
+			{
+				return PluginLocalization.Translate("此菜单只允许在真正的单人世界中使用。");
+			}
+			if (Player.LocalPlayer == null)
+			{
+				return PluginLocalization.Translate("本地玩家尚未生成。");
+			}
+			return string.Empty;
+		}
+	}
 }

@@ -11,176 +11,103 @@ namespace UnturnedSingleplayerCheatMenu.Patches;
 
 internal static class PointToolInteractionPatch
 {
-    private const float NativeStorageRangeSquared = 400f;
-    private const float NativeInteractionRangeSquared = 400f;
-    private const float NativeVehicleRangeSquared = 100f;
+	private sealed class RangeOverrideScope : IDisposable
+	{
+		private bool _disposed;
 
-    private static int _rangeOverrideDepth;
-    private static float _rangeOverride = 100f;
+		public void Dispose()
+		{
+			if (!_disposed)
+			{
+				_disposed = true;
+				_rangeOverrideDepth = Math.Max(0, _rangeOverrideDepth - 1);
+			}
+		}
+	}
 
-    internal static bool IsRangeOverrideActive => _rangeOverrideDepth > 0;
+	private const float NativeStorageRangeSquared = 400f;
 
-    internal static IDisposable BeginRangeOverride(float range)
-    {
-        _rangeOverride = Mathf.Clamp(range, 5f, 250f);
-        _rangeOverrideDepth++;
-        return new RangeOverrideScope();
-    }
+	private const float NativeInteractionRangeSquared = 400f;
 
-    internal static void Install(Harmony harmony, ManualLogSource log)
-    {
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableStorage),
-            "ReceiveInteractRequest",
-            NativeStorageRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableDoor),
-            "ReceiveToggleRequest",
-            NativeInteractionRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableGenerator),
-            "ReceiveToggleRequest",
-            NativeInteractionRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableSpot),
-            "ReceiveToggleRequest",
-            NativeInteractionRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableFire),
-            "ReceiveToggleRequest",
-            NativeInteractionRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableOven),
-            "ReceiveToggleRequest",
-            NativeInteractionRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableOxygenator),
-            "ReceiveToggleRequest",
-            NativeInteractionRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(InteractableSafezone),
-            "ReceiveToggleRequest",
-            NativeInteractionRangeSquared,
-            nameof(GetInteractionRangeSquared));
-        PatchDistanceConstant(
-            harmony,
-            log,
-            typeof(VehicleManager),
-            "ReceiveEnterVehicleRequest",
-            NativeVehicleRangeSquared,
-            nameof(GetVehicleInteractionRangeSquared));
-    }
+	private const float NativeVehicleRangeSquared = 100f;
 
-    internal static float GetInteractionRangeSquared()
-    {
-        return IsRangeOverrideActive
-            ? _rangeOverride * _rangeOverride
-            : NativeInteractionRangeSquared;
-    }
+	private static int _rangeOverrideDepth;
 
-    internal static float GetVehicleInteractionRangeSquared()
-    {
-        return IsRangeOverrideActive
-            ? _rangeOverride * _rangeOverride
-            : NativeVehicleRangeSquared;
-    }
+	private static float _rangeOverride = 100f;
 
-    private static void PatchDistanceConstant(
-        Harmony harmony,
-        ManualLogSource log,
-        Type declaringType,
-        string methodName,
-        float originalValue,
-        string replacementMethodName)
-    {
-        try
-        {
-            MethodInfo target = AccessTools.DeclaredMethod(declaringType, methodName);
-            if (target == null)
-                throw new MissingMethodException(declaringType.FullName, methodName);
+	internal static bool IsRangeOverrideActive => _rangeOverrideDepth > 0;
 
-            MethodInfo transpiler = AccessTools.Method(
-                typeof(PointToolInteractionPatch),
-                nameof(ReplaceDistanceConstant));
-            MethodInfo replacement = AccessTools.Method(
-                typeof(PointToolInteractionPatch),
-                replacementMethodName);
-            harmony.Patch(
-                target,
-                transpiler: new HarmonyMethod(transpiler));
-            log?.LogInfo(
-                $"[PointTool] 已挂接 {declaringType.FullName}.{methodName} 距离校验；" +
-                $"原生阈值 {originalValue:0.##}，准星工具请求时使用 PointTool.Range。替换方法={replacement?.Name ?? "missing"}。");
-        }
-        catch (Exception ex)
-        {
-            log?.LogWarning(
-                $"[PointTool] 无法挂接 {declaringType.FullName}.{methodName} 的距离校验：{ex}");
-        }
-    }
+	internal static IDisposable BeginRangeOverride(float range)
+	{
+		_rangeOverride = Mathf.Clamp(range, 5f, 250f);
+		_rangeOverrideDepth++;
+		return new RangeOverrideScope();
+	}
 
-    private static IEnumerable<CodeInstruction> ReplaceDistanceConstant(
-        IEnumerable<CodeInstruction> instructions,
-        MethodBase __originalMethod)
-    {
-        float originalValue = __originalMethod.DeclaringType == typeof(VehicleManager)
-            ? NativeVehicleRangeSquared
-            : NativeInteractionRangeSquared;
-        string replacementMethodName = __originalMethod.DeclaringType == typeof(VehicleManager)
-            ? nameof(GetVehicleInteractionRangeSquared)
-            : nameof(GetInteractionRangeSquared);
-        MethodInfo replacement = AccessTools.Method(
-            typeof(PointToolInteractionPatch),
-            replacementMethodName);
+	internal static void Install(Harmony harmony, ManualLogSource log)
+	{
+		PatchDistanceConstant(harmony, log, typeof(InteractableStorage), "ReceiveInteractRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(InteractableDoor), "ReceiveToggleRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(InteractableGenerator), "ReceiveToggleRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(InteractableSpot), "ReceiveToggleRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(InteractableFire), "ReceiveToggleRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(InteractableOven), "ReceiveToggleRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(InteractableOxygenator), "ReceiveToggleRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(InteractableSafezone), "ReceiveToggleRequest", 400f, "GetInteractionRangeSquared");
+		PatchDistanceConstant(harmony, log, typeof(VehicleManager), "ReceiveEnterVehicleRequest", 100f, "GetVehicleInteractionRangeSquared");
+	}
 
-        foreach (CodeInstruction instruction in instructions)
-        {
-            if (instruction.opcode == OpCodes.Ldc_R4
-                && instruction.operand is float value
-                && Math.Abs(value - originalValue) < 0.001f)
-            {
-                instruction.opcode = OpCodes.Call;
-                instruction.operand = replacement;
-            }
+	internal static float GetInteractionRangeSquared()
+	{
+		if (!IsRangeOverrideActive)
+		{
+			return 400f;
+		}
+		return _rangeOverride * _rangeOverride;
+	}
 
-            yield return instruction;
-        }
-    }
+	internal static float GetVehicleInteractionRangeSquared()
+	{
+		if (!IsRangeOverrideActive)
+		{
+			return 100f;
+		}
+		return _rangeOverride * _rangeOverride;
+	}
 
-    private sealed class RangeOverrideScope : IDisposable
-    {
-        private bool _disposed;
+	private static void PatchDistanceConstant(Harmony harmony, ManualLogSource log, Type declaringType, string methodName, float originalValue, string replacementMethodName)
+	{
+		try
+		{
+			MethodInfo methodInfo = AccessTools.DeclaredMethod(declaringType, methodName);
+			if (methodInfo == null)
+			{
+				throw new MissingMethodException(declaringType.FullName, methodName);
+			}
+			MethodInfo method = AccessTools.Method(typeof(PointToolInteractionPatch), "ReplaceDistanceConstant");
+			MethodInfo methodInfo2 = AccessTools.Method(typeof(PointToolInteractionPatch), replacementMethodName);
+			harmony.Patch(methodInfo, null, null, new HarmonyMethod(method));
+			log?.LogInfo("[PointTool] 已挂接 " + declaringType.FullName + "." + methodName + " 距离校验；" + string.Format("原生阈值 {0:0.##}，准星工具请求时使用 PointTool.Range。替换方法={1}。", originalValue, methodInfo2?.Name ?? "missing"));
+		}
+		catch (Exception arg)
+		{
+			log?.LogWarning($"[PointTool] 无法挂接 {declaringType.FullName}.{methodName} 的距离校验：{arg}");
+		}
+	}
 
-        public void Dispose()
-        {
-            if (_disposed)
-                return;
-
-            _disposed = true;
-            _rangeOverrideDepth = Math.Max(0, _rangeOverrideDepth - 1);
-        }
-    }
+	private static IEnumerable<CodeInstruction> ReplaceDistanceConstant(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
+	{
+		float originalValue = ((__originalMethod.DeclaringType == typeof(VehicleManager)) ? 100f : 400f);
+		string name = ((__originalMethod.DeclaringType == typeof(VehicleManager)) ? "GetVehicleInteractionRangeSquared" : "GetInteractionRangeSquared");
+		MethodInfo replacement = AccessTools.Method(typeof(PointToolInteractionPatch), name);
+		foreach (CodeInstruction instruction in instructions)
+		{
+			if (instruction.opcode == OpCodes.Ldc_R4 && instruction.operand is float num && Math.Abs(num - originalValue) < 0.001f)
+			{
+				instruction.opcode = OpCodes.Call;
+				instruction.operand = replacement;
+			}
+			yield return instruction;
+		}
+	}
 }
