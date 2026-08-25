@@ -1,6 +1,6 @@
 # Unturned Singleplayer Cheat Menu
 
-[中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md)
+[中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
 A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. It brings player controls, item and vehicle discovery, favorites, map-scoped teleports, world-time and weather controls, crosshair interaction, and native-simulation movement into one focused overlay.
 
