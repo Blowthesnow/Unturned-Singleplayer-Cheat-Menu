@@ -296,7 +296,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		{
 			_translationCancellation?.Cancel();
 			_translationCancellation = cancellationTokenSource;
-			_translationTask = TranslateWorkerAsync(generation, list2.Select((WorkshopLocalizationCandidate candidate) => new WorkshopTranslationWorkItem(candidate.Key, candidate.Field, candidate.SourceText, candidate.AssetName, candidate.AssetGuid, candidate.LegacyId, candidate.ActionKey)).ToList(), cancellationTokenSource.Token);
+			_translationTask = TranslateWorkerAsync(generation, list2.Select((WorkshopLocalizationCandidate candidate) => new WorkshopTranslationWorkItem(candidate.Key, candidate.Field, candidate.SourceText, candidate.AssetName, candidate.AssetGuid, candidate.LegacyId, candidate.ActionKey, candidate.AssetType, candidate.LocalizationKey, candidate.SchemaVersion)).ToList(), cancellationTokenSource.Token);
 			_info?.Invoke($"Workshop translation started: provider={Settings.ApiProtocol}, pending={list2.Count}, force={force}.");
 		}
 		return true;
@@ -486,7 +486,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		_cache.Upsert(new WorkshopTranslationCacheEntry
 		{
 			Key = workItem.Key,
-			SchemaVersion = 1,
+			SchemaVersion = workItem.SchemaVersion,
 			SourceLanguage = Settings.SourceLanguage,
 			TargetLanguage = Settings.TargetLanguage,
 			Field = workItem.Field,
@@ -496,6 +496,8 @@ internal sealed class WorkshopLocalizationService : IDisposable
 			AssetGuid = workItem.AssetGuid,
 			LegacyId = workItem.LegacyId,
 			ActionKey = workItem.ActionKey,
+			AssetType = workItem.AssetType,
+			LocalizationKey = workItem.LocalizationKey,
 			ApiProtocol = Settings.ApiProtocol,
 			Provider = Settings.ApiProtocol,
 			Model = Settings.Model,
@@ -524,64 +526,22 @@ internal sealed class WorkshopLocalizationService : IDisposable
 
 	private void PublishSnapshotLocked()
 	{
-		Dictionary<object, string> dictionary = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary2 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary3 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary4 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary5 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary6 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary7 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary8 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary9 = new Dictionary<object, string>(ReferenceComparer.Instance);
-		Dictionary<object, string> dictionary10 = new Dictionary<object, string>(ReferenceComparer.Instance);
+		Dictionary<object, IReadOnlyDictionary<WorkshopTextField, string>> dictionary = new Dictionary<object, IReadOnlyDictionary<WorkshopTextField, string>>(ReferenceComparer.Instance);
+		Dictionary<object, IReadOnlyDictionary<WorkshopTextField, string>> dictionary2 = new Dictionary<object, IReadOnlyDictionary<WorkshopTextField, string>>(ReferenceComparer.Instance);
 		HashSet<string> hashSet = new HashSet<string>(StringComparer.Ordinal);
 		foreach (WorkshopLocalizationCandidate candidate in _candidates)
 		{
-			switch (candidate.Field)
-			{
-			case WorkshopTextField.ItemName:
-				dictionary6[candidate.Instance] = candidate.SourceText;
-				break;
-			case WorkshopTextField.ItemDescription:
-				dictionary7[candidate.Instance] = candidate.SourceText;
-				break;
-			case WorkshopTextField.VehicleName:
-				dictionary8[candidate.Instance] = candidate.SourceText;
-				break;
-			case WorkshopTextField.ActionText:
-				dictionary9[candidate.Instance] = candidate.SourceText;
-				break;
-			case WorkshopTextField.ActionTooltip:
-				dictionary10[candidate.Instance] = candidate.SourceText;
-				break;
-			}
-			if (_cache.TryGet(candidate.Key, out var entry) && !IsCandidateAlreadyInTargetLanguage(candidate, Settings.TargetLanguage) && string.Equals(WorkshopTextIdentity.NormalizeSource(entry.SourceText), WorkshopTextIdentity.NormalizeSource(candidate.SourceText), StringComparison.Ordinal) && entry.Field == candidate.Field)
+			AddSnapshotValue(dictionary2, candidate.Instance, candidate.Field, candidate.SourceText);
+			if (_cache.TryGet(candidate.Key, out var entry) && !IsCandidateAlreadyInTargetLanguage(candidate, Settings.TargetLanguage) && IsCacheEntryMatch(candidate, entry))
 			{
 				if (hashSet.Add(candidate.Key))
 				{
 					_cache.Touch(candidate.Key);
 				}
-				switch (candidate.Field)
-				{
-				case WorkshopTextField.ItemName:
-					dictionary[candidate.Instance] = entry.Translation;
-					break;
-				case WorkshopTextField.ItemDescription:
-					dictionary2[candidate.Instance] = entry.Translation;
-					break;
-				case WorkshopTextField.VehicleName:
-					dictionary3[candidate.Instance] = entry.Translation;
-					break;
-				case WorkshopTextField.ActionText:
-					dictionary4[candidate.Instance] = entry.Translation;
-					break;
-				case WorkshopTextField.ActionTooltip:
-					dictionary5[candidate.Instance] = entry.Translation;
-					break;
-				}
+				AddSnapshotValue(dictionary, candidate.Instance, candidate.Field, entry.Translation);
 			}
 		}
-		_snapshot = new WorkshopLocalizationSnapshot(dictionary, dictionary2, dictionary3, dictionary4, dictionary5, dictionary6, dictionary7, dictionary8, dictionary9, dictionary10);
+		_snapshot = new WorkshopLocalizationSnapshot(dictionary, dictionary2);
 		_snapshotVersion++;
 		_progress.CacheHits = _candidates.Select((WorkshopLocalizationCandidate candidate) => candidate.Key).Distinct<string>(StringComparer.Ordinal).Count((string key) => _cache.TryGet(key, out var _));
 		_progress.Version = _snapshotVersion;
@@ -606,7 +566,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		{
 			return false;
 		}
-		if (cached.Field != candidate.Field || !string.Equals(WorkshopTextIdentity.NormalizeSource(cached.SourceText), WorkshopTextIdentity.NormalizeSource(candidate.SourceText), StringComparison.Ordinal))
+		if (!IsCacheEntryMatch(candidate, cached))
 		{
 			return false;
 		}
@@ -615,6 +575,33 @@ internal sealed class WorkshopLocalizationService : IDisposable
 			return true;
 		}
 		return !string.Equals(WorkshopTextIdentity.NormalizeSource(candidate.SourceText), WorkshopTextIdentity.NormalizeSource(cached.Translation), StringComparison.Ordinal);
+	}
+
+	private static void AddSnapshotValue(Dictionary<object, IReadOnlyDictionary<WorkshopTextField, string>> lookup, object instance, WorkshopTextField field, string value)
+	{
+		if (instance == null)
+		{
+			return;
+		}
+		if (!lookup.TryGetValue(instance, out var readOnlyValues))
+		{
+			readOnlyValues = new Dictionary<WorkshopTextField, string>();
+			lookup.Add(instance, readOnlyValues);
+		}
+		((Dictionary<WorkshopTextField, string>)readOnlyValues)[field] = value;
+	}
+
+	private static bool IsCacheEntryMatch(WorkshopLocalizationCandidate candidate, WorkshopTranslationCacheEntry entry)
+	{
+		if (entry == null || entry.SchemaVersion != candidate.SchemaVersion || entry.Field != candidate.Field || !string.Equals(WorkshopTextIdentity.NormalizeSource(entry.SourceText), WorkshopTextIdentity.NormalizeSource(candidate.SourceText), StringComparison.Ordinal))
+		{
+			return false;
+		}
+		if (candidate.SchemaVersion != WorkshopTextIdentity.AssetScopedSchemaVersion)
+		{
+			return true;
+		}
+		return string.Equals(entry.AssetType, candidate.AssetType, StringComparison.Ordinal) && string.Equals(entry.AssetGuid, candidate.AssetGuid, StringComparison.Ordinal) && string.Equals(entry.LocalizationKey, candidate.LocalizationKey, StringComparison.Ordinal);
 	}
 
 	private static bool IsCandidateAlreadyInTargetLanguage(WorkshopLocalizationCandidate candidate, string targetLanguage)

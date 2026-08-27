@@ -1,8 +1,8 @@
 # Unturned Singleplayer Cheat Menu
 
-[中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md)
+[中文说明](README.md) · [Changelog](CHANGELOG.md) · [Acceptance matrix](ACCEPTANCE.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
-A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. Version 1.7.0 adds a crosshair interaction tool, native-simulation flight and noclip, safer map teleport landing, live time-slider preview, and duplicate-plugin deployment protection.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `1.9.0`, adding automatic pickup, infinite storage, creature health bars, hover details, view-direction flight, and global shortcuts, while fixing inventory arrangement and Workshop localization behavior.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 
@@ -62,7 +62,7 @@ The map setup checkbox named **singleplayer cheats** is not required. It control
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `1.7.0` |
+| Plugin | `1.9.0` |
 
 ## Installation
 
@@ -121,7 +121,7 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-Version 1.7.0 adds the point tool, native-simulation movement, safer teleport landing, live time preview, and duplicate-DLL deployment protection. Release build, nine solution projects, Plugin-Only package validation, retained runtime evidence, and remaining runtime boundaries are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md). No complete BepInEx package is published.
+The `1.9.0` source changes, build, and Smoke evidence are recorded in the [v1.9 source changelog](docs/V1.8_RECOVERY_CHANGELOG.md). This update pushes code only: no tag, release package, or GitHub Release was created. The `1.7.0` Plugin-Only package remains the latest formal release asset.
 
 Published plugin DLL:
 

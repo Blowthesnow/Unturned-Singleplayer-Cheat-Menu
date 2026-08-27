@@ -99,6 +99,15 @@ internal sealed class GlobalShortcutManager
 		return GetShortcut(actionId).ToString();
 	}
 
+	internal KeyboardShortcut GetDefaultShortcut(string actionId)
+	{
+		if (_registrations.TryGetValue(actionId, out var value))
+		{
+			return value.DefaultShortcut;
+		}
+		return new KeyboardShortcut(KeyCode.End);
+	}
+
 	internal string GetDisplayName(string actionId)
 	{
 		string text;
@@ -123,7 +132,7 @@ internal sealed class GlobalShortcutManager
 		{
 			return false;
 		}
-		if (_registrations.Values.Any((Registration candidate) => candidate.ActionId != actionId && candidate.Config.Value.Equals(shortcut)))
+		if (shortcut.MainKey != KeyCode.None && _registrations.Values.Any((Registration candidate) => candidate.ActionId != actionId && candidate.Config.Value.MainKey != KeyCode.None && candidate.Config.Value.Equals(shortcut)))
 		{
 			_log?.LogWarning($"全局快捷键重复，拒绝保存 {actionId}：{shortcut}。");
 			return false;
@@ -156,6 +165,10 @@ internal sealed class GlobalShortcutManager
 		foreach (Registration value2 in _registrations.Values)
 		{
 			KeyboardShortcut value = value2.Config.Value;
+			if (value.MainKey == KeyCode.None)
+			{
+				continue;
+			}
 			bool flag = ShortcutInputPolicy.IsUnityPressed(value);
 			bool flag2 = value2.NativeDetector.IsPressed(value);
 			if ((flag || flag2) && value2.Gate.TryAccept(frame, realtimeSinceStartup))
@@ -165,20 +178,4 @@ internal sealed class GlobalShortcutManager
 		}
 	}
 
-	internal bool ProcessGuiEvent(Event current, int frame, float realtimeSinceStartup, bool inputSuppressed)
-	{
-		if (inputSuppressed)
-		{
-			return false;
-		}
-		foreach (Registration value in _registrations.Values)
-		{
-			if (ShortcutInputPolicy.IsGuiEvent(current, value.Config.Value) && value.Gate.TryAccept(frame, realtimeSinceStartup))
-			{
-				value.Handler("IMGUI 事件");
-				return true;
-			}
-		}
-		return false;
-	}
 }

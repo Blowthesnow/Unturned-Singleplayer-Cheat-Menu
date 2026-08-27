@@ -211,6 +211,11 @@ internal static class PluginLocalization
 		dictionary["关闭"] = "Close";
 		dictionary["设置全局快捷键"] = "Set Global Shortcut";
 		dictionary["当前动作："] = "Current action: ";
+		dictionary["清除"] = "Clear";
+		dictionary["世界"] = "World";
+		dictionary["准星"] = "Crosshair";
+		dictionary["生物生命条"] = "Creature Health Bars";
+		dictionary["自动化"] = "Automation";
 		dictionary["打开或关闭菜单"] = "Toggle Menu";
 		dictionary["当前快捷键："] = "Current shortcut: ";
 		dictionary["点击“开始设置”，然后按下要使用的键盘键、鼠标中键或鼠标侧键；鼠标左键和右键不可用，可先按住 Ctrl / Alt / Shift / Win 作为组合键。"] = "Click “Start Setup”, then press a keyboard key, middle mouse button, or side mouse button. Left and right mouse buttons are unavailable; hold Ctrl / Alt / Shift / Win first for a combination.";
@@ -220,6 +225,7 @@ internal static class PluginLocalization
 		dictionary["全局快捷键已更新。"] = "Global shortcut updated.";
 		dictionary["全局快捷键已更新，但配置文件保存失败。"] = "Global shortcut updated, but the configuration file could not be saved.";
 		dictionary["各模式功能介绍"] = "Mode Descriptions";
+		dictionary["切换飞行模式：在世界轴与视角指向之间切换。"] = "Switch flight mode between world-axis and view-direction movement.";
 		dictionary["根据准星目标自动选择单一动作：维修、实用、准星传送、检查或 Shift + 中键删除。"] = "Automatically chooses one action for the crosshair target: repair, utility, crosshair teleport, inspect, or Shift + middle-click delete.";
 		dictionary["查看准星指向对象的名称、ID / GUID、生命 / 耐久和位置等信息。"] = "Shows the crosshair target's name, ID / GUID, health / durability, position, and other details.";
 		dictionary["维修准星指向的受损车辆、路障或建筑。"] = "Repairs a damaged vehicle, barricade, or structure under the crosshair.";
@@ -259,6 +265,7 @@ internal static class PluginLocalization
 		dictionary["无限生存状态"] = "Infinite Survival Stats";
 		dictionary["无限生存状态已开启。"] = "Infinite survival stats enabled.";
 		dictionary["无限生存状态已关闭。"] = "Infinite survival stats disabled.";
+		dictionary["恢复角色状态"] = "Restore Player State";
 		dictionary["设置指定数值（0–100；生命最低 1）"] = "Set exact values (0–100; health minimum 1)";
 		dictionary["生命"] = "Health";
 		dictionary["饱食"] = "Food";
@@ -273,6 +280,7 @@ internal static class PluginLocalization
 		dictionary["角色状态已全部恢复。"] = "All player stats restored.";
 		dictionary["恢复失败。"] = "Restore failed.";
 		dictionary["补满生存状态"] = "Refill Survival Stats";
+		dictionary["补满失败。"] = "Refill failed.";
 		dictionary["生存状态已补满。"] = "Survival stats refilled.";
 		dictionary["操作失败。"] = "Action failed.";
 		dictionary["治疗流血/骨折"] = "Heal Bleeding / Fracture";
@@ -426,6 +434,7 @@ internal static class PluginLocalization
 		dictionary["世界事件"] = "World Events";
 		dictionary["立即呼叫空投"] = "Call Airdrop Now";
 		dictionary["空投已呼叫。"] = "Airdrop requested.";
+		dictionary["空投呼叫失败。"] = "Airdrop request failed.";
 		dictionary["此地图没有可用的空投节点或货物表。"] = "This map has no usable airdrop node or loot table.";
 		dictionary["下雨"] = "Rain";
 		dictionary["已触发雨天。"] = "Rain triggered.";
@@ -460,12 +469,32 @@ internal static class PluginLocalization
 		dictionary["默认"] = "Default";
 		dictionary["背包整理"] = "Inventory Arrange";
 		dictionary["排序预设"] = "Sort Preset";
+		dictionary["整理范围"] = "Arrange Scope";
+		dictionary["配置随身页 ▼"] = "Configure Carried Pages ▼";
+		dictionary["分别开启或关闭背包、背心、上衣和裤子储物页；关闭的页面不会参与整理。"] = "Configure the backpack, vest, shirt, and pants storage pages; disabled pages are excluded from arranging.";
+		dictionary["选择参与整理的随身页"] = "Choose carried pages to arrange";
+		dictionary["背包"] = "Backpack";
+		dictionary["背心"] = "Vest";
+		dictionary["上衣"] = "Shirt";
+		dictionary["裤子"] = "Pants";
+		dictionary["背包页已纳入整理范围。"] = "The backpack page is included in the arrange scope.";
+		dictionary["背包页已排除出整理范围。"] = "The backpack page is excluded from the arrange scope.";
+		dictionary["背心页已纳入整理范围。"] = "The vest page is included in the arrange scope.";
+		dictionary["背心页已排除出整理范围。"] = "The vest page is excluded from the arrange scope.";
+		dictionary["上衣页已纳入整理范围。"] = "The shirt page is included in the arrange scope.";
+		dictionary["上衣页已排除出整理范围。"] = "The shirt page is excluded from the arrange scope.";
+		dictionary["裤子页已纳入整理范围。"] = "The pants page is included in the arrange scope.";
+		dictionary["裤子页已排除出整理范围。"] = "The pants page is excluded from the arrange scope.";
+		dictionary["开启后整理背包储物页；关闭后该页物品和位置保持不变。"] = "When enabled, arrange the backpack storage page; when disabled, leave its items and positions unchanged.";
+		dictionary["开启后整理背心储物页；关闭后该页物品和位置保持不变。"] = "When enabled, arrange the vest storage page; when disabled, leave its items and positions unchanged.";
+		dictionary["开启后整理上衣储物页；关闭后该页物品和位置保持不变。"] = "When enabled, arrange the shirt storage page; when disabled, leave its items and positions unchanged.";
+		dictionary["开启后整理裤子储物页；关闭后该页物品和位置保持不变。"] = "When enabled, arrange the pants storage page; when disabled, leave its items and positions unchanged.";
 		dictionary["点击后从列表直接选择一个整理预设，预设的具体规则可将鼠标移到选项上查看。"] = "Choose an arrange preset directly from the list. Hover an option to read what the preset does.";
 		dictionary["安全背包整理"] = "Safe Inventory Arrange";
 		dictionary["安全策略：预检无法完整安置时取消整次操作；不调用自动掉落。"] = "Safety: cancel the whole operation when preflight cannot place every item; automatic dropping is never used.";
 		dictionary["跨箱集中：打开储物箱时，按住 Ctrl 或 Shift 点击物品，会把同一资产的物品逐件转移到另一侧；目标空间不足时停止，不会丢弃物品。"] = "Cross-container concentration: while a storage box is open, hold Ctrl or Shift and click an item to transfer every instance of the same asset to the other side; it stops when space runs out and never drops items.";
 		dictionary["保护装备"] = "Protect Equipped";
-		dictionary["保留热键"] = "Preserve Hotkeys";
+		dictionary["固定热键物品"] = "Fix Hotkey Items";
 		dictionary["撤销上次整理"] = "Undo Last Arrange";
 		dictionary["仅归并"] = "Merge Only";
 		dictionary["仅压缩"] = "Compact Only";
@@ -481,8 +510,9 @@ internal static class PluginLocalization
 		dictionary["整理将保持原页范围。"] = "Arrange will keep items on their original pages.";
 		dictionary["已保护当前装备物品。"] = "Equipped items are protected.";
 		dictionary["将允许整理当前装备物品。"] = "Arrange may move equipped items.";
-		dictionary["已保护热键绑定物品。"] = "Hotkey-bound items are protected.";
-		dictionary["将允许移动热键绑定物品。"] = "Arrange may move hotkey-bound items.";
+		dictionary["热键绑定物品将保持在原坐标。"] = "Hotkey-bound items will remain at their original coordinates.";
+		dictionary["热键绑定物品会随整理移动并更新坐标。"] = "Hotkey-bound items will move with arrange and update their coordinates.";
+		dictionary["开启时固定绑定热键的物品；关闭时整理会同步快捷键到新坐标。"] = "When on, hotkey-bound items stay fixed; when off, arrange updates shortcuts to their new coordinates.";
 		dictionary["没有可撤销的整理记录。"] = "There is no arrange operation to undo.";
 		dictionary["自定义排序链（最多 5 项）：Key:Direction,Key:Direction"] = "Custom sort chain (up to 5 keys): Key:Direction,Key:Direction";
 		dictionary["弹药管理"] = "Ammo Management";
@@ -509,7 +539,8 @@ internal static class PluginLocalization
 		dictionary["按稀有度从神话、传奇、史诗、稀有、罕见到普通排列。"] = "Sort rarity from Mythical, Legendary, Epic, Rare, Uncommon, to Common.";
 		dictionary["相同物品会自动合堆；兼容的半弹匣或弹药箱会重新分配成满的和空的。"] = "Merge matching stacks automatically; compatible half magazines or ammo boxes become full and empty containers.";
 		dictionary["剩余弹量多的弹匣或弹药箱排在前面；读不到弹量的物品不会乱改。"] = "Put magazines or ammo boxes with more ammo first; unreadable ammo is left unchanged.";
-		dictionary["绑定快捷栏的物品优先；开启保留热键时，绑定物品不会被移动。"] = "Prioritize hotbar-bound items; with Preserve Hotkeys on, bound items are not moved.";
+		dictionary["绑定快捷栏的物品优先；开启固定热键物品时，绑定物品不会被移动。"] = "Prioritize hotbar-bound items; with Fix Hotkey Items on, bound items are not moved.";
+		dictionary["整理所有随身页，不处理当前储物箱；默认保护装备并固定热键物品。"] = "Arrange all carried pages without touching the open storage; protect equipped items and fix hotkey items by default.";
 		dictionary["尽量保持原来的页、位置和旋转，只做必要的整理。"] = "Keep the original page, position, and rotation whenever possible.";
 		dictionary["按下面输入框里的排序链执行，例如 Name:Descending,Area:Ascending。"] = "Use the sort chain in the input below, for example Name:Descending,Area:Ascending.";
 		dictionary["按安全的默认规则整理。"] = "Arrange using the safe default rules.";
@@ -612,6 +643,16 @@ internal static class PluginLocalization
 		dictionary["名称"] = "Name";
 		dictionary["排序预设："] = "Sort Preset:";
 		dictionary["启用准星交互工具"] = "Enable Point Interaction Tool";
+		dictionary["准星工具"] = "Crosshair Tool";
+		dictionary["准星工具模式"] = "Crosshair Tool Mode";
+		dictionary["准星工具已开启。"] = "Crosshair tool enabled.";
+		dictionary["准星工具已关闭。"] = "Crosshair tool disabled.";
+		dictionary["生物头顶血条"] = "Creature Health Bars";
+		dictionary["生物生命条已开启。"] = "Creature health bars enabled.";
+		dictionary["生物生命条已关闭。"] = "Creature health bars disabled.";
+		dictionary["准心目标或实际受伤后的生物会显示当前生命 / 生命上限。"] = "Crosshair targets or recently damaged creatures show current health / maximum health.";
+		dictionary["生物头顶血条已开启。"] = "Creature health bars enabled.";
+		dictionary["生物头顶血条已关闭。"] = "Creature health bars disabled.";
 		dictionary["扫描当前已加载资产后，翻译缓存中没有的文本；填写配置后点击这里开始。"] = "Scan currently loaded assets and translate text missing from the cache; configure the API, then click here to start.";
 		dictionary["生命 / 耐久"] = "Health / Durability";
 		dictionary["实用"] = "Utility";
@@ -647,10 +688,141 @@ internal static class PluginLocalization
 		dictionary["准星交互工具"] = "Point Interaction Tool";
 		dictionary["准星交互工具已关闭。"] = "Point interaction tool disabled.";
 		dictionary["准星交互工具已开启。"] = "Point interaction tool enabled.";
+		dictionary["无限储存"] = "Infinite Storage";
+		dictionary["无限储存不可用"] = "Infinite storage unavailable";
+		dictionary["储存运行时尚未初始化。"] = "The storage runtime has not finished initializing.";
+		dictionary["启用无限储存"] = "Enable infinite storage";
+		dictionary["拾取优先存入无限储存"] = "Prioritize Infinite Storage for Pickup";
+		dictionary["存储当前携带物品"] = "Store Current Carried Items";
+		dictionary["没有可存储的物品，或无限储存未启用。"] = "No items can be stored, or infinite storage is disabled.";
+		dictionary["将当前背包中的物品存入无限储存。"] = "Store the current backpack items in infinite storage.";
+		dictionary["当前分类没有已存储物品。"] = "No stored items in the current category.";
+		dictionary["存储物品后会显示在这里。"] = "Stored items will appear here.";
+		dictionary["无状态"] = "No state";
+		dictionary["取出数量"] = "Withdraw amount";
+		dictionary["未解析物品 ID "] = "Unresolved item ID ";
+		dictionary["当前资产未解析；条目保持保守状态隔离。"] = "The current asset could not be resolved; this entry remains conservatively isolated.";
+		dictionary["取出此条目的全部数量。"] = "Withdraw the full amount of this entry.";
+		dictionary["取出此条目的全部单位。"] = "Withdraw all units from this entry.";
+		dictionary["取全部"] = "Withdraw All";
+		dictionary["原生背包没有可用空间。"] = "The native inventory has no available space.";
+		dictionary["\n\n点击取出当前数量。"] = "\n\nClick to withdraw the current amount.";
+		dictionary["\n\n点击取出当前数量（"] = "\n\nClick to withdraw the current amount (";
+		dictionary["单位"] = "units";
+		dictionary["个完整物品"] = "complete items";
+		dictionary["导出原始备份"] = "Export original backup";
+		dictionary["已导出待处理旧存档原始备份。"] = "Exported the original backup for pending legacy entries.";
+		dictionary["导出待处理旧存档失败。"] = "Could not export pending legacy entries.";
+		dictionary["导出所有待处理旧存档的原始 JSON 备份。"] = "Export the original JSON backup for all pending legacy entries.";
+		dictionary["自动拾取"] = "Auto Pickup";
+		dictionary["丢弃后禁拾时长"] = "Post-drop block duration";
+		dictionary["分钟（1-1440）"] = "minutes (1-1440)";
+		dictionary["玩家丢弃某个物品后，暂时禁止自动拾取同 ID 物品；再次丢弃同 ID 会重新计时。范围 1-1440 分钟，默认 1 分钟。"] = "After dropping an item, temporarily block auto pickup for every item with the same ID. Dropping the same ID again restarts the timer. Range: 1-1440 minutes; default: 1 minute.";
+		dictionary["启用品质过滤"] = "Enable quality filter";
+		dictionary["最低品质"] = "Minimum quality";
+		dictionary["启用后，自动拾取会忽略品质低于该数值的物品。范围 0-100。"] = "When enabled, auto pickup ignores items below this quality. Range: 0-100.";
+		dictionary["品质（0-100）"] = "quality (0-100)";
+		dictionary["自动拾取不可用"] = "Auto pickup unavailable";
+		dictionary["插件尚未完成自动拾取服务初始化。"] = "The auto-pickup service has not finished initializing.";
+		dictionary["启用自动拾取"] = "Enable auto pickup";
+		dictionary["自动拾取已启用；关闭菜单后开始扫描。"] = "Auto pickup enabled; scanning starts after closing the menu.";
+		dictionary["自动拾取已关闭。"] = "Auto pickup disabled.";
+		dictionary["自动拾取已开启。"] = "Auto pickup enabled.";
+		dictionary["无限储存功能"] = "Infinite Storage Feature";
+		dictionary["无限储存功能已开启。"] = "Infinite storage feature enabled.";
+		dictionary["无限储存功能已关闭。"] = "Infinite storage feature disabled.";
+		dictionary["只有进入真正的单人世界后才能启用自动拾取。"] = "Auto pickup can only be enabled in a true singleplayer world.";
+		dictionary["菜单打开时暂停"] = "Pause while menu is open";
+		dictionary["死亡时暂停"] = "Pause while dead";
+		dictionary["扫描半径"] = "Scan radius";
+		dictionary["请求距离"] = "Request distance";
+		dictionary["拾取距离"] = "Pickup distance";
+		dictionary["扫描频率"] = "Scan frequency";
+		dictionary["白名单"] = "Whitelist";
+		dictionary["启用白名单"] = "Enable whitelist";
+		dictionary["管理白名单"] = "Manage whitelist";
+		dictionary["添加白名单"] = "Add to whitelist";
+		dictionary["白名单物品"] = "Whitelisted Items";
+		dictionary["点击物品卡片可取消白名单。"] = "Click an item card to remove it from the whitelist.";
+		dictionary["白名单为空"] = "Whitelist is empty";
+		dictionary["启用白名单并添加物品后，只会拾取白名单物品。"] = "When the whitelist is enabled, only whitelisted items are picked up.";
+		dictionary["该物品已经在白名单中。"] = "This item is already whitelisted.";
+		dictionary["保存白名单失败："] = "Failed to save whitelist: ";
+		dictionary["从当前背包添加白名单"] = "Add to Whitelist from Current Backpack";
+		dictionary["物品按 ID 自动去重；点击卡片加入白名单，悬停卡片可查看完整物品详情。"] = "Items are deduplicated by ID. Click a card to whitelist it, or hover for full item details.";
+		dictionary["白名单已启用；现在只拾取白名单物品。"] = "Whitelist enabled; only whitelisted items will be picked up.";
+		dictionary["白名单已停用；黑名单仍然生效。"] = "Whitelist disabled; the blacklist remains active.";
+		dictionary["保存白名单状态失败："] = "Failed to save whitelist state: ";
+		dictionary["黑名单"] = "Blacklist";
+		dictionary["管理黑名单"] = "Manage blacklist";
+		dictionary["添加黑名单"] = "Add to blacklist";
+		dictionary["黑名单物品"] = "Blacklisted Items";
+		dictionary["点击物品卡片可取消黑名单。"] = "Click an item card to remove it from the blacklist.";
+		dictionary["黑名单为空"] = "Blacklist is empty";
+		dictionary["默认不限制物品；点击“添加黑名单”从当前背包选择物品。"] = "Items are unrestricted by default. Choose Add to blacklist to select from the current backpack.";
+		dictionary["默认自动拾取所有物品；点击“添加黑名单”从当前背包选择物品。"] = "All items are picked up by default. Choose Add to blacklist to select from the current backpack.";
+		dictionary["该物品已经在黑名单中。"] = "This item is already blacklisted.";
+		dictionary["保存黑名单失败："] = "Failed to save blacklist: ";
+		dictionary["从当前背包添加黑名单"] = "Add from Current Backpack";
+		dictionary["物品按 ID 自动去重；点击卡片加入黑名单，悬停卡片可查看完整物品详情。"] = "Items are deduplicated by ID. Click a card to blacklist it, or hover for full item details.";
+		dictionary["当前背包没有匹配物品。"] = "No matching items in the current backpack.";
+		dictionary["请先进入单人世界并确认物品在随身背包中。"] = "Enter a singleplayer world and make sure the item is in your carried inventory.";
+		dictionary["已关闭"] = "Off";
+		dictionary["世界已切换"] = "World changed";
+		dictionary["单人门禁未就绪"] = "Singleplayer not ready";
+		dictionary["玩家死亡，已暂停"] = "Paused while dead";
+		dictionary["菜单打开，已暂停"] = "Paused while menu is open";
+		dictionary["运行中"] = "Running";
+		dictionary["背包空间不足，已暂停请求"] = "Inventory full; pickup requests paused";
+		dictionary["每次扫描最多发送的原生拾取请求数，范围 1-16。"] = "Maximum native pickup requests per scan, from 1 to 16.";
+		dictionary["诊断："] = "Diagnostics: ";
+		dictionary["启用过滤规则"] = "Enable filter rules";
+		dictionary["过滤规则状态已保存。"] = "Filter rule state saved.";
+		dictionary["模式："] = "Mode: ";
+		dictionary["过滤模式已保存。"] = "Filter mode saved.";
+		dictionary["重新导入"] = "Reload";
+		dictionary["导入失败："] = "Import failed: ";
+		dictionary["导出保存"] = "Export and save";
+		dictionary["规则已原子写入配置文件。"] = "Rules were atomically written to the config file.";
+		dictionary["清空统计"] = "Clear statistics";
+		dictionary["添加"] = "Add";
+		dictionary["过滤规则已添加并保存。"] = "Filter rule added and saved.";
+		dictionary["规则值无效或与现有规则重复。"] = "The rule value is invalid or duplicates an existing rule.";
+		dictionary["保存规则失败："] = "Failed to save rules: ";
+		dictionary["规则"] = "Rules";
+		dictionary["规则文件："] = "Rules file: ";
+		dictionary["条规则  ·  第 "] = " rules · page ";
+		dictionary["上一页"] = "Previous";
+		dictionary["下一页"] = "Next";
+		dictionary["已启用"] = "Enabled";
+		dictionary["已停用"] = "Disabled";
+		dictionary["删除"] = "Delete";
+		dictionary["规则启用状态已保存。"] = "Rule enabled state saved.";
+		dictionary["规则已删除。"] = "Rule deleted.";
+		dictionary["规则保存失败："] = "Failed to save rules: ";
+		dictionary["全部允许"] = "Allow all";
+		dictionary["仅白名单"] = "Whitelist only";
+		dictionary["仅黑名单"] = "Blacklist only";
+		dictionary["先白后黑"] = "Whitelist then blacklist";
+		dictionary["允许"] = "Allow";
+		dictionary["拒绝"] = "Deny";
+		dictionary["物品 ID"] = "Item ID";
+		dictionary["资产名"] = "Asset name";
+		dictionary["显示名"] = "Display name";
+		dictionary["物品类型"] = "Item type";
+		dictionary["分类"] = "Category";
+		dictionary["关键词"] = "Keyword";
+		dictionary["关闭"] = "Off";
+		dictionary["摘要"] = "Summary";
+		dictionary["逐项"] = "Verbose";
 		English = dictionary;
 		Chinese = new Dictionary<string, string>(StringComparer.Ordinal) { ["Workshop"] = "创意工坊" };
-		EnglishPatterns = new PatternTranslation[43]
+		EnglishPatterns = new PatternTranslation[88]
 		{
+			new PatternTranslation("^飞行模式：世界轴$", "Flight mode: World Axis"),
+			new PatternTranslation("^飞行模式：视角指向$", "Flight mode: View Direction"),
+			new PatternTranslation("^飞行模式已切换为 世界轴。$", "Flight mode changed to World Axis."),
+			new PatternTranslation("^飞行模式已切换为 视角指向。$", "Flight mode changed to View Direction."),
 			new PatternTranslation("^状态：(.+?)；已扫描物品 (\\d+) / 载具 (\\d+)$", "State: $1; scanned items $2 / vehicles $3"),
 			new PatternTranslation("^文本总数 (\\d+) · 缓存命中 (\\d+) · 中文跳过 (\\d+) · 待翻译 (\\d+) · 完成 (\\d+) · 失败 (\\d+)$", "Texts $1 · cache hits $2 · Chinese skipped $3 · pending $4 · completed $5 · failed $6"),
 			new PatternTranslation("^文本总数 (\\d+) · 缓存命中 (\\d+) · 待翻译 (\\d+) · 完成 (\\d+) · 失败 (\\d+)$", "Texts $1 · cache hits $2 · pending $3 · completed $4 · failed $5"),
@@ -693,7 +865,48 @@ internal static class PluginLocalization
 			new PatternTranslation("^时间已设置为周期的 (\\d+)% 。$", "Time set to $1% of the cycle."),
 			new PatternTranslation("^排序预设：(.+?)；默认禁止自动掉落。$", "Preset: $1; automatic dropping is disabled by default."),
 			new PatternTranslation("^切换排序预设：(.+?)$", "Open preset list: $1"),
-			new PatternTranslation("^物品：(\\d+)（模组 (\\d+)）    车辆：(\\d+)（模组 (\\d+)）$", "Items: $1 (mod $2)    Vehicles: $3 (mod $4)")
+			new PatternTranslation("^物品：(\\d+)（模组 (\\d+)）    车辆：(\\d+)（模组 (\\d+)）$", "Items: $1 (mod $2)    Vehicles: $3 (mod $4)"),
+			new PatternTranslation("^(.+?)  ·  候选 (\\d+)  ·  成功 (\\d+)  ·  失败 (\\d+)  ·  重试 (\\d+)$", "$1  ·  candidates $2  ·  picked up $3  ·  failed $4  ·  retries $5"),
+			new PatternTranslation("^当前 (\\d+) 条白名单物品。$", "$1 whitelist items."),
+			new PatternTranslation("^当前 (\\d+) 条黑名单物品；黑名单始终优先。$", "$1 blacklist items; blacklist always takes precedence."),
+			new PatternTranslation("^(\\d+) 件  ·  第 (\\d+)/(\\d+) 页$", "$1 items  ·  page $2/$3"),
+			new PatternTranslation("^ID (\\d+)  ·  点击取消白名单$", "ID $1  ·  click to remove from whitelist"),
+			new PatternTranslation("^ID (\\d+)  ·  点击加入白名单$", "ID $1  ·  click to add to whitelist"),
+			new PatternTranslation("^ID (\\d+)  ·  点击取消黑名单$", "ID $1  ·  click to remove from blacklist"),
+			new PatternTranslation("^ID (\\d+)  ·  点击加入黑名单$", "ID $1  ·  click to add to blacklist"),
+			new PatternTranslation("^已将 (.+) 加入白名单。$", "Added $1 to the whitelist."),
+			new PatternTranslation("^已取消物品 ID (\\d+) 的白名单。$", "Removed item ID $1 from the whitelist."),
+			new PatternTranslation("^已将 (.+) 加入黑名单。$", "Added $1 to the blacklist."),
+			new PatternTranslation("^已取消物品 ID (\\d+) 的黑名单。$", "Removed item ID $1 from the blacklist."),
+			new PatternTranslation("^当前背包去重后 (\\d+) 件  ·  第 (\\d+)/(\\d+) 页$", "$1 unique backpack items  ·  page $2/$3"),
+			new PatternTranslation("^已存储 (\\d+) 个背包格。$", "Stored $1 inventory slots."),
+			new PatternTranslation("^检测到 ([\\d,]+) 条待处理旧存档记录。$", "Detected $1 pending legacy records."),
+			new PatternTranslation("^显示 ([\\d,]+) / ([\\d,]+) 条目；资源 ([\\d,]+)，完整物品 ([\\d,]+) 个。$", "Showing $1 / $2 entries; resource units $3, complete items $4."),
+			new PatternTranslation("^库存 ([\\d,]+)$", "Stored $1"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 弹药 ([\\d,]+)/([\\d,]+) \\| 品质 (\\d+)%$", "Stored $1 complete items | ammo $2/$3 | quality $4%"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 弹药 ([\\d,]+)/([\\d,]+)$", "Stored $1 complete items | ammo $2/$3"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 燃料 ([\\d,]+)/([\\d,]+) \\| 品质 (\\d+)%$", "Stored $1 complete items | fuel $2/$3 | quality $4%"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 燃料 ([\\d,]+)/([\\d,]+)$", "Stored $1 complete items | fuel $2/$3"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 水 ([\\d,]+)/([\\d,]+) \\| 品质 (\\d+)%$", "Stored $1 complete items | water $2/$3 | quality $4%"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 水 ([\\d,]+)/([\\d,]+)$", "Stored $1 complete items | water $2/$3"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 品质 (\\d+)% \\| 状态独立保存$", "Stored $1 complete items | quality $2% | state preserved separately"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 品质 (\\d+)%$", "Stored $1 complete items | quality $2%"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 状态独立保存$", "Stored $1 complete items | state preserved separately"),
+			new PatternTranslation("^库存 ([\\d,]+) 个 \\| 保守状态隔离$", "Stored $1 complete items | conservatively isolated"),
+			new PatternTranslation("^库存 ([\\d,]+) 个$", "Stored $1 complete items"),
+			new PatternTranslation("^已取出 ([\\d,]+) 单位。$", "Withdrew $1 units."),
+			new PatternTranslation("^已取出 ([\\d,]+) 个完整物品。$", "Withdrew $1 complete items."),
+			new PatternTranslation("点击取出当前数量（数量）。", "Click to withdraw the current quantity."),
+			new PatternTranslation("点击取出当前数量（个）。", "Click to withdraw one complete item."),
+			new PatternTranslation("^显示 ([\\d,]+) / ([\\d,]+) 条目；总数量 ([\\d,]+)。$", "Showing $1 / $2 entries; total quantity $3."),
+			new PatternTranslation("^ID (\\d+)  ·  ×([\\d,]+)  ·  品质 (\\d+)  ·  无状态$", "ID $1  ·  ×$2  ·  Quality $3  ·  No state"),
+			new PatternTranslation("^ID (\\d+)  ·  ×([\\d,]+)  ·  品质 (\\d+)  ·  状态 (\\d+)B$", "ID $1  ·  ×$2  ·  Quality $3  ·  State $4B"),
+			new PatternTranslation("^ID (\\d+)  ·  剩余弹药 ([\\d,]+)  ·  无状态$", "ID $1  ·  Ammo left $2  ·  No state"),
+			new PatternTranslation("^ID (\\d+)  ·  剩余弹药 ([\\d,]+)  ·  状态 (\\d+)B$", "ID $1  ·  Ammo left $2  ·  State $3B"),
+			new PatternTranslation("^ID (\\d+)  ·  剩余弹药 ([\\d,]+)  ·  品质 (\\d+)  ·  无状态$", "ID $1  ·  Ammo left $2  ·  Quality $3  ·  No state"),
+			new PatternTranslation("^ID (\\d+)  ·  剩余弹药 ([\\d,]+)  ·  品质 (\\d+)  ·  状态 (\\d+)B$", "ID $1  ·  Ammo left $2  ·  Quality $3  ·  State $4B"),
+			new PatternTranslation("^已取出 ([\\d,]+) 个物品。$", "Withdrew $1 items."),
+			new PatternTranslation("^准星工具模式已切换为 (.+)。$", "Crosshair tool mode changed to $1.")
 		};
 		CurrentLanguage = PluginLanguage.Chinese;
 	}

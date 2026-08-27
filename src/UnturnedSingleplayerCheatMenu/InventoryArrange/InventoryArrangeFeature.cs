@@ -16,11 +16,26 @@ internal sealed class InventoryArrangeFeature
 
 		internal Dictionary<string, Item> SourceItems = new Dictionary<string, Item>(StringComparer.Ordinal);
 
+		internal List<HotkeyBinding> HotkeyBindings = new List<HotkeyBinding>();
+
 		internal int UnsupportedItemCount;
 
 		internal string LayoutFingerprint;
 
 		internal string Fingerprint;
+	}
+
+	private sealed class HotkeyBinding
+	{
+		internal HotkeyInfo Hotkey;
+
+		internal string ItemKey;
+
+		internal byte OriginalPage;
+
+		internal byte OriginalX;
+
+		internal byte OriginalY;
 	}
 
 	private sealed class QuickTransferState
@@ -110,20 +125,23 @@ internal sealed class InventoryArrangeFeature
 		{
 			return Publish(success: false, inventoryArrangePlan.FailureReason, inventoryArrangePlan);
 		}
+		PlayerInventory inventory = Player.LocalPlayer.inventory;
+		bool flag = false;
 		_isRunning = true;
 		try
 		{
-			PlayerInventory inventory = Player.LocalPlayer.inventory;
 			if (!ApplyPlan(inventory, captured, inventoryArrangePlan, out reason))
 			{
 				string text = (Restore(inventory, captured, out var reason2) ? ("整理未完成，已恢复执行前库存：" + reason) : ("整理失败且恢复失败；请停止继续操作并查看 BepInEx 日志。原因：" + reason + "；恢复：" + reason2));
 				_log?.LogError(text);
 				return Publish(success: false, text, inventoryArrangePlan);
 			}
-			CapturedInventory capturedInventory = Capture(inventory, GetPages(inventory, scope), inventoryArrangeSettings);
+			flag = true;
+			CapturedInventory capturedInventory = Capture(inventory, GetPages(inventory, scope, inventoryArrangeSettings), inventoryArrangeSettings);
 			if (!string.Equals(captured.Fingerprint, capturedInventory.Fingerprint, StringComparison.Ordinal))
 			{
 				string text2 = (Restore(inventory, captured, out var reason3) ? "整理后校验发现物品指纹变化，已恢复执行前库存。" : ("整理后校验失败且恢复失败；请停止继续操作并查看日志。恢复：" + reason3));
+				flag = false;
 				_log?.LogError(text2);
 				return Publish(success: false, text2, inventoryArrangePlan);
 			}
@@ -136,8 +154,13 @@ internal sealed class InventoryArrangeFeature
 		}
 		catch (Exception ex)
 		{
-			_log?.LogError("背包整理发生未处理异常。\n" + ex);
-			return Publish(success: false, "整理出现异常；请查看 BepInEx 日志。", inventoryArrangePlan);
+			string text3 = "整理出现异常；请查看 BepInEx 日志。";
+			if (flag)
+			{
+				text3 = (Restore(inventory, captured, out var reason4) ? "整理出现异常，已恢复执行前库存和热键坐标。" : ("整理出现异常且恢复失败；请停止继续操作并查看 BepInEx 日志。恢复：" + reason4));
+			}
+			_log?.LogError(text3 + "\n" + ex);
+			return Publish(success: false, text3, inventoryArrangePlan);
 		}
 		finally
 		{
@@ -473,7 +496,7 @@ internal sealed class InventoryArrangeFeature
 			return false;
 		}
 		InventoryArrangeSettings settings = _settings?.Invoke() ?? new InventoryArrangeSettings();
-		captured = Capture(inventory, GetPages(inventory, scope), settings);
+		captured = Capture(inventory, GetPages(inventory, scope, settings), settings);
 		if (captured.UnsupportedItemCount > 0)
 		{
 			reason = "库存包含无法解析的物品，已取消整理以避免丢失物品。";
@@ -487,28 +510,52 @@ internal sealed class InventoryArrangeFeature
 		return true;
 	}
 
-	private static IEnumerable<byte> GetPages(PlayerInventory inventory, InventoryArrangeScope scope)
+	private static IEnumerable<byte> GetPages(PlayerInventory inventory, InventoryArrangeScope scope, InventoryArrangeSettings settings)
 	{
 		if (scope == InventoryArrangeScope.CurrentContext && inventory.isStoring)
 		{
 			return new byte[1] { PlayerInventory.STORAGE };
 		}
-		return from page in Enumerable.Range(PlayerInventory.BACKPACK, PlayerInventory.PAGES - 2 - PlayerInventory.BACKPACK)
-			select (byte)page;
+		List<byte> pages = new List<byte> { PlayerInventory.SLOTS };
+		if (settings?.IncludeBackpackPage ?? true)
+		{
+			pages.Add(PlayerInventory.BACKPACK);
+		}
+		if (settings?.IncludeVestPage ?? true)
+		{
+			pages.Add(PlayerInventory.VEST);
+		}
+		if (settings?.IncludeShirtPage ?? true)
+		{
+			pages.Add(PlayerInventory.SHIRT);
+		}
+		if (settings?.IncludePantsPage ?? true)
+		{
+			pages.Add(PlayerInventory.PANTS);
+		}
+		return pages;
 	}
 
 	private CapturedInventory Capture(PlayerInventory inventory, IEnumerable<byte> pages, InventoryArrangeSettings settings, Func<byte, ItemJar, bool> selected = null)
 	{
 		CapturedInventory capturedInventory = new CapturedInventory();
 		HashSet<string> hashSet = new HashSet<string>(StringComparer.Ordinal);
-		if (settings.PreserveHotkeys && Player.LocalPlayer?.equipment?.hotkeys != null)
+		Dictionary<string, List<HotkeyInfo>> dictionary = new Dictionary<string, List<HotkeyInfo>>(StringComparer.Ordinal);
+		if (Player.LocalPlayer?.equipment?.hotkeys != null)
 		{
 			HotkeyInfo[] hotkeys = Player.LocalPlayer.equipment.hotkeys;
 			foreach (HotkeyInfo hotkeyInfo in hotkeys)
 			{
 				if (hotkeyInfo != null && hotkeyInfo.id != 0)
 				{
-					hashSet.Add(hotkeyInfo.page + ":" + hotkeyInfo.x + ":" + hotkeyInfo.y);
+					string text = hotkeyInfo.page + ":" + hotkeyInfo.x + ":" + hotkeyInfo.y;
+					hashSet.Add(text);
+					if (!dictionary.TryGetValue(text, out var value))
+					{
+						value = new List<HotkeyInfo>();
+						dictionary.Add(text, value);
+					}
+					value.Add(hotkeyInfo);
 				}
 			}
 		}
@@ -543,7 +590,8 @@ internal sealed class InventoryArrangeFeature
 					bool flag2 = settings.ProtectEquipped && Player.LocalPlayer.equipment != null && Player.LocalPlayer.equipment.checkSelection(page, item.x, item.y);
 					bool flag3 = InventoryStateReader.TryReadAmmoContainerMetadata(itemAsset, out var isMagazine, out var capacity, out var group);
 					bool flag4 = InventoryStateReader.TryReadAmmoCount(itemAsset, item2, out var ammoCount);
-					bool flag5 = hashSet.Contains(page + ":" + item.x + ":" + item.y);
+					string text2 = page + ":" + item.x + ":" + item.y;
+					bool flag5 = hashSet.Contains(text2);
 					inventoryArrangeContainer.Items.Add(new InventoryArrangeItem
 					{
 						ItemKey = text,
@@ -568,10 +616,24 @@ internal sealed class InventoryArrangeFeature
 						SourceY = item.y,
 						SourceRotation = item.rot,
 						OriginalIndex = num++,
-						IsProtected = ((!flag | flag2) || (settings.PreserveHotkeys & flag5)),
+						IsProtected = ((!flag | flag2) || (settings.FixHotkeyItems & flag5)),
 						IsHotkeyBound = flag5
 					});
 					capturedInventory.SourceItems.Add(text, Clone(item2));
+					if (dictionary.TryGetValue(text2, out var value2))
+					{
+						foreach (HotkeyInfo hotkeyInfo2 in value2)
+						{
+							capturedInventory.HotkeyBindings.Add(new HotkeyBinding
+							{
+								Hotkey = hotkeyInfo2,
+								ItemKey = text,
+								OriginalPage = hotkeyInfo2.page,
+								OriginalX = hotkeyInfo2.x,
+								OriginalY = hotkeyInfo2.y
+							});
+						}
+					}
 				}
 			}
 			capturedInventory.Containers.Add(inventoryArrangeContainer);
@@ -581,7 +643,7 @@ internal sealed class InventoryArrangeFeature
 		return capturedInventory;
 	}
 
-	private static bool ApplyPlan(PlayerInventory inventory, CapturedInventory captured, InventoryArrangePlan plan, out string reason)
+	private bool ApplyPlan(PlayerInventory inventory, CapturedInventory captured, InventoryArrangePlan plan, out string reason)
 	{
 		reason = null;
 		HashSet<byte> hashSet = new HashSet<byte>(plan.Placements.Select((InventoryArrangePlacement placement) => (byte)placement.Page));
@@ -615,6 +677,26 @@ internal sealed class InventoryArrangeFeature
 				return false;
 			}
 		}
+		int num2 = 0;
+		foreach (HotkeyBinding hotkeyBinding in captured.HotkeyBindings)
+		{
+			InventoryArrangePlacement inventoryArrangePlacement = plan.Placements.FirstOrDefault((InventoryArrangePlacement placement) => string.Equals(placement.Item.ItemKey, hotkeyBinding.ItemKey, StringComparison.Ordinal));
+			if (inventoryArrangePlacement != null)
+			{
+				if (hotkeyBinding.Hotkey.page != (byte)inventoryArrangePlacement.Page || hotkeyBinding.Hotkey.x != (byte)inventoryArrangePlacement.X || hotkeyBinding.Hotkey.y != (byte)inventoryArrangePlacement.Y)
+				{
+					num2++;
+				}
+				hotkeyBinding.Hotkey.page = (byte)inventoryArrangePlacement.Page;
+				hotkeyBinding.Hotkey.x = (byte)inventoryArrangePlacement.X;
+				hotkeyBinding.Hotkey.y = (byte)inventoryArrangePlacement.Y;
+			}
+		}
+		if (num2 > 0)
+		{
+			Player.LocalPlayer?.equipment?.onHotkeysUpdated?.Invoke();
+			_log?.LogInfo("[InventoryArrangeHotkeys] Updated " + num2 + " of " + captured.HotkeyBindings.Count + " bound shortcut coordinates.");
+		}
 		return true;
 	}
 
@@ -640,6 +722,21 @@ internal sealed class InventoryArrangeFeature
 					reason = "原生 API 拒绝恢复原始位置。";
 					return false;
 				}
+			}
+			int updatedHotkeyCount = 0;
+			foreach (HotkeyBinding hotkeyBinding in captured.HotkeyBindings)
+			{
+				if (hotkeyBinding.Hotkey.page != hotkeyBinding.OriginalPage || hotkeyBinding.Hotkey.x != hotkeyBinding.OriginalX || hotkeyBinding.Hotkey.y != hotkeyBinding.OriginalY)
+				{
+					updatedHotkeyCount++;
+				}
+				hotkeyBinding.Hotkey.page = hotkeyBinding.OriginalPage;
+				hotkeyBinding.Hotkey.x = hotkeyBinding.OriginalX;
+				hotkeyBinding.Hotkey.y = hotkeyBinding.OriginalY;
+			}
+			if (updatedHotkeyCount > 0)
+			{
+				Player.LocalPlayer?.equipment?.onHotkeysUpdated?.Invoke();
 			}
 			return true;
 		}

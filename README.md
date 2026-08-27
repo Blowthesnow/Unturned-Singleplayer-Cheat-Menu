@@ -1,8 +1,8 @@
 # Unturned Singleplayer Cheat Menu
 
-[English](README.en.md) · [更新日志](CHANGELOG.md) · [验收记录](ACCEPTANCE.md) · [安全说明](SECURITY.md)
+[English](README.en.md) · [更新日志](CHANGELOG.md) · [验收记录](ACCEPTANCE.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。v1.7.0 新增准星交互工具、原生模拟飞行/穿墙、传送安全落点增强、时间滑条实时预览和重复插件 DLL 部署保护。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.9.0`，新增自动拾取、无限储存、生物生命条、悬停详情、视角飞行和全局快捷键，并修复背包整理与 Workshop 本地化问题。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
@@ -113,7 +113,7 @@
 
 ## 兼容环境
 
-v1.7.0 已针对以下环境构建；既有单人运行证据与本轮新增功能的验证边界见 [ACCEPTANCE.md](ACCEPTANCE.md)：
+当前 `1.9.0` 源码已针对以下环境构建；既有单人运行证据与本轮新增功能的验证边界见 [更新日志](docs/V1.8_RECOVERY_CHANGELOG.md)：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -121,7 +121,7 @@ v1.7.0 已针对以下环境构建；既有单人运行证据与本轮新增功�
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.7.0` |
+| 插件 | `1.9.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
@@ -206,7 +206,7 @@ dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSetti
 
 ## 验证
 
-v1.7.0 的 Release 构建、九个解决方案项目、Plugin-Only 发布包校验及哈希记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。本版本加入准星交互工具、原生模拟飞行/穿墙、传送安全落点增强、时间滑条实时预览和重复 DLL 部署保护。
+`1.9.0` 的源码变更、构建和 Smoke 记录见 [v1.9 更新日志](docs/V1.8_RECOVERY_CHANGELOG.md)。本轮只推送代码，不创建正式版、标签或发布包；`1.7.0` Plugin-Only 包仍是当前最后一个正式发布资产。
 
 已发布插件 DLL：
 

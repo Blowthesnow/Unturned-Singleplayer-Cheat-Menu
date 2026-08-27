@@ -30,7 +30,7 @@ internal sealed class PointToolHud
 
 	private bool _hasLoggedFontFailure;
 
-	private static readonly bool ShowMovementHud;
+	private static readonly bool ShowMovementHud = false;
 
 	private const float PointOnlyHorizontalOffset = -15f;
 

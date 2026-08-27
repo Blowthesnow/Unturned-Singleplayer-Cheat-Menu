@@ -5,10 +5,15 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <UseAppHost>false</UseAppHost>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\PluginLocalization.cs" Link="PluginLocalization.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\PluginLanguage.cs" Link="PluginLanguage.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\WorkshopTextField.cs" Link="WorkshopTextField.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopTextIdentity.cs" Link="WorkshopTextIdentity.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopProtectedText.cs" Link="WorkshopProtectedText.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopRichTextProtector.cs" Link="WorkshopRichTextProtector.cs" />
   </ItemGroup>
 </Project>

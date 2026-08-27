@@ -12,6 +12,14 @@ internal sealed class InventoryArrangeSettings
 
 	internal bool AllowCrossPage = true;
 
+	internal bool IncludeBackpackPage = true;
+
+	internal bool IncludeVestPage = true;
+
+	internal bool IncludeShirtPage = true;
+
+	internal bool IncludePantsPage = true;
+
 	internal bool AutoRefillMagazines = true;
 
 	internal List<int> PreferredPages = new List<int>();
@@ -20,5 +28,5 @@ internal sealed class InventoryArrangeSettings
 
 	internal List<InventorySortKeySpec> CustomKeys = new List<InventorySortKeySpec>();
 
-	internal bool PreserveHotkeys = true;
+	internal bool FixHotkeyItems = true;
 }

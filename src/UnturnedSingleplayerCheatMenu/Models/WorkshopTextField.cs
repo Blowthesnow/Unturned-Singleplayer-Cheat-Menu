@@ -6,5 +6,17 @@ internal enum WorkshopTextField
 	ItemDescription,
 	VehicleName,
 	ActionText,
-	ActionTooltip
+	ActionTooltip,
+	DialogueMessagePage,
+	DialogueResponse,
+	NpcCharacter,
+	QuestName,
+	QuestDescription,
+	ObjectName,
+	ObjectInteract,
+	ObjectDialogueName,
+	VendorName,
+	VendorDescription,
+	VendorBuyingDescription,
+	VendorSellingDescription
 }

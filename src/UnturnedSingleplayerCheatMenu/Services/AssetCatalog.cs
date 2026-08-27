@@ -100,7 +100,12 @@ internal sealed class AssetCatalog
 
 	public static bool IsWorkshopAsset(Asset asset)
 	{
-		return asset.assetOrigin == EAssetOrigin.WORKSHOP;
+		return AssetOriginClassifier.IsWorkshop(asset);
+	}
+
+	public static bool IsOfficialAsset(Asset asset)
+	{
+		return AssetOriginClassifier.IsOfficial(asset);
 	}
 
 	private static int CompareItems(ItemAsset left, ItemAsset right)

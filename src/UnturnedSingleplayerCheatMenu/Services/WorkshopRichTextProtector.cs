@@ -44,11 +44,17 @@ internal static class WorkshopRichTextProtector
 			return false;
 		}
 		HashSet<int> hashSet = new HashSet<int>();
-		foreach (int item2 in list)
+		for (int i = 0; i < list.Count; i++)
 		{
-			if (!hashSet.Add(item2))
+			int item = list[i];
+			if (!hashSet.Add(item))
 			{
 				error = "response protection markers were duplicated";
+				return false;
+			}
+			if (item != i)
+			{
+				error = "response protection markers were reordered";
 				return false;
 			}
 		}

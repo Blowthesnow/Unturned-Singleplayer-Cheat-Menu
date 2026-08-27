@@ -33,6 +33,12 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 
 	private string _hoverExplanation;
 
+	private bool _delayHoverExplanation;
+
+	private float _hoverExplanationStartTime;
+
+	private bool _hoverExplanationShown;
+
 	private Action<string, RectTransform, Vector2> _showHoverExplanation;
 
 	private Action _hideHoverExplanation;
@@ -49,11 +55,12 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		Refresh();
 	}
 
-	public void SetHoverExplanation(string message, Action<string, RectTransform, Vector2> show, Action hide)
+	public void SetHoverExplanation(string message, Action<string, RectTransform, Vector2> show, Action hide, bool delay = false)
 	{
 		_hoverExplanation = message;
 		_showHoverExplanation = show;
 		_hideHoverExplanation = hide;
+		_delayHoverExplanation = delay;
 	}
 
 	public void SetBaseColor(Color baseColor)
@@ -77,9 +84,12 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 	public void OnPointerEnter(PointerEventData eventData)
 	{
 		_hovered = true;
+		_hoverExplanationStartTime = Time.unscaledTime;
+		_hoverExplanationShown = false;
 		Refresh();
-		if (!string.IsNullOrWhiteSpace(_hoverExplanation))
+		if (!_delayHoverExplanation && !string.IsNullOrWhiteSpace(_hoverExplanation))
 		{
+			_hoverExplanationShown = true;
 			_showHoverExplanation?.Invoke(_hoverExplanation, (_background != null) ? _background.rectTransform : null, eventData.position);
 		}
 	}
@@ -88,7 +98,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 	{
 		_hovered = false;
 		_pressed = false;
-		_hideHoverExplanation?.Invoke();
+		CancelHoverExplanation();
 		Refresh();
 	}
 
@@ -121,7 +131,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		_hovered = false;
 		_pressed = false;
 		_selected = false;
-		_hideHoverExplanation?.Invoke();
+		CancelHoverExplanation();
 		if (_focusIndicator != null)
 		{
 			_focusIndicator.SetActive(value: false);
@@ -139,6 +149,18 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		{
 			Refresh();
 		}
+		if (_delayHoverExplanation && _hovered && !_hoverExplanationShown && !string.IsNullOrWhiteSpace(_hoverExplanation) && Time.unscaledTime - _hoverExplanationStartTime >= 2f)
+		{
+			_hoverExplanationShown = true;
+			_showHoverExplanation?.Invoke(_hoverExplanation, (_background != null) ? _background.rectTransform : null, Input.mousePosition);
+		}
+	}
+
+	private void CancelHoverExplanation()
+	{
+		_hoverExplanationStartTime = 0f;
+		_hoverExplanationShown = false;
+		_hideHoverExplanation?.Invoke();
 	}
 
 	private void Refresh()

@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using BepInEx.Configuration;
 using SDG.Unturned;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Services;
 
@@ -56,6 +60,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		Interaction,
 		Inventory,
+		AutoPickup,
 		Movement,
 		Translation
 	}
@@ -138,6 +143,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private readonly ItemFilterState _favoriteItemFilter = new ItemFilterState();
 
+	private readonly ItemFilterState _infiniteStorageFilter = new ItemFilterState();
+
 	private readonly List<ItemAsset> _itemResults = new List<ItemAsset>();
 
 	private readonly List<VehicleAsset> _vehicleResults = new List<VehicleAsset>();
@@ -145,6 +152,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private readonly List<ItemAsset> _favoriteItemResults = new List<ItemAsset>();
 
 	private readonly List<VehicleAsset> _favoriteVehicleResults = new List<VehicleAsset>();
+
+	private readonly Dictionary<ushort, ItemAsset> _infiniteStorageAssetsById = new Dictionary<ushort, ItemAsset>();
 
 	private readonly List<GameObject> _deferredDestroy = new List<GameObject>();
 
@@ -158,7 +167,21 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private readonly UiDebouncer _timeApplyDebouncer = new UiDebouncer(0.15f);
 
+	private readonly UiDebouncer _autoPickupRuleSearchDebouncer = new UiDebouncer(0.15f);
+
+	private readonly UiDebouncer _autoPickupRangeDebouncer = new UiDebouncer(0.15f);
+
+	private readonly UiDebouncer _autoPickupFrequencyDebouncer = new UiDebouncer(0.15f);
+
+	private readonly AmmoCompatibilityIndex _ammoCompatibilityIndex = new AmmoCompatibilityIndex();
+
 	private GameObject _root;
+
+	private GameObject _infiniteStorageRoot;
+
+	private RectTransform _infiniteStoragePanel;
+
+	private GameObject _infiniteStorageContentHost;
 
 	private GameObject _hoverExplanationRoot;
 
@@ -194,6 +217,12 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private GameObject _shortcutRoot;
 
+	private ScrollRect _shortcutScrollRect;
+
+	private RectTransform _shortcutScrollContent;
+
+	private float _shortcutScrollPosition = 1f;
+
 	private Text _shortcutCaptureText;
 
 	private readonly HashSet<KeyCode> _shortcutCaptureModifiers = new HashSet<KeyCode>();
@@ -207,6 +236,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private ItemFilterState _itemFilterDraft;
 
 	private bool _itemFilterForFavorites;
+
+	private bool _itemFilterForInfiniteStorage;
 
 	private GameObject _vehicleThumbnailSettingsRoot;
 
@@ -226,6 +257,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Texture2D _keyboardGlyphTexture;
 
+	private Texture2D _keyboardGlyphKeysTexture;
+
 	private Texture2D _favoriteFilledTexture;
 
 	private Texture2D _favoriteOutlineTexture;
@@ -235,6 +268,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private Sprite _closeGlyphSprite;
 
 	private Sprite _keyboardGlyphSprite;
+
+	private Sprite _keyboardGlyphKeysSprite;
 
 	private Sprite _favoriteFilledSprite;
 
@@ -277,6 +312,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private string _vehicleAmountText = "1";
 
 	private int _itemPage;
+
+	private int _infiniteStoragePage;
 
 	private int _vehiclePage;
 
@@ -332,6 +369,20 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private ToolsTab _activeToolsTab;
 
+	private string _autoPickupRuleSearch = string.Empty;
+
+	private int _autoPickupPage;
+
+	private int _autoPickupBlacklistPickerPage;
+
+	private string _autoPickupBlacklistPickerSearch = string.Empty;
+
+	private GameObject _autoPickupBlacklistPickerRoot;
+
+	private GameObject _autoPickupBlacklistPickerHost;
+
+	private ItemFilterRuleAction _autoPickupPickerAction = ItemFilterRuleAction.Deny;
+
 	private static readonly PointToolMode[] PointToolModes = new PointToolMode[6]
 	{
 		PointToolMode.Smart,
@@ -357,6 +408,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private RectTransform _inventoryPresetDrawerPopup;
 
 	private Button _inventoryPresetTriggerButton;
+
+	private bool _inventoryScopeDrawerOpen;
+
+	private GameObject _inventoryScopeDrawerRoot;
+
+	private RectTransform _inventoryScopeDrawerPopup;
+
+	private Button _inventoryScopeTriggerButton;
 
 	private bool _workshopProtocolDrawerOpen;
 
@@ -386,6 +445,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		BuildItemResults();
 		BuildVehicleResults();
 		BuildFavoriteResults();
+		_ammoCompatibilityIndex.Rebuild(_plugin.Catalog.Items);
 		EnsureShell();
 		RefreshHeader();
 		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
@@ -397,6 +457,25 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		SetStatus($"自动扫描完成：{_plugin.Catalog.Items.Count} 个物品、{_plugin.Catalog.Vehicles.Count} 辆载具。", 5f, StatusKind.Info);
 	}
 
+	internal void OpenInfiniteStorage()
+	{
+		_ammoCompatibilityIndex.Rebuild(_plugin.Catalog.Items);
+		RebuildInfiniteStorageAssetIndex();
+		EnsureInfiniteStorageShell();
+		_infiniteStorageRoot.SetActive(value: true);
+		RebuildInfiniteStoragePage();
+	}
+
+	internal void CloseInfiniteStorage()
+	{
+		HideItemFilterPanel();
+		HideHoverExplanation();
+		if (_infiniteStorageRoot != null)
+		{
+			_infiniteStorageRoot.SetActive(value: false);
+		}
+	}
+
 	public void OnClosed()
 	{
 		HideConfirmDialog();
@@ -406,8 +485,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		HideTeleportColorPicker();
 		HidePointToolModeDrawer();
 		HideInventoryPresetDrawer();
+		HideInventoryScopeDrawer();
 		HideWorkshopProtocolDrawer();
 		HideItemFilterPanel();
+		HideAutoPickupBlacklistPicker();
 		HideHoverExplanation();
 		HideVehicleThumbnailSettings();
 		if (_root != null)
@@ -421,9 +502,15 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		BuildItemResults();
 		BuildVehicleResults();
 		BuildFavoriteResults();
+		_ammoCompatibilityIndex.Rebuild(_plugin.Catalog.Items);
+		RebuildInfiniteStorageAssetIndex();
 		if (_root != null && _root.activeSelf && (_activeTab == MenuTab.Items || _activeTab == MenuTab.Vehicles || _activeTab == MenuTab.Favorites))
 		{
 			ShowTab(_activeTab);
+		}
+		if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf)
+		{
+			RebuildInfiniteStoragePage();
 		}
 	}
 
@@ -443,6 +530,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 				RefreshWorkshopLocalizationPage();
 			}
 		}
+		if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf)
+		{
+			RebuildInfiniteStoragePage();
+		}
 	}
 
 	internal void OnVehicleThumbnailSettingsApplied()
@@ -456,28 +547,42 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	public void Maintain()
 	{
 		FlushDeferredDestroy();
-		if (_root == null || !_root.activeSelf)
+		bool menuActive = _root != null && _root.activeSelf;
+		bool infiniteStorageActive = _infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf;
+		if (!menuActive && !infiniteStorageActive)
 		{
 			return;
 		}
 		_searchDebouncer.Tick();
 		_timeApplyDebouncer.Tick();
-		if (_activeTab == MenuTab.Other)
+		_autoPickupRuleSearchDebouncer.Tick();
+		_autoPickupRangeDebouncer.Tick();
+		_autoPickupFrequencyDebouncer.Tick();
+		if (menuActive && _activeTab == MenuTab.Other)
 		{
 			RefreshOtherTime();
 		}
-		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
+		if (menuActive && _activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
 		{
 			RefreshWorkshopLocalizationPageValues();
 		}
-		Canvas component = _root.GetComponent<Canvas>();
+		Canvas component = menuActive ? _root.GetComponent<Canvas>() : null;
 		if (component != null && component.sortingOrder != 29900)
 		{
 			component.sortingOrder = 29900;
 		}
-		if (_panel != null)
+		if (menuActive && _panel != null)
 		{
 			_panel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
+		}
+		if (infiniteStorageActive && _infiniteStoragePanel != null)
+		{
+			_infiniteStoragePanel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
+			Canvas storageCanvas = _infiniteStorageRoot.GetComponent<Canvas>();
+			if (storageCanvas != null && storageCanvas.sortingOrder != OverlaySortingOrder + 1)
+			{
+				storageCanvas.sortingOrder = OverlaySortingOrder + 1;
+			}
 		}
 		if (_teleportMarkerDrawerRoot != null)
 		{
@@ -487,10 +592,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 				HideTeleportMarkerDrawer();
 			}
 		}
-		RefreshHeader();
-		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
+		if (menuActive)
 		{
-			RefreshWorkshopLocalizationPageValues();
+			RefreshHeader();
+			if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
+			{
+				RefreshWorkshopLocalizationPageValues();
+			}
 		}
 		if (_activeTab == MenuTab.Teleports && _teleportMapSurface != null && Player.LocalPlayer != null)
 		{
@@ -498,10 +606,15 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 		MaintainPointToolModeDrawer();
 		MaintainInventoryPresetDrawer();
+		MaintainInventoryScopeDrawer();
 		MaintainWorkshopProtocolDrawer();
 		if (_shortcutCaptureActive)
 		{
 			CaptureShortcutInput();
+		}
+		if (infiniteStorageActive)
+		{
+			MaintainInfiniteStorage();
 		}
 		if (_statusUntil > 0f && Time.unscaledTime > _statusUntil)
 		{
@@ -514,11 +627,18 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		_searchDebouncer.Dispose();
 		_timeApplyDebouncer.Dispose();
+		_autoPickupRuleSearchDebouncer.Dispose();
+		_autoPickupRangeDebouncer.Dispose();
+		_autoPickupFrequencyDebouncer.Dispose();
 		FlushDeferredDestroy();
 		HideHoverExplanation();
 		if (_root != null)
 		{
 			UnityEngine.Object.Destroy(_root);
+		}
+		if (_infiniteStorageRoot != null)
+		{
+			UnityEngine.Object.Destroy(_infiniteStorageRoot);
 		}
 		if (_ownedEventSystem != null)
 		{
@@ -531,6 +651,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		DestroyGeneratedSprite(ref _sliderGripSprite, ref _sliderGripTexture);
 		DestroyGeneratedSprite(ref _closeGlyphSprite, ref _closeGlyphTexture);
 		DestroyGeneratedSprite(ref _keyboardGlyphSprite, ref _keyboardGlyphTexture);
+		DestroyGeneratedSprite(ref _keyboardGlyphKeysSprite, ref _keyboardGlyphKeysTexture);
 		DestroyGeneratedSprite(ref _favoriteFilledSprite, ref _favoriteFilledTexture);
 		DestroyGeneratedSprite(ref _favoriteOutlineSprite, ref _favoriteOutlineTexture);
 		foreach (Sprite value in _teleportMarkerSprites.Values)
@@ -573,11 +694,22 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		{
 			UnityEngine.Object.Destroy(_inventoryPresetDrawerRoot);
 		}
+		if (_inventoryScopeDrawerRoot != null)
+		{
+			UnityEngine.Object.Destroy(_inventoryScopeDrawerRoot);
+		}
+		if (_autoPickupBlacklistPickerRoot != null)
+		{
+			UnityEngine.Object.Destroy(_autoPickupBlacklistPickerRoot);
+		}
 		if (_teleportColorPickerRoot != null)
 		{
 			UnityEngine.Object.Destroy(_teleportColorPickerRoot);
 		}
 		_root = null;
+		_infiniteStorageRoot = null;
+		_infiniteStoragePanel = null;
+		_infiniteStorageContentHost = null;
 		_ownedEventSystem = null;
 		_mapAndShortcutText = null;
 		_statusText = null;
@@ -591,6 +723,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		_confirmRoot = null;
 		_aboutRoot = null;
 		_shortcutRoot = null;
+		_shortcutScrollRect = null;
+		_shortcutScrollContent = null;
 		_shortcutCaptureText = null;
 		_shortcutCaptureModifiers.Clear();
 		_shortcutCaptureActive = false;
@@ -606,6 +740,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		_inventoryPresetDrawerRoot = null;
 		_inventoryPresetDrawerPopup = null;
 		_inventoryPresetTriggerButton = null;
+		_inventoryScopeDrawerRoot = null;
+		_inventoryScopeDrawerPopup = null;
+		_inventoryScopeTriggerButton = null;
+		_autoPickupBlacklistPickerRoot = null;
+		_autoPickupBlacklistPickerHost = null;
 		_teleportColorPreview = null;
 		_teleportColorHexPreview = null;
 		_teleportColorHexInput = null;
@@ -691,6 +830,97 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
+	private void EnsureInfiniteStorageShell()
+	{
+		if (_infiniteStorageRoot != null)
+		{
+			return;
+		}
+		if (_font == null)
+		{
+			_font = Font.CreateDynamicFontFromOSFont(new string[4] { "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Arial" }, 18);
+		}
+		if (UnityEngine.Object.FindObjectOfType<EventSystem>() == null)
+		{
+			_ownedEventSystem = new GameObject("UnturnedSingleplayerCheatMenu.EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+			UnityEngine.Object.DontDestroyOnLoad(_ownedEventSystem);
+		}
+		_infiniteStorageRoot = new GameObject("UnturnedSingleplayerCheatMenu.InfiniteStorage", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+		UnityEngine.Object.DontDestroyOnLoad(_infiniteStorageRoot);
+		Canvas canvas = _infiniteStorageRoot.GetComponent<Canvas>();
+		canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+		canvas.overrideSorting = true;
+		canvas.sortingOrder = OverlaySortingOrder + 1;
+		CanvasScaler scaler = _infiniteStorageRoot.GetComponent<CanvasScaler>();
+		scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+		scaler.referenceResolution = new Vector2(1920f, 1080f);
+		scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+		scaler.matchWidthOrHeight = 0.5f;
+		GameObject panel = CreateObject("InfiniteStoragePanel", _infiniteStorageRoot.transform, typeof(Image));
+		_infiniteStoragePanel = panel.GetComponent<RectTransform>();
+		_infiniteStoragePanel.anchorMin = _infiniteStoragePanel.anchorMax = new Vector2(0.5f, 0.5f);
+		_infiniteStoragePanel.pivot = new Vector2(0.5f, 0.5f);
+		_infiniteStoragePanel.sizeDelta = new Vector2(1120f, 790f);
+		_infiniteStoragePanel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
+		panel.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		VerticalLayoutGroup layout = panel.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(18, 18, 14, 14);
+		layout.spacing = 9f;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+		GameObject header = CreateRow(panel.transform, 46f, 8f);
+		CreateText(header.transform, "无限储存", 22, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+		CreateFlexibleSpacer(header.transform);
+		CreateWindowCloseButton(header.transform, _plugin.CloseInfiniteStorage);
+		_infiniteStorageContentHost = CreateObject("InfiniteStorageContentHost", panel.transform, typeof(Image));
+		_infiniteStorageContentHost.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
+		SetLayout(_infiniteStorageContentHost, -1f, -1f, -1f, 1f);
+		AddVerticalLayout(_infiniteStorageContentHost, 9f, new RectOffset(12, 12, 10, 10)).childForceExpandHeight = false;
+		_infiniteStorageRoot.SetActive(value: false);
+	}
+
+	private void RebuildInfiniteStoragePage()
+	{
+		if (_infiniteStorageRoot == null || !_infiniteStorageRoot.activeSelf)
+		{
+			return;
+		}
+		HideHoverExplanation();
+		HideItemFilterPanel();
+		if (_infiniteStorageContentHost != null)
+		{
+			QueueForDestroy(_infiniteStorageContentHost);
+		}
+		_infiniteStorageContentHost = CreateObject("InfiniteStorageContentHost", _infiniteStoragePanel, typeof(Image));
+		_infiniteStorageContentHost.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
+		SetLayout(_infiniteStorageContentHost, -1f, -1f, -1f, 1f);
+		AddVerticalLayout(_infiniteStorageContentHost, 9f, new RectOffset(12, 12, 10, 10)).childForceExpandHeight = false;
+		BuildInfiniteStoragePanel(_infiniteStorageContentHost.transform);
+	}
+
+	private void MaintainInfiniteStorage()
+	{
+		if (_infiniteStorageRoot == null || !_infiniteStorageRoot.activeSelf)
+		{
+			return;
+		}
+		if (_itemFilterRoot == null && _infiniteStorageContentHost == null)
+		{
+			RebuildInfiniteStoragePage();
+		}
+	}
+
+	private GameObject GetActiveOverlayRoot()
+	{
+		if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf)
+		{
+			return _infiniteStorageRoot;
+		}
+		return _root;
+	}
+
 	private void BuildHeader(Transform parent)
 	{
 		GameObject gameObject = CreateRow(parent, 46f, 10f);
@@ -737,6 +967,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		_statusAccent = null;
 		_aboutRoot = null;
 		_shortcutRoot = null;
+		_shortcutScrollRect = null;
+		_shortcutScrollContent = null;
 		_shortcutCaptureText = null;
 		_shortcutCaptureModifiers.Clear();
 		_shortcutCaptureActive = false;
@@ -841,9 +1073,12 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void ReplaceContentHost()
 	{
+		HideHoverExplanation();
 		HidePointToolModeDrawer();
 		HideInventoryPresetDrawer();
+		HideInventoryScopeDrawer();
 		HideWorkshopProtocolDrawer();
+		HideAutoPickupBlacklistPicker();
 		if (_contentHost != null)
 		{
 			QueueForDestroy(_contentHost);
@@ -1313,8 +1548,17 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private void ShowItemFilterPanel(bool forFavorites)
 	{
 		HideItemFilterPanel();
+		_itemFilterForInfiniteStorage = false;
 		_itemFilterForFavorites = forFavorites;
-		_itemFilterDraft = (forFavorites ? _favoriteItemFilter : _itemFilter).Clone();
+		_itemFilterDraft = (_itemFilterForInfiniteStorage ? _infiniteStorageFilter : (forFavorites ? _favoriteItemFilter : _itemFilter)).Clone();
+		BuildItemFilterPanel();
+	}
+
+	private void ShowInfiniteStorageFilterPanel()
+	{
+		HideItemFilterPanel();
+		_itemFilterForInfiniteStorage = true;
+		_itemFilterDraft = _infiniteStorageFilter.Clone();
 		BuildItemFilterPanel();
 	}
 
@@ -1324,7 +1568,12 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		{
 			return;
 		}
-		_itemFilterRoot = CreateObject("ItemFilterOverlay", _root.transform, typeof(Image));
+		GameObject activeRoot = GetActiveOverlayRoot();
+		if (activeRoot == null)
+		{
+			return;
+		}
+		_itemFilterRoot = CreateObject("ItemFilterOverlay", activeRoot.transform, typeof(Image));
 		Stretch(_itemFilterRoot.GetComponent<RectTransform>());
 		_itemFilterRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
 		GameObject gameObject = CreateObject("ItemFilterDialog", _itemFilterRoot.transform, typeof(Image));
@@ -1476,13 +1725,22 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void ApplyItemFilterPanel()
 	{
-		ItemFilterState obj = (_itemFilterForFavorites ? _favoriteItemFilter : _itemFilter);
+		ItemFilterState obj = _itemFilterForInfiniteStorage ? _infiniteStorageFilter : (_itemFilterForFavorites ? _favoriteItemFilter : _itemFilter);
 		obj.CopyFrom(_itemFilterDraft);
 		ItemFilterService.NormalizeForCategory(obj);
 		HideItemFilterPanel();
+		_itemFilterForInfiniteStorage = false;
 		BuildItemResults();
 		BuildFavoriteResults();
-		ShowTab(_activeTab);
+		if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf)
+		{
+			_infiniteStoragePage = 0;
+			RebuildInfiniteStoragePage();
+		}
+		else
+		{
+			ShowTab(_activeTab);
+		}
 	}
 
 	private void HideItemFilterPanel()
@@ -1502,11 +1760,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		SetLayout(gameObject, -1f, -1f, 1f, 1f);
 		int num = Math.Max(1, Mathf.CeilToInt((float)_itemResults.Count / 15f));
 		_itemPage = Mathf.Clamp(_itemPage, 0, num - 1);
-		BuildPagination(gameObject.transform, _itemPage, num, delegate(int value)
+		Action<int> changePage = delegate(int value)
 		{
 			_itemPage = value;
 			ShowTab(MenuTab.Items);
-		});
+		};
+		BuildPagination(gameObject.transform, _itemPage, num, changePage);
+		AddPageScrollHandler(gameObject, _itemPage, num, changePage);
 		if (_itemResults.Count == 0)
 		{
 			CreateEmptyState(gameObject.transform, string.IsNullOrWhiteSpace(_itemFilter.SearchQuery) ? "当前分类没有可用物品。" : "没有匹配的物品。", string.IsNullOrWhiteSpace(_itemFilter.SearchQuery) ? "请选择其他分类，或重新扫描当前加载的资产。" : "请清空搜索或尝试其他关键词。");
@@ -1535,11 +1795,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		SetLayout(gameObject, -1f, -1f, 1f, 1f);
 		int num = Math.Max(1, Mathf.CeilToInt((float)_vehicleResults.Count / 15f));
 		_vehiclePage = Mathf.Clamp(_vehiclePage, 0, num - 1);
-		BuildPagination(gameObject.transform, _vehiclePage, num, delegate(int value)
+		Action<int> changePage = delegate(int value)
 		{
 			_vehiclePage = value;
 			ShowTab(MenuTab.Vehicles);
-		});
+		};
+		BuildPagination(gameObject.transform, _vehiclePage, num, changePage);
+		AddPageScrollHandler(gameObject, _vehiclePage, num, changePage);
 		if (_vehicleResults.Count == 0)
 		{
 			CreateEmptyState(gameObject.transform, string.IsNullOrWhiteSpace(_vehicleQuery) ? "当前分类没有可用车辆。" : "没有匹配的车辆。", string.IsNullOrWhiteSpace(_vehicleQuery) ? "请选择其他分类，或重新扫描当前加载的资产。" : "请清空搜索或尝试其他关键词。");
@@ -1569,11 +1831,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		SetLayout(gameObject, -1f, -1f, 1f, 1f);
 		int num2 = Math.Max(1, Mathf.CeilToInt((float)num / 15f));
 		_favoritePage = Mathf.Clamp(_favoritePage, 0, num2 - 1);
-		BuildPagination(gameObject.transform, _favoritePage, num2, delegate(int value)
+		Action<int> changePage = delegate(int value)
 		{
 			_favoritePage = value;
 			ShowTab(MenuTab.Favorites);
-		});
+		};
+		BuildPagination(gameObject.transform, _favoritePage, num2, changePage);
+		AddPageScrollHandler(gameObject, _favoritePage, num2, changePage);
 		if (num == 0)
 		{
 			CreateEmptyState(gameObject.transform, (_favoriteKind == FavoriteKind.Items) ? "当前分类没有已加载的收藏物品。" : "当前分类没有已加载的收藏车辆。", (_favoriteKind == FavoriteKind.Items) ? "请在物品卡片右上角点击 ☆ 收藏。" : "请在车辆卡片右上角点击 ☆ 收藏。");
@@ -1609,13 +1873,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
 		string displayName = ((workshopLocalization != null && workshopLocalization.TryGetTranslation(asset, WorkshopTextField.ItemName, out var translation) && !string.IsNullOrWhiteSpace(translation)) ? translation : asset.FriendlyName);
+		string tooltip = AssetHoverDetailsBuilder.BuildItem(asset, displayName, asset.itemDescription, _ammoCompatibilityIndex, _plugin.Catalog.Items);
 		Button button = CreateButton(parent, string.Empty, delegate
 		{
 			_giveAmount = (byte)ParseClamped(_itemAmountText, 1, 255, _giveAmount);
 			_itemAmountText = _giveAmount.ToString();
 			bool flag = _plugin.Actions.GiveItem(asset, _giveAmount);
 			SetStatus(flag ? $"已给予 {_giveAmount} × {displayName}。" : ("无法给予 " + displayName + "。"), 4f, flag ? StatusKind.Success : StatusKind.Error);
-		}, 155f, 158f, CheatMenuStyle.Surface);
+		}, 155f, 158f, CheatMenuStyle.Surface, tooltip: tooltip, delayTooltip: true);
 		AddCardContents(button.transform, displayName, $"ID {asset.id}  ·  {AssetCatalog.GetOriginLabel(asset)}", () => _plugin.Icons.GetItemIcon(asset), isVehicle: false);
 		AddFavoriteButton(button.transform, _plugin.Favorites.IsItemFavorite(asset), delegate
 		{
@@ -1627,13 +1892,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
 		string displayName = ((workshopLocalization != null && workshopLocalization.TryGetTranslation(asset, WorkshopTextField.VehicleName, out var translation) && !string.IsNullOrWhiteSpace(translation)) ? translation : asset.FriendlyName);
+		string tooltip = AssetHoverDetailsBuilder.BuildVehicle(asset, displayName);
 		Button button = CreateButton(parent, string.Empty, delegate
 		{
 			_spawnVehicleAmount = ParseClamped(_vehicleAmountText, 1, 20, _spawnVehicleAmount);
 			_vehicleAmountText = _spawnVehicleAmount.ToString();
 			int num = _plugin.Actions.SpawnVehicles(asset, _spawnVehicleAmount);
 			SetStatus((num > 0) ? $"已在玩家前方生成 {num} × {displayName}。" : ("无法生成 " + displayName + "。"), 4f, (num > 0) ? StatusKind.Success : StatusKind.Error);
-		}, 155f, 158f, CheatMenuStyle.Surface);
+		}, 155f, 158f, CheatMenuStyle.Surface, tooltip: tooltip, delayTooltip: true);
 		string text = ((asset.id == 0) ? "GUID" : $"ID {asset.id}");
 		AddCardContents(button.transform, displayName, text + "  ·  " + AssetCatalog.GetOriginLabel(asset), () => _plugin.Icons.GetVehicleIcon(asset), isVehicle: true);
 		AddFavoriteButton(button.transform, _plugin.Favorites.IsVehicleFavorite(asset), delegate
@@ -1708,6 +1974,22 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		RectTransform rectTransform2 = text3.rectTransform;
 		offsetMin = (text3.rectTransform.offsetMax = Vector2.zero);
 		rectTransform2.offsetMin = offsetMin;
+	}
+
+	private void AddPageScrollHandler(GameObject target, int page, int pageCount, Action<int> changePage)
+	{
+		Image image = target.GetComponent<Image>() ?? target.AddComponent<Image>();
+		image.color = Color.clear;
+		PageScrollHandler handler = target.AddComponent<PageScrollHandler>();
+		handler.Initialize(page, pageCount,
+			delegate
+			{
+				if (page > 0) { HideHoverExplanation(); changePage(page - 1); }
+			},
+			delegate
+			{
+				if (page < pageCount - 1) { HideHoverExplanation(); changePage(page + 1); }
+			});
 	}
 
 	private void BuildPagination(Transform parent, int page, int pageCount, Action<int> changePage)
@@ -2086,7 +2368,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			CreateText(gameObject2.transform, "关于此插件", 17, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
 			CreateFlexibleSpacer(gameObject2.transform);
 			Button button = CreateWindowCloseButton(gameObject2.transform, HideAboutDialog);
-			CreateText(gameObject.transform, "Unturned Singleplayer Cheat Menu v1.7.0", 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
+			CreateText(gameObject.transform, "Unturned Singleplayer Cheat Menu v1.9.0", 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
 			CreateText(gameObject.transform, "作者：Blowthesnow", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft);
 			SetLayout(CreateText(gameObject.transform, "此插件完全免费。如果你在其他地方购买了此插件，请立刻申请退款。", 13, CheatMenuStyle.Warning, TextAnchor.MiddleLeft).gameObject, -1f, 46f);
 			CreateText(gameObject.transform, "项目地址", 12, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -2134,7 +2416,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 			component.anchorMin = anchorMin;
 			component.pivot = new Vector2(0.5f, 0.5f);
-			component.sizeDelta = new Vector2(720f, 520f);
+			component.sizeDelta = new Vector2(930f, 780f);
 			VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
 			verticalLayoutGroup.padding = new RectOffset(24, 24, 18, 18);
 			verticalLayoutGroup.spacing = 10f;
@@ -2146,17 +2428,84 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			CreateText(gameObject2.transform, "设置全局快捷键", 17, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
 			CreateFlexibleSpacer(gameObject2.transform);
 			Button button = CreateWindowCloseButton(gameObject2.transform, HideShortcutDialog);
-			CreateShortcutSectionHeader(gameObject.transform, "插件窗口");
-			BuildShortcutActionRow(gameObject.transform, "menu.toggle");
-			CreateShortcutSectionSpacing(gameObject.transform);
-			CreateShortcutSectionHeader(gameObject.transform, "背包整理");
-			BuildShortcutActionRow(gameObject.transform, "inventory.arrange.current");
-			BuildShortcutActionRow(gameObject.transform, "inventory.arrange.all-carried");
+			GameObject gameObject3 = CreateObject("ShortcutBody", gameObject.transform);
+			SetLayout(gameObject3, -1f, -1f, 1f, 1f);
+			GameObject gameObject4 = CreateObject("ShortcutNavigation", gameObject3.transform, typeof(Image));
+			gameObject4.GetComponent<Image>().color = CheatMenuStyle.Surface;
+			AddVerticalLayout(gameObject4, 6f, new RectOffset(8, 8, 8, 8));
+			RectTransform component2 = gameObject4.GetComponent<RectTransform>();
+			component2.anchorMin = new Vector2(0f, 0f);
+			component2.anchorMax = new Vector2(0f, 1f);
+			component2.offsetMin = Vector2.zero;
+			component2.offsetMax = new Vector2(142f, 0f);
+			GameObject gameObject5 = CreateObject("ShortcutContentPanel", gameObject3.transform, typeof(Image));
+			gameObject5.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+			RectTransform component3 = gameObject5.GetComponent<RectTransform>();
+			component3.anchorMin = new Vector2(0f, 0f);
+			component3.anchorMax = new Vector2(1f, 1f);
+			component3.offsetMin = new Vector2(152f, 0f);
+			component3.offsetMax = Vector2.zero;
+			_shortcutScrollContent = CreateShortcutScroll(gameObject5.transform);
+			_shortcutScrollRect = _shortcutScrollContent.GetComponentInParent<ScrollRect>();
+			_shortcutScrollRect.scrollSensitivity = 48f;
+			AddShortcutScrollbar(_shortcutScrollRect);
+			AddShortcutScrollLayout(_shortcutScrollContent.gameObject, 10f, new RectOffset(12, 18, 10, 10));
+			RectTransform pluginHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "插件窗口");
+			CreateShortcutNavigationButton(gameObject4.transform, "插件窗口", pluginHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, "menu.toggle");
+			BuildShortcutActionRow(_shortcutScrollContent, "infinite-storage.toggle");
+			CreateShortcutSectionSpacing(_shortcutScrollContent);
+			RectTransform inventoryHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "背包整理");
+			CreateShortcutNavigationButton(gameObject4.transform, "背包整理", inventoryHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, "inventory.arrange.current");
+			BuildShortcutActionRow(_shortcutScrollContent, "inventory.arrange.all-carried");
+			CreateShortcutSectionSpacing(_shortcutScrollContent);
+			RectTransform characterHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "角色");
+			CreateShortcutNavigationButton(gameObject4.transform, "角色", characterHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleGodMode);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleInfiniteNeeds);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.RestoreEverything);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.RefillNeeds);
+			CreateShortcutSectionSpacing(_shortcutScrollContent);
+			RectTransform movementHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "移动");
+			CreateShortcutNavigationButton(gameObject4.transform, "移动", movementHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleFlight);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleNoclip);
+			CreateShortcutSectionSpacing(_shortcutScrollContent);
+			RectTransform pointToolHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "准星");
+			CreateShortcutNavigationButton(gameObject4.transform, "准星", pointToolHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.TogglePointToolEnabled);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.NextPointToolMode);
+			CreateShortcutSectionSpacing(_shortcutScrollContent);
+			RectTransform healthBarsHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "生物生命条");
+			CreateShortcutNavigationButton(gameObject4.transform, "生物生命条", healthBarsHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleCreatureHealthBars);
+			CreateShortcutSectionSpacing(_shortcutScrollContent);
+			RectTransform automationHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "自动化");
+			CreateShortcutNavigationButton(gameObject4.transform, "自动化", automationHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleAutoPickup);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleInfiniteStorageEnabled);
+			CreateShortcutSectionSpacing(_shortcutScrollContent);
+			RectTransform worldHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "世界");
+			CreateShortcutNavigationButton(gameObject4.transform, "世界", worldHeader);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleFreezeTime);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.SetDay);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.SetNight);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleFullMoon);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ClearWeather);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.DisableWeather);
+			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.CallAirdrop);
 			_shortcutCaptureText = CreateText(gameObject.transform, "点击某一行的设置后按下键盘键、鼠标中键或鼠标侧键；Escape 取消。", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft);
 			SetLayout(_shortcutCaptureText.gameObject, -1f, 42f);
-			GameObject gameObject3 = CreateRow(gameObject.transform, 38f, 8f);
-			CreateFlexibleSpacer(gameObject3.transform);
-			CreateButton(gameObject3.transform, "关闭", HideShortcutDialog, 104f, 34f, CheatMenuStyle.Surface);
+			GameObject gameObject6 = CreateRow(gameObject.transform, 38f, 8f);
+			CreateFlexibleSpacer(gameObject6.transform);
+			CreateButton(gameObject6.transform, "关闭", HideShortcutDialog, 104f, 34f, CheatMenuStyle.Surface);
+			Canvas.ForceUpdateCanvases();
+			LayoutRebuilder.ForceRebuildLayoutImmediate(component);
+			LayoutRebuilder.ForceRebuildLayoutImmediate(gameObject3.GetComponent<RectTransform>());
+			LayoutRebuilder.ForceRebuildLayoutImmediate(component3);
+			RebuildShortcutScrollLayout();
+			_shortcutScrollRect.verticalNormalizedPosition = Mathf.Clamp01(_shortcutScrollPosition);
 			if (EventSystem.current != null)
 			{
 				EventSystem.current.SetSelectedGameObject(button.gameObject);
@@ -2164,11 +2513,136 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
-	private void CreateShortcutSectionHeader(Transform parent, string title)
+	private RectTransform CreateShortcutSectionHeader(Transform parent, string title)
 	{
 		CreateShortcutDivider(parent);
-		CreateText(parent, title, 13, CheatMenuStyle.Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
+		RectTransform rectTransform = CreateText(parent, title, 13, CheatMenuStyle.Muted, TextAnchor.MiddleCenter, FontStyle.Bold).rectTransform;
 		CreateShortcutDivider(parent);
+		return rectTransform;
+	}
+
+	private void CreateShortcutNavigationButton(Transform parent, string title, RectTransform sectionHeader)
+	{
+		CreateButton(parent, title, delegate
+		{
+			ScrollShortcutSectionIntoView(sectionHeader);
+		}, 0f, 34f, CheatMenuStyle.SurfaceHover);
+	}
+
+	private void ScrollShortcutSectionIntoView(RectTransform sectionHeader)
+	{
+		if (_shortcutScrollRect == null || _shortcutScrollContent == null || sectionHeader == null)
+		{
+			return;
+		}
+		RebuildShortcutScrollLayout();
+		RectTransform viewport = _shortcutScrollRect.viewport;
+		if (viewport == null)
+		{
+			return;
+		}
+		float scrollableHeight = _shortcutScrollContent.rect.height - viewport.rect.height;
+		if (scrollableHeight <= 0.01f)
+		{
+			_shortcutScrollRect.verticalNormalizedPosition = 1f;
+			return;
+		}
+		Vector3 worldPoint = sectionHeader.TransformPoint(new Vector3(sectionHeader.rect.center.x, sectionHeader.rect.yMax, 0f));
+		float sectionOffset = 0f - _shortcutScrollContent.InverseTransformPoint(worldPoint).y;
+		_shortcutScrollRect.verticalNormalizedPosition = 1f - Mathf.Clamp01(sectionOffset / scrollableHeight);
+	}
+
+	private void RebuildShortcutScrollLayout()
+	{
+		if (_shortcutScrollContent == null)
+		{
+			return;
+		}
+		Canvas.ForceUpdateCanvases();
+		LayoutRebuilder.ForceRebuildLayoutImmediate(_shortcutScrollContent);
+		float preferredHeight = Mathf.Max(1f, LayoutUtility.GetPreferredHeight(_shortcutScrollContent));
+		_shortcutScrollContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, preferredHeight);
+		_shortcutScrollContent.anchoredPosition = new Vector2(_shortcutScrollContent.anchoredPosition.x, 0f);
+		LayoutRebuilder.ForceRebuildLayoutImmediate(_shortcutScrollContent);
+		Canvas.ForceUpdateCanvases();
+	}
+
+	private static VerticalLayoutGroup AddShortcutScrollLayout(GameObject target, float spacing, RectOffset padding)
+	{
+		VerticalLayoutGroup layout = target.AddComponent<VerticalLayoutGroup>();
+		layout.padding = padding;
+		layout.spacing = spacing;
+		layout.childAlignment = TextAnchor.UpperLeft;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+		return layout;
+	}
+
+	private static RectTransform CreateShortcutScroll(Transform parent)
+	{
+		GameObject scrollObject = CreateObject("ShortcutScroll", parent, typeof(Image), typeof(ScrollRect));
+		Stretch(scrollObject.GetComponent<RectTransform>());
+		scrollObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
+		SetLayout(scrollObject, -1f, -1f, 1f, 1f);
+		LayoutElement layoutElement = scrollObject.GetComponent<LayoutElement>();
+		layoutElement.minWidth = 1f;
+		layoutElement.minHeight = 1f;
+
+		GameObject viewportObject = CreateObject("Viewport", scrollObject.transform, typeof(RectMask2D));
+		RectTransform viewport = viewportObject.GetComponent<RectTransform>();
+		Stretch(viewport);
+
+		RectTransform content = CreateObject("ShortcutContent", viewport, typeof(RectTransform)).GetComponent<RectTransform>();
+		content.anchorMin = new Vector2(0f, 1f);
+		content.anchorMax = new Vector2(1f, 1f);
+		content.pivot = new Vector2(0.5f, 1f);
+		content.offsetMin = Vector2.zero;
+		content.offsetMax = Vector2.zero;
+
+		ScrollRect scrollRect = scrollObject.GetComponent<ScrollRect>();
+		scrollRect.viewport = viewport;
+		scrollRect.content = content;
+		scrollRect.horizontal = false;
+		scrollRect.vertical = true;
+		scrollRect.movementType = ScrollRect.MovementType.Clamped;
+		scrollRect.scrollSensitivity = 48f;
+		return content;
+	}
+
+	private static void AddShortcutScrollbar(ScrollRect scrollRect)
+	{
+		if (scrollRect == null || scrollRect.viewport == null)
+		{
+			return;
+		}
+		scrollRect.viewport.offsetMax = new Vector2(-18f, 0f);
+		GameObject scrollbarObject = CreateObject("ShortcutScrollbar", scrollRect.transform, typeof(Image), typeof(Scrollbar));
+		RectTransform scrollbarRect = scrollbarObject.GetComponent<RectTransform>();
+		scrollbarRect.anchorMin = new Vector2(1f, 0f);
+		scrollbarRect.anchorMax = new Vector2(1f, 1f);
+		scrollbarRect.pivot = new Vector2(1f, 0.5f);
+		scrollbarRect.offsetMin = new Vector2(-14f, 4f);
+		scrollbarRect.offsetMax = new Vector2(-2f, -4f);
+		scrollbarObject.GetComponent<Image>().color = CheatMenuStyle.InputBorder;
+		GameObject slidingArea = CreateObject("SlidingArea", scrollbarRect);
+		RectTransform slidingRect = slidingArea.GetComponent<RectTransform>();
+		Stretch(slidingRect);
+		slidingRect.offsetMin = new Vector2(2f, 2f);
+		slidingRect.offsetMax = new Vector2(-2f, -2f);
+		GameObject handleObject = CreateObject("Handle", slidingRect, typeof(Image));
+		RectTransform handleRect = handleObject.GetComponent<RectTransform>();
+		Stretch(handleRect);
+		Image handleImage = handleObject.GetComponent<Image>();
+		handleImage.color = CheatMenuStyle.Accent;
+		Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
+		scrollbar.handleRect = handleRect;
+		scrollbar.targetGraphic = handleImage;
+		scrollbar.direction = Scrollbar.Direction.BottomToTop;
+		scrollRect.verticalScrollbar = scrollbar;
+		scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+		scrollRect.verticalScrollbarSpacing = 4f;
 	}
 
 	private static void CreateShortcutDivider(Transform parent)
@@ -2186,12 +2660,20 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private void BuildShortcutActionRow(Transform parent, string actionId)
 	{
 		GameObject gameObject = CreateRow(parent, 40f, 8f);
-		SetLayout(CreateText(gameObject.transform, _plugin.GetShortcutDisplayName(actionId), 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft).gameObject, 190f);
-		SetLayout(CreateText(gameObject.transform, _plugin.GetShortcutLabel(actionId), 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false).gameObject, -1f, -1f, 1f);
+		Text actionText = CreateText(gameObject.transform, _plugin.GetShortcutDisplayName(actionId), 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft);
+		actionText.horizontalOverflow = HorizontalWrapMode.Overflow;
+		SetLayout(actionText.gameObject, 240f);
+		Text shortcutText = CreateText(gameObject.transform, _plugin.GetShortcutLabel(actionId), 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
+		shortcutText.horizontalOverflow = HorizontalWrapMode.Overflow;
+		SetLayout(shortcutText.gameObject, 160f, 40f);
 		CreateButton(gameObject.transform, "设置", delegate
 		{
 			BeginShortcutCapture(actionId);
 		}, 82f, 34f, CheatMenuStyle.Accent);
+		CreateButton(gameObject.transform, "清除", delegate
+		{
+			ApplyShortcut(new KeyboardShortcut(KeyCode.None), actionId);
+		}, 82f, 34f, CheatMenuStyle.Surface);
 		CreateButton(gameObject.transform, "默认", delegate
 		{
 			ApplyShortcut(_plugin.GetShortcutDefault(actionId), actionId);
@@ -2202,6 +2684,12 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		_shortcutCaptureActive = false;
 		_shortcutCaptureModifiers.Clear();
+		if (_shortcutScrollRect != null)
+		{
+			_shortcutScrollPosition = _shortcutScrollRect.verticalNormalizedPosition;
+		}
+		_shortcutScrollRect = null;
+		_shortcutScrollContent = null;
 		_shortcutCaptureText = null;
 		if (!(_shortcutRoot == null))
 		{
@@ -3165,9 +3653,20 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void EnsureHoverExplanation()
 	{
+		GameObject activeRoot = GetActiveOverlayRoot();
+		if (activeRoot == null)
+		{
+			return;
+		}
+		if (_hoverExplanationRoot != null && _hoverExplanationRoot.transform.parent != activeRoot.transform)
+		{
+			QueueForDestroy(_hoverExplanationRoot);
+			_hoverExplanationRoot = null;
+			_hoverExplanationText = null;
+		}
 		if (!(_hoverExplanationRoot != null))
 		{
-			_hoverExplanationRoot = CreateObject("OverlayHoverExplanation", _root.transform, typeof(Image));
+			_hoverExplanationRoot = CreateObject("OverlayHoverExplanation", activeRoot.transform, typeof(Image));
 			RectTransform component = _hoverExplanationRoot.GetComponent<RectTransform>();
 			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 			component.anchorMin = anchorMin;
@@ -3175,7 +3674,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			Image component2 = _hoverExplanationRoot.GetComponent<Image>();
 			component2.color = Color.clear;
 			component2.raycastTarget = false;
-			Canvas component3 = _root.GetComponent<Canvas>();
+			Canvas component3 = activeRoot.GetComponent<Canvas>();
 			float num = ((component3 != null) ? Mathf.Max(0.01f, component3.scaleFactor) : 1f);
 			float num2 = 3f / num;
 			CreateHoverExplanationBorderEdge(_hoverExplanationRoot.transform, "BorderTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f - num2), Vector2.zero);
@@ -3189,7 +3688,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			component4.offsetMin = new Vector2(num2, num2);
 			component4.offsetMax = new Vector2(0f - num2, 0f - num2);
 			Image component5 = gameObject.GetComponent<Image>();
-			component5.color = new Color(0f, 0f, 0f, 0.5f);
+			component5.color = new Color(0f, 0f, 0f, 0.8f);
 			component5.raycastTarget = false;
 			_hoverExplanationText = CreateText(_hoverExplanationRoot.transform, string.Empty, 12, Color.white, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
 			_hoverExplanationText.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -3201,12 +3700,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void ShowHoverExplanation(string message, RectTransform target, Vector2 screenPosition)
 	{
-		if (_root == null || !_root.activeSelf || string.IsNullOrWhiteSpace(message))
+		GameObject activeRoot = GetActiveOverlayRoot();
+		if (activeRoot == null || !activeRoot.activeSelf || string.IsNullOrWhiteSpace(message))
 		{
 			return;
 		}
 		EnsureHoverExplanation();
-		Canvas component = _root.GetComponent<Canvas>();
+		Canvas component = activeRoot.GetComponent<Canvas>();
 		float num = ((component != null) ? Mathf.Max(1f, component.scaleFactor) : 1f);
 		float num2 = 10f / num;
 		float max = 420f / num;
@@ -3271,7 +3771,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 				screenPoint = vector5;
 			}
 		}
-		RectTransformUtility.ScreenPointToLocalPointInRectangle(_root.GetComponent<RectTransform>(), screenPoint, null, out var localPoint);
+		RectTransformUtility.ScreenPointToLocalPointInRectangle(activeRoot.GetComponent<RectTransform>(), screenPoint, null, out var localPoint);
 		component2.anchoredPosition = localPoint;
 		_hoverExplanationRoot.SetActive(value: true);
 	}
@@ -3291,7 +3791,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
-	private Button CreateButton(Transform parent, string label, System.Action action, float width = 0f, float height = 36f, Color? color = null, int fontSize = 13, string tooltip = null)
+	private Button CreateButton(Transform parent, string label, System.Action action, float width = 0f, float height = 36f, Color? color = null, int fontSize = 13, string tooltip = null, bool delayTooltip = false)
 	{
 		GameObject gameObject = CreateObject("Button", parent, typeof(Image), typeof(Button));
 		Image component = gameObject.GetComponent<Image>();
@@ -3338,6 +3838,21 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			component4.pivot = new Vector2(0.5f, 0.5f);
 			component4.anchoredPosition = Vector2.zero;
 			component4.sizeDelta = ((label == "×") ? new Vector2(20f, 20f) : ((label == "__keyboard_glyph__") ? new Vector2(24f, 20f) : new Vector2(21f, 21f)));
+			if (label == "__keyboard_glyph__")
+			{
+				GameObject keyboardKeysObject = CreateObject("KeyboardKeys", gameObject.transform, typeof(Image));
+				Image keyboardKeysImage = keyboardKeysObject.GetComponent<Image>();
+				keyboardKeysImage.sprite = GetKeyboardGlyphKeysSprite();
+				keyboardKeysImage.color = Color.white;
+				keyboardKeysImage.preserveAspect = true;
+				keyboardKeysImage.raycastTarget = false;
+				RectTransform keyboardKeysRect = keyboardKeysObject.GetComponent<RectTransform>();
+				keyboardKeysRect.anchorMin = anchorMin;
+				keyboardKeysRect.anchorMax = new Vector2(0.5f, 0.5f);
+				keyboardKeysRect.pivot = new Vector2(0.5f, 0.5f);
+				keyboardKeysRect.anchoredPosition = new Vector2(-0.5f, 0f);
+				keyboardKeysRect.sizeDelta = new Vector2(24f, 20f);
+			}
 			break;
 		}
 		default:
@@ -3359,7 +3874,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		component2.transition = Selectable.Transition.None;
 		OverlaySelectableVisual overlaySelectableVisual = gameObject.AddComponent<OverlaySelectableVisual>();
 		overlaySelectableVisual.Initialize(component2, component, text, gameObject3, outline, component.color);
-		overlaySelectableVisual.SetHoverExplanation(tooltip, ShowHoverExplanation, HideHoverExplanation);
+		overlaySelectableVisual.SetHoverExplanation(tooltip, ShowHoverExplanation, HideHoverExplanation, delayTooltip);
 		SetLayout(gameObject, (width > 0f) ? width : (-1f), height);
 		return component2;
 	}
@@ -3385,6 +3900,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		Stretch(gameObject.GetComponent<RectTransform>());
 		gameObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
 		SetLayout(gameObject, -1f, -1f, 1f, 1f);
+		LayoutElement layoutElement = gameObject.GetComponent<LayoutElement>();
+		layoutElement.minWidth = 1f;
+		layoutElement.minHeight = 1f;
 		GameObject gameObject2 = CreateObject("Viewport", gameObject.transform, typeof(Image), typeof(Mask));
 		RectTransform component = gameObject2.GetComponent<RectTransform>();
 		Stretch(component);
@@ -3582,6 +4100,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
+	internal void ShowGlobalShortcutStatus(string message, bool warning = false)
+	{
+		SetStatus(message, 4f, warning ? StatusKind.Warning : null);
+	}
+
 	private void SetStatus(string message, float seconds = 3f, StatusKind? kind = null)
 	{
 		StatusKind statusKind = kind ?? InferStatusKind(message);
@@ -3676,6 +4199,17 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		return _keyboardGlyphSprite;
 	}
 
+	private Sprite GetKeyboardGlyphKeysSprite()
+	{
+		if (_keyboardGlyphKeysSprite != null)
+		{
+			return _keyboardGlyphKeysSprite;
+		}
+		_keyboardGlyphKeysTexture = CreateKeyboardGlyphKeysTexture(32);
+		_keyboardGlyphKeysSprite = Sprite.Create(_keyboardGlyphKeysTexture, new Rect(0f, 0f, _keyboardGlyphKeysTexture.width, _keyboardGlyphKeysTexture.height), new Vector2(0.5f, 0.5f), 32f);
+		return _keyboardGlyphKeysSprite;
+	}
+
 	private Sprite GetFavoriteFilledSprite()
 	{
 		if (_favoriteFilledSprite != null)
@@ -3758,26 +4292,34 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 				}
 			}
 		}
-		for (int k = 0; k < 2; k++)
-		{
-			for (int l = 0; l < 7; l++)
-			{
-				int num = 7 + l * 3;
-				int num2 = 10 + k * 6;
-				for (int m = num2; m < num2 + 3; m++)
-				{
-					for (int n = num; n < num + 2; n++)
-					{
-						texture2D.SetPixel(n, m, white);
-					}
-				}
-			}
-		}
 		for (int num3 = 22; num3 <= 23; num3++)
 		{
 			for (int num4 = 11; num4 <= 21; num4++)
 			{
 				texture2D.SetPixel(num4, num3, white);
+			}
+		}
+		texture2D.Apply();
+		return texture2D;
+	}
+
+	private static Texture2D CreateKeyboardGlyphKeysTexture(int size)
+	{
+		Texture2D texture2D = CreateTransparentTexture(size);
+		Color white = Color.white;
+		for (int i = 0; i < 2; i++)
+		{
+			for (int j = 0; j < 6; j++)
+			{
+				int startX = 8 + j * 3;
+				int startY = 10 + i * 6;
+				for (int y = startY; y < startY + 3; y++)
+				{
+					for (int x = startX; x < startX + 2; x++)
+					{
+						texture2D.SetPixel(x, y, white);
+					}
+				}
 			}
 		}
 		texture2D.Apply();
@@ -3885,13 +4427,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 7f);
 		AddToolsTab(gameObject.transform, ToolsTab.Interaction, "交互");
 		AddToolsTab(gameObject.transform, ToolsTab.Inventory, "背包整理");
+		AddToolsTab(gameObject.transform, ToolsTab.AutoPickup, "自动拾取");
 		AddToolsTab(gameObject.transform, ToolsTab.Movement, "移动");
 		AddToolsTab(gameObject.transform, ToolsTab.Translation, "翻译");
 		GameObject gameObject2 = CreateObject("ToolsPanel", _contentHost.transform, typeof(Image));
 		gameObject2.GetComponent<Image>().color = CheatMenuStyle.Surface;
 		AddVerticalLayout(gameObject2, 10f, new RectOffset(18, 18, 16, 16));
 		SetLayout(gameObject2, -1f, -1f, 1f, 1f);
-		CreateLabel(gameObject2.transform, (_activeToolsTab == ToolsTab.Interaction) ? "准星交互工具" : ((_activeToolsTab == ToolsTab.Inventory) ? "背包整理" : ((_activeToolsTab == ToolsTab.Movement) ? "移动工具" : "翻译")), 19, CheatMenuStyle.Text);
+		CreateLabel(gameObject2.transform, GetToolsTabTitle(_activeToolsTab), 19, CheatMenuStyle.Text);
 		if (_activeToolsTab == ToolsTab.Interaction)
 		{
 			BuildPointToolPanel(gameObject2.transform);
@@ -3899,6 +4442,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		else if (_activeToolsTab == ToolsTab.Inventory)
 		{
 			BuildInventoryArrangePanel(gameObject2.transform);
+		}
+		else if (_activeToolsTab == ToolsTab.AutoPickup)
+		{
+			BuildAutoPickupPanel(gameObject2.transform);
 		}
 		else if (_activeToolsTab == ToolsTab.Movement)
 		{
@@ -3910,6 +4457,18 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
+	private static string GetToolsTabTitle(ToolsTab tab)
+	{
+		return tab switch
+		{
+			ToolsTab.Interaction => "准星交互工具",
+			ToolsTab.Inventory => "背包整理",
+			ToolsTab.AutoPickup => "自动拾取",
+			ToolsTab.Movement => "移动工具",
+			_ => "翻译"
+		};
+	}
+
 	private void AddToolsTab(Transform parent, ToolsTab tab, string label)
 	{
 		SetLayout(CreateButton(parent, label, delegate
@@ -3918,6 +4477,183 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			ReplaceContentHost();
 			BuildToolsTab();
 		}, 0f, 40f, (_activeToolsTab == tab) ? CheatMenuStyle.Accent : CheatMenuStyle.Surface, 14).gameObject, -1f, -1f, 1f);
+	}
+
+	private void BuildInfiniteStoragePanel(Transform panel)
+	{
+		if (_plugin.InfiniteStorage == null)
+		{
+			CreateEmptyState(panel, "无限储存不可用", "储存运行时尚未初始化。");
+			return;
+		}
+		GameObject row = CreateRow(panel, 40f, 7f);
+		CreateToggleAction(row.transform, "启用无限储存", _plugin.InfiniteStorage.Enabled, delegate(bool value)
+		{
+			_plugin.SetInfiniteStorageEnabled(value);
+			RebuildInfiniteStoragePage();
+		});
+		GameObject priorityRow = CreateRow(panel, 34f, 7f);
+		CreateToggleAction(priorityRow.transform, "拾取优先存入无限储存", _plugin.IsInfiniteStoragePickupPriorityEnabled, delegate(bool value)
+		{
+			_plugin.SetInfiniteStoragePickupPriority(value);
+			RebuildInfiniteStoragePage();
+		});
+		CreateLabel(row.transform, "搜索", 13, CheatMenuStyle.Text, 40f);
+		CreateInput(row.transform, _infiniteStorageFilter.SearchQuery, delegate(string value)
+		{
+			_infiniteStorageFilter.SearchQuery = value;
+			_infiniteStoragePage = 0;
+			_searchDebouncer.Schedule(delegate { if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf) { RebuildInfiniteStoragePage(); } });
+		}, 220f);
+		CreateLabel(row.transform, "取出数量", 13, CheatMenuStyle.Text, 56f);
+		CreateButton(row.transform, "−", delegate
+		{
+			_giveAmount = (byte)Math.Max(1, ParseClamped(_itemAmountText, 1, 255, _giveAmount) - 1);
+			_itemAmountText = _giveAmount.ToString();
+			UpdateItemAmountInput();
+		}, 36f, 34f);
+		_itemAmountInput = CreateInput(row.transform, _itemAmountText, delegate(string value)
+		{
+			_itemAmountText = value;
+			if (int.TryParse(value, out var result))
+			{
+				_giveAmount = (byte)Mathf.Clamp(result, 1, 255);
+			}
+		}, 62f);
+		CreateButton(row.transform, "+", delegate
+		{
+			_giveAmount = (byte)Math.Min(255, ParseClamped(_itemAmountText, 1, 255, _giveAmount) + 1);
+			_itemAmountText = _giveAmount.ToString();
+			UpdateItemAmountInput();
+		}, 36f, 34f);
+		CreateButton(row.transform, (_infiniteStorageFilter.ActiveFilterCount == 0) ? "筛选" : $"筛选 {_infiniteStorageFilter.ActiveFilterCount}", ShowInfiniteStorageFilterPanel, 92f, 34f, CheatMenuStyle.Surface, 12);
+		long resourceUnits = _plugin.InfiniteStorage.Entries.Where(entry => entry.UnitKind == StackUnitKind.ResourceUnits).Sum(entry => entry.StoredUnitCount);
+		long instances = _plugin.InfiniteStorage.Entries.Where(entry => entry.UnitKind != StackUnitKind.ResourceUnits).Sum(entry => entry.StoredUnitCount);
+		IReadOnlyList<VirtualStorageEntry> filteredEntries = GetFilteredInfiniteStorageEntries();
+		if (_plugin.InfiniteStorage.LegacyAmbiguousEntries.Count > 0)
+		{
+			GameObject legacyRow = CreateRow(panel, 34f, 7f);
+			CreateLabel(legacyRow.transform, $"检测到 {_plugin.InfiniteStorage.LegacyAmbiguousEntries.Count:N0} 条待处理旧存档记录。", 13, CheatMenuStyle.Warning, 0f);
+			CreateButton(legacyRow.transform, "导出原始备份", delegate
+			{
+				bool exported = _plugin.InfiniteStorage.TryExportLegacyAmbiguousEntries(out _, out _);
+				SetStatus(exported ? "已导出待处理旧存档原始备份。" : "导出待处理旧存档失败。", 4f, exported ? StatusKind.Success : StatusKind.Warning);
+			}, 118f, 30f, CheatMenuStyle.Surface, 12, "导出所有待处理旧存档的原始 JSON 备份。");
+		}
+		CreateButton(panel, "存储当前携带物品", delegate
+		{
+			int moved = _plugin.InfiniteStorage.StoreAllCarried();
+			SetStatus(moved > 0 ? $"已存储 {moved} 个背包格。" : "没有可存储的物品，或无限储存未启用。", 4f, StatusKind.Info);
+			RebuildInfiniteStoragePage();
+		}, 180f, 40f, CheatMenuStyle.Success, 13, "将当前背包中的物品存入无限储存。");
+		CreateLabel(panel, $"显示 {filteredEntries.Count:N0} / {_plugin.InfiniteStorage.Entries.Count:N0} 条目；资源 {resourceUnits:N0}，完整物品 {instances:N0} 个。", 14, CheatMenuStyle.Text);
+		GameObject contentRow = CreateRow(panel, 0f, 10f);
+		SetLayout(contentRow, -1f, -1f, -1f, 1f);
+		HashSet<ushort> storedAssetIds = new HashSet<ushort>(_plugin.InfiniteStorage.Entries.Select(entry => entry.AssetId));
+		BuildItemCategorySidebar(contentRow.transform, "物品分类", _infiniteStorageFilter, delegate(ItemPrimaryCategory category)
+		{
+			_infiniteStorageFilter.Category = category;
+			ItemFilterService.NormalizeForCategory(_infiniteStorageFilter);
+			_infiniteStoragePage = 0;
+			RebuildInfiniteStoragePage();
+		}, asset => storedAssetIds.Contains(asset.id));
+		BuildInfiniteStorageGrid(contentRow.transform, filteredEntries);
+	}
+
+	private void BuildInfiniteStorageGrid(Transform parent, IReadOnlyList<VirtualStorageEntry> entries)
+	{
+		GameObject column = CreateObject("InfiniteStorageGridColumn", parent);
+		AddVerticalLayout(column, 7f, new RectOffset(0, 0, 0, 0));
+		SetLayout(column, -1f, -1f, 1f, 1f);
+		int pageCount = Math.Max(1, Mathf.CeilToInt(entries.Count / 15f));
+		_infiniteStoragePage = Mathf.Clamp(_infiniteStoragePage, 0, pageCount - 1);
+		Action<int> changePage = delegate(int value)
+		{
+			_infiniteStoragePage = value;
+			RebuildInfiniteStoragePage();
+		};
+		BuildPagination(column.transform, _infiniteStoragePage, pageCount, changePage);
+		AddPageScrollHandler(column, _infiniteStoragePage, pageCount, changePage);
+		if (entries.Count == 0)
+		{
+			CreateEmptyState(column.transform, string.IsNullOrWhiteSpace(_infiniteStorageFilter.SearchQuery) ? "当前分类没有已存储物品。" : "没有匹配的物品。", string.IsNullOrWhiteSpace(_infiniteStorageFilter.SearchQuery) ? "存储物品后会显示在这里。" : "请清空搜索或尝试其他关键词。");
+			return;
+		}
+		GameObject grid = CreateObject("InfiniteStorageGrid", column.transform);
+		SetLayout(grid, -1f, 500f, -1f, 1f);
+		GridLayoutGroup layout = grid.AddComponent<GridLayoutGroup>();
+		layout.padding = new RectOffset(4, 4, 4, 4);
+		layout.spacing = new Vector2(8f, 8f);
+		layout.cellSize = new Vector2(155f, 158f);
+		layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+		layout.constraintCount = 5;
+		int start = _infiniteStoragePage * 15;
+		int end = Math.Min(start + 15, entries.Count);
+		for (int i = start; i < end; i++)
+		{
+			VirtualStorageEntry entry = entries[i];
+			_infiniteStorageAssetsById.TryGetValue(entry.AssetId, out ItemAsset asset);
+			CreateInfiniteStorageCard(grid.transform, entry, asset);
+		}
+	}
+
+	private void CreateInfiniteStorageCard(Transform parent, VirtualStorageEntry entry, ItemAsset asset)
+	{
+		string displayName = asset == null ? "未解析物品 ID " + entry.AssetId : GetItemDisplayName(asset);
+		InfiniteStorageCardMetadata metadata = ItemInstanceSemantics.BuildCardMetadata(asset, entry);
+		string tooltip = asset == null ? "当前资产未解析；条目保持保守状态隔离。" : AssetHoverDetailsBuilder.BuildItem(asset, displayName, asset.itemDescription, _ammoCompatibilityIndex, _plugin.Catalog.Items);
+		Button button = CreateButton(parent, string.Empty, delegate
+		{
+			_giveAmount = (byte)ParseClamped(_itemAmountText, 1, 255, _giveAmount);
+			_itemAmountText = _giveAmount.ToString();
+			UpdateItemAmountInput();
+			WithdrawInfiniteStorageEntry(entry, _giveAmount);
+		}, 155f, 158f, CheatMenuStyle.Surface, tooltip: tooltip + "\n\n点击取出当前数量（" + metadata.WithdrawUnitLabel + "）。", delayTooltip: true);
+		AddCardContents(button.transform, displayName, metadata.Text, () => asset == null ? null : _plugin.Icons.GetItemIcon(asset), isVehicle: false);
+		Button withdrawAll = CreateButton(button.transform, "取全部", delegate
+		{
+			WithdrawInfiniteStorageEntry(entry, entry.StoredUnitCount);
+		}, 62f, 26f, CheatMenuStyle.Accent, 10, "取出此条目的全部单位。", delayTooltip: true);
+		RectTransform rect = withdrawAll.GetComponent<RectTransform>();
+		Vector2 anchor = (rect.anchorMax = new Vector2(1f, 1f));
+		rect.anchorMin = anchor;
+		rect.pivot = new Vector2(1f, 1f);
+		rect.anchoredPosition = new Vector2(-5f, -5f);
+		rect.sizeDelta = new Vector2(62f, 26f);
+		withdrawAll.transform.SetAsLastSibling();
+	}
+
+	private void WithdrawInfiniteStorageEntry(VirtualStorageEntry entry, long amount)
+	{
+		long moved = _plugin.InfiniteStorage.Withdraw(entry.EntryId, amount);
+		string unit = entry.UnitKind == StackUnitKind.ResourceUnits ? "单位" : "个完整物品";
+		SetStatus(moved > 0 ? $"已取出 {moved:N0} {unit}。" : "原生背包没有可用空间。", 3f, StatusKind.Info);
+		RebuildInfiniteStoragePage();
+	}
+
+	private IReadOnlyList<VirtualStorageEntry> GetFilteredInfiniteStorageEntries()
+	{
+		List<VirtualStorageEntry> results = new List<VirtualStorageEntry>();
+		foreach (VirtualStorageEntry entry in _plugin.InfiniteStorage.Entries)
+		{
+			if (_infiniteStorageAssetsById.TryGetValue(entry.AssetId, out ItemAsset asset) && MatchesItemForFilter(asset, _infiniteStorageFilter))
+			{
+				results.Add(entry);
+			}
+		}
+		return results;
+	}
+
+	private void RebuildInfiniteStorageAssetIndex()
+	{
+		_infiniteStorageAssetsById.Clear();
+		foreach (ItemAsset asset in _plugin.Catalog.Items)
+		{
+			if (asset != null && !_infiniteStorageAssetsById.ContainsKey(asset.id))
+			{
+				_infiniteStorageAssetsById.Add(asset.id, asset);
+			}
+		}
 	}
 
 	private void BuildWorkshopLocalizationPanel(Transform panel)
@@ -4271,6 +5007,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			ToggleInventoryPresetDrawer(presetButton);
 		}, 0f, 40f, CheatMenuStyle.Surface, 13, "点击后从列表直接选择一个整理预设，预设的具体规则可将鼠标移到选项上查看。");
 		SetLayout(presetButton.gameObject, -1f, -1f, 1f);
+		GameObject scopeRow = CreateRow(panel, 44f, 8f);
+		CreateLabel(scopeRow.transform, "整理范围", 14, CheatMenuStyle.Text, 110f);
+		Button scopeButton = null;
+		scopeButton = CreateButton(scopeRow.transform, "配置随身页 ▼", delegate
+		{
+			ToggleInventoryScopeDrawer(scopeButton);
+		}, 0f, 40f, CheatMenuStyle.Surface, 13, "分别开启或关闭背包、背心、上衣和裤子储物页；关闭的页面不会参与整理。");
+		SetLayout(scopeButton.gameObject, -1f, -1f, 1f);
 		if (inventoryArrangeSettings.Preset == InventorySortPreset.Custom)
 		{
 			CreateLabel(panel, "自定义排序链（最多 5 项）：Key:Direction,Key:Direction", 12, CheatMenuStyle.Muted);
@@ -4296,11 +5040,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			_plugin.SetInventoryArrangeProtectEquipped(value);
 			SetStatus(value ? "已保护当前装备物品。" : "将允许整理当前装备物品。", 4f, StatusKind.Info);
 		}, "保护当前装备物品；开启时不会移除或重排它。");
-		CreateToggleAction(gameObject3.transform, "保留热键", inventoryArrangeSettings.PreserveHotkeys, delegate(bool value)
+		CreateToggleAction(gameObject3.transform, "固定热键物品", inventoryArrangeSettings.FixHotkeyItems, delegate(bool value)
 		{
-			_plugin.SetInventoryArrangePreserveHotkeys(value);
-			SetStatus(value ? "已保护热键绑定物品。" : "将允许移动热键绑定物品。", 4f, StatusKind.Info);
-		}, "保护绑定热键的物品，避免整理后快捷栏失效。");
+			_plugin.SetInventoryArrangeFixHotkeyItems(value);
+			SetStatus(value ? "热键绑定物品将保持在原坐标。" : "热键绑定物品会随整理移动并更新坐标。", 4f, StatusKind.Info);
+		}, "开启时固定绑定热键的物品；关闭时整理会同步快捷键到新坐标。");
 		CreateLabel(panel, "安全策略：预检无法完整安置时取消整次操作；不调用自动掉落。", 12, CheatMenuStyle.Warning);
 		CreateLabel(panel, "跨箱集中：打开储物箱时，按住 Ctrl 或 Shift 点击物品，会把同一资产的物品逐件转移到另一侧；目标空间不足时停止，不会丢弃物品。", 12, CheatMenuStyle.Muted);
 		GameObject gameObject4 = CreateRow(panel, 40f, 7f);
@@ -4315,7 +5059,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		CreateButton(gameObject4.transform, "整理全部随身", delegate
 		{
 			ShowInventoryArrangeResult(InventoryArrangeScope.AllCarried, InventoryArrangeAction.Arrange, preview: false);
-		}, 150f, 34f, CheatMenuStyle.Accent, 13, "整理所有随身页，不处理当前储物箱；默认保护装备和热键。");
+		}, 150f, 34f, CheatMenuStyle.Accent, 13, "整理所有随身页，不处理当前储物箱；默认保护装备并固定热键物品。");
 		GameObject gameObject5 = CreateRow(panel, 40f, 7f);
 		CreateButton(gameObject5.transform, "仅压缩", delegate
 		{
@@ -4442,6 +5186,125 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		_inventoryPresetTriggerButton = null;
 	}
 
+	private void ToggleInventoryScopeDrawer(Button trigger)
+	{
+		if (_inventoryScopeDrawerOpen)
+		{
+			HideInventoryScopeDrawer();
+			return;
+		}
+		_inventoryScopeDrawerOpen = true;
+		_inventoryScopeTriggerButton = trigger;
+		BuildInventoryScopeDrawer();
+	}
+
+	private void BuildInventoryScopeDrawer()
+	{
+		if (_inventoryScopeTriggerButton == null || _root == null)
+		{
+			return;
+		}
+		if (_inventoryScopeDrawerRoot != null)
+		{
+			QueueForDestroy(_inventoryScopeDrawerRoot);
+		}
+		_inventoryScopeDrawerRoot = CreateObject("InventoryScopeDrawer", _root.transform, typeof(Image));
+		_inventoryScopeDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Outline outline = _inventoryScopeDrawerRoot.AddComponent<Outline>();
+		outline.effectColor = CheatMenuStyle.InputBorder;
+		outline.effectDistance = Vector2.one;
+		outline.useGraphicAlpha = false;
+		_inventoryScopeDrawerPopup = _inventoryScopeDrawerRoot.GetComponent<RectTransform>();
+		_inventoryScopeDrawerPopup.anchorMin = new Vector2(0.5f, 0.5f);
+		_inventoryScopeDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f);
+		_inventoryScopeDrawerPopup.pivot = new Vector2(0.5f, 1f);
+		_inventoryScopeDrawerPopup.sizeDelta = new Vector2(248f, 218f);
+		VerticalLayoutGroup layout = _inventoryScopeDrawerRoot.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(8, 8, 8, 8);
+		layout.spacing = 4f;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+		Text title = CreateLabel(_inventoryScopeDrawerRoot.transform, "选择参与整理的随身页", 13, CheatMenuStyle.Text);
+		SetLayout(title.gameObject, -1f, 24f, 1f);
+		InventoryArrangeSettings settings = _plugin.GetInventoryArrangeSettings();
+		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "背包", settings.IncludeBackpackPage, delegate(bool value)
+		{
+			_plugin.SetInventoryArrangeIncludeBackpackPage(value);
+			SetStatus(value ? "背包页已纳入整理范围。" : "背包页已排除出整理范围。", 4f, StatusKind.Info);
+		}, "开启后整理背包储物页；关闭后该页物品和位置保持不变。");
+		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "背心", settings.IncludeVestPage, delegate(bool value)
+		{
+			_plugin.SetInventoryArrangeIncludeVestPage(value);
+			SetStatus(value ? "背心页已纳入整理范围。" : "背心页已排除出整理范围。", 4f, StatusKind.Info);
+		}, "开启后整理背心储物页；关闭后该页物品和位置保持不变。");
+		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "上衣", settings.IncludeShirtPage, delegate(bool value)
+		{
+			_plugin.SetInventoryArrangeIncludeShirtPage(value);
+			SetStatus(value ? "上衣页已纳入整理范围。" : "上衣页已排除出整理范围。", 4f, StatusKind.Info);
+		}, "开启后整理上衣储物页；关闭后该页物品和位置保持不变。");
+		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "裤子", settings.IncludePantsPage, delegate(bool value)
+		{
+			_plugin.SetInventoryArrangeIncludePantsPage(value);
+			SetStatus(value ? "裤子页已纳入整理范围。" : "裤子页已排除出整理范围。", 4f, StatusKind.Info);
+		}, "开启后整理裤子储物页；关闭后该页物品和位置保持不变。");
+		Canvas.ForceUpdateCanvases();
+		LayoutRebuilder.ForceRebuildLayoutImmediate(_inventoryScopeDrawerPopup);
+		_inventoryScopeDrawerRoot.transform.SetAsLastSibling();
+		PositionInventoryScopeDrawer();
+	}
+
+	private void MaintainInventoryScopeDrawer()
+	{
+		if (_inventoryScopeDrawerRoot != null)
+		{
+			PositionInventoryScopeDrawer();
+			if (Input.GetMouseButtonDown(0) && _inventoryScopeTriggerButton != null && _inventoryScopeDrawerPopup != null && !RectTransformUtility.RectangleContainsScreenPoint(_inventoryScopeDrawerPopup, Input.mousePosition, null) && !RectTransformUtility.RectangleContainsScreenPoint(_inventoryScopeTriggerButton.GetComponent<RectTransform>(), Input.mousePosition, null))
+			{
+				HideInventoryScopeDrawer();
+			}
+		}
+	}
+
+	private void PositionInventoryScopeDrawer()
+	{
+		if (_inventoryScopeTriggerButton != null && _inventoryScopeDrawerPopup != null && _root != null)
+		{
+			RectTransform trigger = _inventoryScopeTriggerButton.GetComponent<RectTransform>();
+			RectTransform root = _root.GetComponent<RectTransform>();
+			Vector3[] corners = new Vector3[4];
+			trigger.GetWorldCorners(corners);
+			Vector2 bottom = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
+			Vector2 top = RectTransformUtility.WorldToScreenPoint(null, corners[1]);
+			Vector2 rightTop = RectTransformUtility.WorldToScreenPoint(null, corners[2]);
+			RectTransformUtility.ScreenPointToLocalPointInRectangle(root, bottom, null, out var localBottom);
+			RectTransformUtility.ScreenPointToLocalPointInRectangle(root, top, null, out var localTop);
+			RectTransformUtility.ScreenPointToLocalPointInRectangle(root, rightTop, null, out var localRightTop);
+			Vector2 size = _inventoryScopeDrawerPopup.sizeDelta;
+			float centerX = (localBottom.x + localRightTop.x) * 0.5f;
+			bool placeBelow = localBottom.y - root.rect.yMin < size.y + 8f;
+			_inventoryScopeDrawerPopup.pivot = placeBelow ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f);
+			float minX = root.rect.xMin + size.x * 0.5f + 8f;
+			float maxX = root.rect.xMax - size.x * 0.5f - 8f;
+			float x = Mathf.Clamp(centerX, minX, maxX);
+			float y = placeBelow ? localTop.y : localBottom.y;
+			_inventoryScopeDrawerPopup.anchoredPosition = new Vector2(x, y);
+		}
+	}
+
+	private void HideInventoryScopeDrawer()
+	{
+		_inventoryScopeDrawerOpen = false;
+		if (_inventoryScopeDrawerRoot != null)
+		{
+			QueueForDestroy(_inventoryScopeDrawerRoot);
+		}
+		_inventoryScopeDrawerRoot = null;
+		_inventoryScopeDrawerPopup = null;
+		_inventoryScopeTriggerButton = null;
+	}
+
 	private static string InventoryPresetTooltip(InventorySortPreset preset)
 	{
 		return preset switch
@@ -4456,7 +5319,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			InventorySortPreset.Rarity => "按稀有度从神话、传奇、史诗、稀有、罕见到普通排列。",
 			InventorySortPreset.StackFill => "相同物品会自动合堆；兼容的半弹匣或弹药箱会重新分配成满的和空的。",
 			InventorySortPreset.Ammo => "剩余弹量多的弹匣或弹药箱排在前面；读不到弹量的物品不会乱改。",
-			InventorySortPreset.Hotkey => "绑定快捷栏的物品优先；开启保留热键时，绑定物品不会被移动。",
+			InventorySortPreset.Hotkey => "绑定快捷栏的物品优先；开启固定热键物品时，绑定物品不会被移动。",
 			InventorySortPreset.LowMovement => "尽量保持原来的页、位置和旋转，只做必要的整理。",
 			InventorySortPreset.Custom => "按下面输入框里的排序链执行，例如 Name:Descending,Area:Ascending。",
 			_ => "按安全的默认规则整理。",
@@ -4475,8 +5338,517 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		SetStatus(inventoryArrangeResult?.Message ?? "没有可撤销的整理记录。", 6f, (inventoryArrangeResult != null && inventoryArrangeResult.Success) ? StatusKind.Success : StatusKind.Warning);
 	}
 
+	private const int AutoPickupCardPageSize = 10;
+
+	private const int AutoPickupPickerPageSize = 15;
+
+	private void BuildAutoPickupPanel(Transform panel)
+	{
+		AutoPickupFeature feature = _plugin.AutoPickup;
+		if (feature == null)
+		{
+			CreateEmptyState(panel, "自动拾取不可用", "插件尚未完成自动拾取服务初始化。");
+			return;
+		}
+		List<ItemAsset> whitelistAssets = GetFilteredAutoPickupRuleAssets(feature.Rules, ItemFilterRuleAction.Allow);
+		List<ItemAsset> blacklistAssets = GetFilteredAutoPickupRuleAssets(feature.Rules, ItemFilterRuleAction.Deny);
+		int whitelistPageCount = Math.Max(1, Mathf.CeilToInt((float)whitelistAssets.Count / AutoPickupCardPageSize));
+		int blacklistPageCount = Math.Max(1, Mathf.CeilToInt((float)blacklistAssets.Count / AutoPickupCardPageSize));
+		int pageCount = 1 + whitelistPageCount + blacklistPageCount;
+		_autoPickupPage = Mathf.Clamp(_autoPickupPage, 0, pageCount - 1);
+		GameObject pager = CreateRow(panel, 0f, 8f);
+		SetLayout(pager, -1f, 510f, 1f, 0f);
+		GameObject pageBody = CreateObject("AutoPickupPageBody", pager.transform, typeof(Image));
+		pageBody.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+		AddVerticalLayout(pageBody, 8f, new RectOffset(14, 14, 12, 12));
+		SetLayout(pageBody, -1f, -1f, 1f, 1f);
+		AddPageScrollHandler(pageBody, _autoPickupPage, pageCount, delegate(int page)
+		{
+			_autoPickupPage = Mathf.Clamp(page, 0, pageCount - 1);
+			ShowTab(MenuTab.Tools);
+		});
+		pageBody.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+		CreateAutoPickupPageDots(pager.transform, _autoPickupPage, pageCount);
+		if (_autoPickupPage == 0)
+		{
+			BuildAutoPickupSettingsPage(pageBody.transform, feature);
+		}
+		else if (_autoPickupPage <= whitelistPageCount)
+		{
+			BuildAutoPickupRulePage(pageBody.transform, whitelistAssets, _autoPickupPage - 1, whitelistPageCount, ItemFilterRuleAction.Allow);
+		}
+		else
+		{
+			BuildAutoPickupRulePage(pageBody.transform, blacklistAssets, _autoPickupPage - 1 - whitelistPageCount, blacklistPageCount, ItemFilterRuleAction.Deny);
+		}
+	}
+
+	private void CreateAutoPickupPageDots(Transform parent, int page, int pageCount)
+	{
+		GameObject dots = CreateObject("AutoPickupPageDots", parent, typeof(Image));
+		dots.GetComponent<Image>().color = Color.clear;
+		SetLayout(dots, 26f, -1f, 0f, 1f);
+		VerticalLayoutGroup layout = dots.AddComponent<VerticalLayoutGroup>();
+		layout.spacing = 2f;
+		layout.childAlignment = TextAnchor.MiddleCenter;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = false;
+		layout.childForceExpandHeight = false;
+		float dotSize = Mathf.Clamp((480f - Math.Max(0, pageCount - 1) * layout.spacing) / pageCount, 8f, 18f);
+		int fontSize = dotSize >= 12f ? 12 : 8;
+		for (int i = 0; i < pageCount; i++)
+		{
+			Text dot = CreateText(dots.transform, "●", fontSize, i == page ? CheatMenuStyle.AccentBright : CheatMenuStyle.Muted, TextAnchor.MiddleCenter, FontStyle.Normal, localize: false);
+			SetLayout(dot.gameObject, dotSize, dotSize, 0f, 0f);
+		}
+	}
+
+	private void BuildAutoPickupSettingsPage(Transform page, AutoPickupFeature feature)
+	{
+		AutoPickupSettings settings = feature.Settings;
+		AutoPickupRuleDocument document = feature.Rules;
+		AutoPickupDiagnosticsSnapshot diagnostics = feature.Diagnostics;
+		CreateSummaryPanel(page, $"{PluginLocalization.Translate(diagnostics.State)}  ·  候选 {diagnostics.CandidateCount}  ·  成功 {diagnostics.PickedUpCount}  ·  失败 {diagnostics.FailureCount}  ·  重试 {diagnostics.RetryCount}");
+		GameObject switches = CreateRow(page, 40f, 7f);
+		CreateToggleAction(switches.transform, "启用自动拾取", settings.Enabled, delegate(bool value)
+		{
+			_plugin.SetAutoPickupEnabled(value);
+			SetStatus((_plugin.AutoPickup.Settings.Enabled == value) ? (value ? "自动拾取已启用；关闭菜单后开始扫描。" : "自动拾取已关闭。") : "只有进入真正的单人世界后才能启用自动拾取。", 5f, (_plugin.AutoPickup.Settings.Enabled == value) ? StatusKind.Info : StatusKind.Warning);
+		});
+		CreateToggleAction(switches.transform, "菜单打开时暂停", settings.PauseWhenMenuOpen, _plugin.SetAutoPickupPauseWhenMenuOpen);
+		CreateToggleAction(switches.transform, "死亡时暂停", settings.PauseWhenDead, _plugin.SetAutoPickupPauseWhenDead);
+		CreateAutoPickupSlider(page, "拾取距离", settings.Range, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange, "m", _autoPickupRangeDebouncer, _plugin.SetAutoPickupRange);
+		GameObject scheduling = CreateRow(page, 40f, 7f);
+		CreateAutoPickupSlider(scheduling.transform, "扫描频率", settings.FrequencyHz, AutoPickupSettings.MinFrequencyHz, AutoPickupSettings.MaxFrequencyHz, "Hz", _autoPickupFrequencyDebouncer, _plugin.SetAutoPickupFrequency);
+		GameObject dropBlockRow = CreateRow(page, 40f, 8f);
+		CreateLabel(dropBlockRow.transform, "丢弃后禁拾时长", 13, CheatMenuStyle.Text, 120f);
+		InputField dropBlockInput = CreateInput(dropBlockRow.transform, settings.DropBlockMinutes.ToString(CultureInfo.InvariantCulture), delegate(string value)
+		{
+			if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int minutes))
+			{
+				_plugin.SetAutoPickupDropBlockMinutes(minutes);
+			}
+			ShowTab(MenuTab.Tools);
+		}, 92f, 0f, false, true, "玩家丢弃某个物品后，暂时禁止自动拾取同 ID 物品；再次丢弃同 ID 会重新计时。范围 1-1440 分钟，默认 1 分钟。");
+		dropBlockInput.contentType = InputField.ContentType.IntegerNumber;
+		dropBlockInput.characterLimit = 4;
+		CreateLabel(dropBlockRow.transform, "分钟（1-1440）", 12, CheatMenuStyle.Muted, 110f);
+		GameObject qualityFilterRow = CreateRow(page, 40f, 8f);
+		CreateToggleAction(qualityFilterRow.transform, "启用品质过滤", settings.QualityFilterEnabled, _plugin.SetAutoPickupQualityFilterEnabled);
+		CreateLabel(qualityFilterRow.transform, "最低品质", 13, CheatMenuStyle.Text, 72f);
+		InputField qualityInput = CreateInput(qualityFilterRow.transform, settings.MinimumQuality.ToString(CultureInfo.InvariantCulture), delegate(string value)
+		{
+			if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int quality))
+			{
+				_plugin.SetAutoPickupMinimumQuality(quality);
+			}
+			ShowTab(MenuTab.Tools);
+		}, 72f, 0f, false, true, "启用后，自动拾取会忽略品质低于该数值的物品。范围 0-100。");
+		qualityInput.contentType = InputField.ContentType.IntegerNumber;
+		qualityInput.characterLimit = 3;
+		CreateLabel(qualityFilterRow.transform, "品质（0-100）", 12, CheatMenuStyle.Muted, 100f);
+		CreateButton(scheduling.transform, $"每轮 {settings.RequestsPerTick} 个请求", delegate
+		{
+			int value = settings.RequestsPerTick >= AutoPickupSettings.MaxRequestsPerTick ? AutoPickupSettings.MinRequestsPerTick : settings.RequestsPerTick + 1;
+			_plugin.SetAutoPickupRequestsPerTick(value);
+			ShowTab(MenuTab.Tools);
+		}, 150f, 36f, CheatMenuStyle.SurfaceHover, 12, "每次扫描最多发送的原生拾取请求数，范围 1-16。");
+		CreateButton(scheduling.transform, "诊断：" + AutoPickupDiagnosticsLabel(settings.Diagnostics), delegate
+		{
+			AutoPickupDiagnosticsLevel[] values = (AutoPickupDiagnosticsLevel[])Enum.GetValues(typeof(AutoPickupDiagnosticsLevel));
+			int next = (Array.IndexOf(values, settings.Diagnostics) + 1) % values.Length;
+			_plugin.SetAutoPickupDiagnostics(values[next]);
+			ShowTab(MenuTab.Tools);
+		}, 130f, 36f, CheatMenuStyle.SurfaceHover, 12);
+		int whitelistCount = document.Rules.Count(rule => rule.Enabled && rule.Action == ItemFilterRuleAction.Allow && rule.Field == ItemFilterRuleField.AssetId);
+		CreateSection(page, "白名单");
+		GameObject whitelistSummary = CreateRow(page, 38f, 8f);
+		CreateToggleAction(whitelistSummary.transform, "启用白名单", document.Enabled, delegate(bool value)
+		{
+			AutoPickupRuleLoadResult result = _plugin.SetAutoPickupWhitelistEnabled(value);
+			SetStatus(result.Success ? (value ? "白名单已启用；现在只拾取白名单物品。" : "白名单已停用；黑名单仍然生效。") : "保存白名单状态失败：" + result.Error, 4f, result.Success ? StatusKind.Info : StatusKind.Error);
+			ShowTab(MenuTab.Tools);
+		});
+		CreateLabel(whitelistSummary.transform, $"当前 {whitelistCount} 条白名单物品。", 12, CheatMenuStyle.Muted, 170f);
+		CreateButton(whitelistSummary.transform, "管理白名单", delegate
+		{
+			_autoPickupPage = 1;
+			ShowTab(MenuTab.Tools);
+		}, 110f, 34f, CheatMenuStyle.SurfaceHover, 12);
+		CreateButton(whitelistSummary.transform, "添加白名单", ShowAutoPickupWhitelistPicker, 110f, 34f, CheatMenuStyle.Success, 12);
+		CreateSection(page, "黑名单");
+		GameObject blacklistSummary = CreateRow(page, 38f, 8f);
+		int blacklistCount = document.Rules.Count(rule => rule.Enabled && rule.Action == ItemFilterRuleAction.Deny && rule.Field == ItemFilterRuleField.AssetId);
+		CreateLabel(blacklistSummary.transform, $"当前 {blacklistCount} 条黑名单物品；黑名单始终优先。", 12, CheatMenuStyle.Muted);
+		CreateFlexibleSpacer(blacklistSummary.transform);
+		CreateButton(blacklistSummary.transform, "管理黑名单", delegate
+		{
+			_autoPickupPage = GetAutoPickupRuleFirstPage(ItemFilterRuleAction.Deny);
+			ShowTab(MenuTab.Tools);
+		}, 110f, 34f, CheatMenuStyle.SurfaceHover, 12);
+		CreateButton(blacklistSummary.transform, "添加黑名单", ShowAutoPickupBlacklistPicker, 110f, 34f, CheatMenuStyle.Danger, 12);
+	}
+
+	private void BuildAutoPickupRulePage(Transform page, List<ItemAsset> assets, int cardPage, int pageCount, ItemFilterRuleAction ruleAction)
+	{
+		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
+		CreateSection(page, whitelist ? "白名单物品" : "黑名单物品");
+		GameObject header = CreateRow(page, 38f, 8f);
+		CreateLabel(header.transform, whitelist ? "点击物品卡片可取消白名单。" : "点击物品卡片可取消黑名单。", 12, CheatMenuStyle.Muted);
+		CreateFlexibleSpacer(header.transform);
+		CreateButton(header.transform, whitelist ? "添加白名单" : "添加黑名单", whitelist ? ShowAutoPickupWhitelistPicker : ShowAutoPickupBlacklistPicker, 110f, 34f, whitelist ? CheatMenuStyle.Success : CheatMenuStyle.Danger, 12);
+		GameObject searchRow = CreateRow(page, 36f, 7f);
+		CreateLabel(searchRow.transform, "搜索", 12, CheatMenuStyle.Muted, 42f);
+		CreateInput(searchRow.transform, _autoPickupRuleSearch, delegate(string value)
+		{
+			_autoPickupRuleSearch = value ?? string.Empty;
+			_autoPickupPage = GetAutoPickupRuleFirstPage(ruleAction);
+			_autoPickupRuleSearchDebouncer.Schedule(delegate
+			{
+				if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.AutoPickup && _autoPickupPage > 0)
+				{
+					ShowTab(MenuTab.Tools);
+				}
+			});
+		}, 0f, 1f);
+		CreateLabel(searchRow.transform, $"{assets.Count} 件  ·  第 {cardPage + 1}/{pageCount} 页", 11, CheatMenuStyle.Muted, 150f, TextAnchor.MiddleRight);
+		if (assets.Count == 0)
+		{
+			CreateEmptyState(page, whitelist ? "白名单为空" : "黑名单为空", whitelist ? "启用白名单并添加物品后，只会拾取白名单物品。" : "默认不限制物品；点击“添加黑名单”从当前背包选择物品。");
+			return;
+		}
+		GameObject grid = CreateObject("AutoPickupBlacklistGrid", page);
+		SetLayout(grid, -1f, 330f, 1f, 0f);
+		GridLayoutGroup layout = grid.AddComponent<GridLayoutGroup>();
+		layout.padding = new RectOffset(4, 4, 4, 4);
+		layout.spacing = new Vector2(8f, 8f);
+		layout.cellSize = new Vector2(155f, 158f);
+		layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+		layout.constraintCount = 5;
+		int start = cardPage * AutoPickupCardPageSize;
+		int end = Math.Min(start + AutoPickupCardPageSize, assets.Count);
+		for (int i = start; i < end; i++)
+		{
+			ItemAsset asset = assets[i];
+			CreateAutoPickupItemCard(grid.transform, asset, ruleAction, isListed: true, delegate { RemoveAutoPickupRule(ruleAction, asset.id); });
+		}
+	}
+
+	private string GetItemDisplayName(ItemAsset asset)
+	{
+		if (asset == null)
+		{
+			return string.Empty;
+		}
+		WorkshopLocalizationService localization = _plugin.WorkshopLocalization;
+		return localization != null && localization.TryGetTranslation(asset, WorkshopTextField.ItemName, out string translation) && !string.IsNullOrWhiteSpace(translation) ? translation : asset.FriendlyName;
+	}
+
+	private List<ItemAsset> GetAutoPickupRuleAssets(AutoPickupRuleDocument document, ItemFilterRuleAction ruleAction)
+	{
+		HashSet<ushort> ids = new HashSet<ushort>();
+		foreach (ItemFilterRule rule in document?.Rules ?? Enumerable.Empty<ItemFilterRule>())
+		{
+			if (rule.Enabled && rule.Action == ruleAction && rule.Field == ItemFilterRuleField.AssetId && ushort.TryParse(rule.Value, NumberStyles.None, CultureInfo.InvariantCulture, out ushort id))
+			{
+				ids.Add(id);
+			}
+		}
+		List<ItemAsset> assets = _plugin.Catalog.Items.Where(asset => asset != null && ids.Contains(asset.id)).ToList();
+		assets.Sort((left, right) => string.Compare(GetItemDisplayName(left), GetItemDisplayName(right), StringComparison.CurrentCultureIgnoreCase));
+		return assets;
+	}
+
+	private List<ItemAsset> GetFilteredAutoPickupRuleAssets(AutoPickupRuleDocument document, ItemFilterRuleAction ruleAction)
+	{
+		List<ItemAsset> assets = GetAutoPickupRuleAssets(document, ruleAction);
+		string query = (_autoPickupRuleSearch ?? string.Empty).Trim();
+		if (query.Length > 0)
+		{
+			assets = assets.Where(asset => AssetCatalog.Matches(asset, GetItemDisplayName(asset), query)).ToList();
+		}
+		return assets;
+	}
+
+	private HashSet<ushort> GetAutoPickupRuleIds(ItemFilterRuleAction ruleAction)
+	{
+		HashSet<ushort> ids = new HashSet<ushort>();
+		foreach (ItemFilterRule rule in _plugin.AutoPickup.Rules.Rules)
+		{
+			if (rule.Enabled && rule.Action == ruleAction && rule.Field == ItemFilterRuleField.AssetId && ushort.TryParse(rule.Value, NumberStyles.None, CultureInfo.InvariantCulture, out ushort id))
+			{
+				ids.Add(id);
+			}
+		}
+		return ids;
+	}
+
+	private int GetAutoPickupRuleFirstPage(ItemFilterRuleAction ruleAction)
+	{
+		if (ruleAction == ItemFilterRuleAction.Allow)
+		{
+			return 1;
+		}
+		int whitelistCount = GetFilteredAutoPickupRuleAssets(_plugin.AutoPickup.Rules, ItemFilterRuleAction.Allow).Count;
+		return 1 + Math.Max(1, Mathf.CeilToInt((float)whitelistCount / AutoPickupCardPageSize));
+	}
+
+	private List<ItemAsset> GetCurrentBackpackAssets()
+	{
+		List<ItemAsset> result = new List<ItemAsset>();
+		HashSet<ushort> seen = new HashSet<ushort>();
+		PlayerInventory inventory = Player.LocalPlayer?.inventory;
+		if (inventory?.items == null)
+		{
+			return result;
+		}
+		for (byte page = PlayerInventory.BACKPACK; page < PlayerInventory.STORAGE && page < inventory.items.Length; page++)
+		{
+			SDG.Unturned.Items items = inventory.items[page];
+			if (items == null)
+			{
+				continue;
+			}
+			for (byte index = 0; index < items.getItemCount(); index++)
+			{
+				ItemAsset asset = items.getItem(index)?.GetAsset();
+				if (asset != null && seen.Add(asset.id))
+				{
+					result.Add(asset);
+				}
+			}
+		}
+		result.Sort((left, right) => string.Compare(GetItemDisplayName(left), GetItemDisplayName(right), StringComparison.CurrentCultureIgnoreCase));
+		return result;
+	}
+
+	private void CreateAutoPickupItemCard(Transform parent, ItemAsset asset, ItemFilterRuleAction ruleAction, bool isListed, System.Action action)
+	{
+		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
+		string displayName = GetItemDisplayName(asset);
+		string tooltip = AssetHoverDetailsBuilder.BuildItem(asset, displayName, asset.itemDescription, _ammoCompatibilityIndex, _plugin.Catalog.Items);
+		Color color = !isListed ? CheatMenuStyle.Surface : (whitelist ? CheatMenuStyle.Success : CheatMenuStyle.Danger);
+		Button button = CreateButton(parent, string.Empty, action, 155f, 158f, color, tooltip: tooltip, delayTooltip: true);
+		string meta = whitelist
+			? (isListed ? $"ID {asset.id}  ·  点击取消白名单" : $"ID {asset.id}  ·  点击加入白名单")
+			: (isListed ? $"ID {asset.id}  ·  点击取消黑名单" : $"ID {asset.id}  ·  点击加入黑名单");
+		AddCardContents(button.transform, displayName, meta, () => _plugin.Icons.GetItemIcon(asset), isVehicle: false);
+	}
+
+	private void AddAutoPickupRule(ItemFilterRuleAction ruleAction, ItemAsset asset)
+	{
+		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
+		if (asset == null || GetAutoPickupRuleIds(ruleAction).Contains(asset.id))
+		{
+			SetStatus(whitelist ? "该物品已经在白名单中。" : "该物品已经在黑名单中。", 3f, StatusKind.Info);
+			return;
+		}
+		AutoPickupRuleDocument document = _plugin.AutoPickup.Rules;
+		List<ItemFilterRule> rules = document.Rules.Select(rule => rule.Clone()).ToList();
+		rules.Add(new ItemFilterRule
+		{
+			Action = ruleAction,
+			Field = ItemFilterRuleField.AssetId,
+			Value = asset.id.ToString(CultureInfo.InvariantCulture)
+		});
+		bool whitelistEnabled = whitelist || document.Enabled;
+		AutoPickupRuleLoadResult result = _plugin.SetAutoPickupRules(whitelistEnabled, whitelistEnabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly, rules);
+		string success = whitelist ? $"已将 {GetItemDisplayName(asset)} 加入白名单。" : $"已将 {GetItemDisplayName(asset)} 加入黑名单。";
+		string failure = (whitelist ? "保存白名单失败：" : "保存黑名单失败：") + result.Error;
+		SetStatus(result.Success ? success : failure, 4f, result.Success ? StatusKind.Success : StatusKind.Error);
+		if (result.Success)
+		{
+			RefreshAutoPickupPanel(ruleAction);
+		}
+	}
+
+	private void RemoveAutoPickupRule(ItemFilterRuleAction ruleAction, ushort assetId)
+	{
+		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
+		AutoPickupRuleDocument document = _plugin.AutoPickup.Rules;
+		List<ItemFilterRule> rules = document.Rules.Where(rule => !(rule.Action == ruleAction && rule.Field == ItemFilterRuleField.AssetId && string.Equals(rule.Value, assetId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))).Select(rule => rule.Clone()).ToList();
+		AutoPickupRuleLoadResult result = _plugin.SetAutoPickupRules(document.Enabled, document.Mode, rules);
+		string success = whitelist ? $"已取消物品 ID {assetId} 的白名单。" : $"已取消物品 ID {assetId} 的黑名单。";
+		string failure = (whitelist ? "保存白名单失败：" : "保存黑名单失败：") + result.Error;
+		SetStatus(result.Success ? success : failure, 4f, result.Success ? StatusKind.Success : StatusKind.Error);
+		if (result.Success)
+		{
+			RefreshAutoPickupPanel(ruleAction);
+		}
+	}
+
+	private void RefreshAutoPickupPanel(ItemFilterRuleAction ruleAction)
+	{
+		_autoPickupPage = GetAutoPickupRuleFirstPage(ruleAction);
+		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.AutoPickup)
+		{
+			ShowTab(MenuTab.Tools);
+		}
+	}
+
+	private void ShowAutoPickupWhitelistPicker()
+	{
+		ShowAutoPickupRulePicker(ItemFilterRuleAction.Allow);
+	}
+
+	private void ShowAutoPickupBlacklistPicker()
+	{
+		ShowAutoPickupRulePicker(ItemFilterRuleAction.Deny);
+	}
+
+	private void ShowAutoPickupRulePicker(ItemFilterRuleAction ruleAction)
+	{
+		_autoPickupPickerAction = ruleAction;
+		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
+		if (_autoPickupBlacklistPickerRoot != null)
+		{
+			_autoPickupBlacklistPickerRoot.SetActive(true);
+			BuildAutoPickupBlacklistPickerContents();
+			return;
+		}
+		HideHoverExplanation();
+		_autoPickupBlacklistPickerRoot = CreateObject("AutoPickupBlacklistPicker", _root.transform, typeof(Image));
+		_autoPickupBlacklistPickerRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.65f);
+		RectTransform rootRect = _autoPickupBlacklistPickerRoot.GetComponent<RectTransform>();
+		rootRect.anchorMin = Vector2.zero;
+		rootRect.anchorMax = Vector2.one;
+		rootRect.offsetMin = Vector2.zero;
+		rootRect.offsetMax = Vector2.zero;
+		GameObject popup = CreateObject("Popup", _autoPickupBlacklistPickerRoot.transform, typeof(Image));
+		popup.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		RectTransform popupRect = popup.GetComponent<RectTransform>();
+		popupRect.anchorMin = new Vector2(0.5f, 0.5f);
+		popupRect.anchorMax = new Vector2(0.5f, 0.5f);
+		popupRect.pivot = new Vector2(0.5f, 0.5f);
+		popupRect.sizeDelta = new Vector2(980f, 760f);
+		VerticalLayoutGroup layout = popup.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(18, 18, 16, 16);
+		layout.spacing = 8f;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+		GameObject header = CreateRow(popup.transform, 38f, 8f);
+		CreateLabel(header.transform, whitelist ? "从当前背包添加白名单" : "从当前背包添加黑名单", 18, CheatMenuStyle.Text);
+		CreateFlexibleSpacer(header.transform);
+		CreateButton(header.transform, "×", HideAutoPickupBlacklistPicker, 42f, 36f, CheatMenuStyle.Surface, 22);
+		CreateLabel(popup.transform, whitelist ? "物品按 ID 自动去重；点击卡片加入白名单，悬停卡片可查看完整物品详情。" : "物品按 ID 自动去重；点击卡片加入黑名单，悬停卡片可查看完整物品详情。", 12, CheatMenuStyle.Muted);
+		GameObject search = CreateRow(popup.transform, 36f, 7f);
+		CreateLabel(search.transform, "搜索", 12, CheatMenuStyle.Muted, 42f);
+		CreateInput(search.transform, _autoPickupBlacklistPickerSearch, delegate(string value)
+		{
+			_autoPickupBlacklistPickerSearch = value ?? string.Empty;
+			_autoPickupBlacklistPickerPage = 0;
+			BuildAutoPickupBlacklistPickerContents();
+		}, 0f, 1f);
+		_autoPickupBlacklistPickerHost = CreateObject("PickerHost", popup.transform, typeof(Image));
+		_autoPickupBlacklistPickerHost.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+		AddVerticalLayout(_autoPickupBlacklistPickerHost, 8f, new RectOffset(8, 8, 8, 8));
+		SetLayout(_autoPickupBlacklistPickerHost, -1f, 560f, 1f, 0f);
+		_autoPickupBlacklistPickerRoot.transform.SetAsLastSibling();
+		BuildAutoPickupBlacklistPickerContents();
+	}
+
+	private void BuildAutoPickupBlacklistPickerContents()
+	{
+		if (_autoPickupBlacklistPickerHost == null || _plugin.AutoPickup == null)
+		{
+			return;
+		}
+		for (int i = _autoPickupBlacklistPickerHost.transform.childCount - 1; i >= 0; i--)
+		{
+			GameObject child = _autoPickupBlacklistPickerHost.transform.GetChild(i).gameObject;
+			child.SetActive(false);
+			QueueForDestroy(child);
+		}
+		List<ItemAsset> assets = GetCurrentBackpackAssets();
+		ItemFilterRuleAction ruleAction = _autoPickupPickerAction;
+		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
+		string query = (_autoPickupBlacklistPickerSearch ?? string.Empty).Trim();
+		if (query.Length > 0)
+		{
+			assets = assets.Where(asset => AssetCatalog.Matches(asset, GetItemDisplayName(asset), query)).ToList();
+		}
+		int pageCount = Math.Max(1, Mathf.CeilToInt((float)assets.Count / AutoPickupPickerPageSize));
+		_autoPickupBlacklistPickerPage = Mathf.Clamp(_autoPickupBlacklistPickerPage, 0, pageCount - 1);
+		GameObject header = CreateRow(_autoPickupBlacklistPickerHost.transform, 30f, 6f);
+		CreateLabel(header.transform, $"当前背包去重后 {assets.Count} 件  ·  第 {_autoPickupBlacklistPickerPage + 1}/{pageCount} 页", 11, CheatMenuStyle.Muted);
+		if (assets.Count == 0)
+		{
+			CreateEmptyState(_autoPickupBlacklistPickerHost.transform, "当前背包没有匹配物品。", "请先进入单人世界并确认物品在随身背包中。");
+			return;
+		}
+		GameObject grid = CreateObject("PickerGrid", _autoPickupBlacklistPickerHost.transform);
+		SetLayout(grid, -1f, 500f, 1f, 0f);
+		GridLayoutGroup layout = grid.AddComponent<GridLayoutGroup>();
+		layout.padding = new RectOffset(4, 4, 4, 4);
+		layout.spacing = new Vector2(8f, 8f);
+		layout.cellSize = new Vector2(155f, 158f);
+		layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+		layout.constraintCount = 5;
+		AddPageScrollHandler(grid, _autoPickupBlacklistPickerPage, pageCount, delegate(int value)
+		{
+			_autoPickupBlacklistPickerPage = value;
+			BuildAutoPickupBlacklistPickerContents();
+		});
+		HashSet<ushort> listedIds = GetAutoPickupRuleIds(ruleAction);
+		int start = _autoPickupBlacklistPickerPage * AutoPickupPickerPageSize;
+		int end = Math.Min(start + AutoPickupPickerPageSize, assets.Count);
+		for (int i = start; i < end; i++)
+		{
+			ItemAsset asset = assets[i];
+			bool isListed = listedIds.Contains(asset.id);
+			CreateAutoPickupItemCard(grid.transform, asset, ruleAction, isListed, isListed ? delegate { SetStatus(whitelist ? "该物品已经在白名单中。" : "该物品已经在黑名单中。", 3f, StatusKind.Info); } : delegate { AddAutoPickupRule(ruleAction, asset); });
+		}
+	}
+
+	private void HideAutoPickupBlacklistPicker()
+	{
+		if (_autoPickupBlacklistPickerRoot != null)
+		{
+			QueueForDestroy(_autoPickupBlacklistPickerRoot);
+		}
+		_autoPickupBlacklistPickerRoot = null;
+		_autoPickupBlacklistPickerHost = null;
+	}
+
+
+	private void CreateAutoPickupSlider(Transform parent, string label, float value, float min, float max, string suffix, UiDebouncer debouncer, Action<float> changed)
+	{
+		GameObject row = CreateRow(parent, 40f, 8f);
+		CreateLabel(row.transform, label, 13, CheatMenuStyle.Text, 92f);
+		Text valueText = CreateText(row.transform, $"{value:0}{suffix}", 12, CheatMenuStyle.Muted, TextAnchor.MiddleRight, FontStyle.Normal, localize: false);
+		SetLayout(valueText.gameObject, 68f, 30f);
+		SetLayout(CreateTimeSlider(row.transform, Mathf.InverseLerp(min, max, value), delegate(float normalized)
+		{
+			float selected = Mathf.Clamp(Mathf.Round(Mathf.Lerp(min, max, Mathf.Clamp01(normalized))), min, max);
+			valueText.text = $"{selected:0}{suffix}";
+			debouncer.Schedule(delegate { changed(selected); });
+		}).gameObject, -1f, -1f, 1f);
+	}
+
+
+	private static string AutoPickupDiagnosticsLabel(AutoPickupDiagnosticsLevel level)
+	{
+		return level switch
+		{
+			AutoPickupDiagnosticsLevel.Off => "关闭",
+			AutoPickupDiagnosticsLevel.Failures => "失败",
+			AutoPickupDiagnosticsLevel.Summary => "摘要",
+			_ => "逐项"
+		};
+	}
+
 	private void BuildPointToolPanel(Transform panel)
 	{
+		GameObject creatureHealthRow = CreateRow(panel, 40f, 7f);
+		CreateToggleAction(creatureHealthRow.transform, "生物头顶血条", _plugin.CreatureHealthBarEnabled, delegate(bool value)
+		{
+			_plugin.SetCreatureHealthBarEnabled(value);
+			SetStatus(value ? "生物头顶血条已开启。" : "生物头顶血条已关闭。", 5f, StatusKind.Info);
+		});
+		CreateLabel(panel, "准心目标或实际受伤后的生物会显示当前生命 / 生命上限。", 12, CheatMenuStyle.Muted);
 		GameObject gameObject = CreateRow(panel, 40f, 7f);
 		CreateToggleAction(gameObject.transform, "启用准星交互工具", _plugin.PointTool.Enabled, delegate(bool value)
 		{
@@ -4665,6 +6037,17 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void BuildMovementPanel(Transform panel)
 	{
+		GameObject modeRow = CreateRow(panel, 40f, 8f);
+		CreateLabel(modeRow.transform, $"飞行模式：{_plugin.Movement.Mode.ToDisplayName()}", 13, CheatMenuStyle.Text);
+		CreateFlexibleSpacer(modeRow.transform);
+		CreateButton(modeRow.transform, "⇆", delegate
+		{
+			FlightMode nextMode = _plugin.Movement.Mode == FlightMode.WorldAxis ? FlightMode.ViewDirection : FlightMode.WorldAxis;
+			_plugin.SetFlightMode(nextMode);
+			SetStatus($"飞行模式已切换为 {nextMode.ToDisplayName()}。", 5f, StatusKind.Info);
+			ReplaceContentHost();
+			BuildToolsTab();
+		}, 44f, 36f, CheatMenuStyle.Accent, 18, "切换飞行模式：在世界轴与视角指向之间切换。", delayTooltip: false);
 		GameObject gameObject = CreateRow(panel, 42f, 8f);
 		CreateToggleAction(gameObject.transform, "飞行", _plugin.Movement.FlightEnabled, delegate(bool value)
 		{

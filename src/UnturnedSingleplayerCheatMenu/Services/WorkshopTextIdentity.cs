@@ -10,6 +10,8 @@ internal static class WorkshopTextIdentity
 {
 	internal const int SchemaVersion = 1;
 
+	internal const int AssetScopedSchemaVersion = 2;
+
 	internal static string NormalizeSource(string source)
 	{
 		if (string.IsNullOrEmpty(source))
@@ -23,6 +25,13 @@ internal static class WorkshopTextIdentity
 	internal static string CreateKey(string sourceLanguage, string targetLanguage, WorkshopTextField field, string source)
 	{
 		string s = string.Join("\n", 1.ToString(CultureInfo.InvariantCulture), sourceLanguage ?? string.Empty, targetLanguage ?? string.Empty, field.ToString(), NormalizeSource(source));
+		using SHA256 sHA = SHA256.Create();
+		return BitConverter.ToString(sHA.ComputeHash(Encoding.UTF8.GetBytes(s))).Replace("-", string.Empty).ToLowerInvariant();
+	}
+
+	internal static string CreateAssetKey(string sourceLanguage, string targetLanguage, WorkshopTextField field, string assetType, string assetGuid, string localizationKey, string source)
+	{
+		string s = string.Join("\n", AssetScopedSchemaVersion.ToString(CultureInfo.InvariantCulture), sourceLanguage ?? string.Empty, targetLanguage ?? string.Empty, field.ToString(), assetType ?? string.Empty, assetGuid ?? string.Empty, localizationKey ?? string.Empty, NormalizeSource(source));
 		using SHA256 sHA = SHA256.Create();
 		return BitConverter.ToString(sHA.ComputeHash(Encoding.UTF8.GetBytes(s))).Replace("-", string.Empty).ToLowerInvariant();
 	}

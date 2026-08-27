@@ -18,9 +18,10 @@ internal sealed class NativeShortcutDetector
 		bool flag2 = (state & 1) != 0;
 		if (_trackedMainKey != mainKey)
 		{
+			bool pressed = (flag2 || (flag && !_wasMainKeyDown)) && shortcut.Modifiers.All(NativeKeyboard.IsDown);
 			_trackedMainKey = mainKey;
 			_wasMainKeyDown = flag;
-			return false;
+			return pressed;
 		}
 		bool result = (flag2 || (flag && !_wasMainKeyDown)) && shortcut.Modifiers.All(NativeKeyboard.IsDown);
 		_wasMainKeyDown = flag;

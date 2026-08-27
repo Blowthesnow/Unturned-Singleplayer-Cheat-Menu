@@ -29,6 +29,8 @@ internal sealed class MovementCheatService
 
 	internal bool NoclipEnabled { get; private set; }
 
+	internal FlightMode Mode { get; private set; } = FlightMode.WorldAxis;
+
 	internal float FlightSpeed { get; set; } = 3f;
 
 	internal float VerticalSpeed { get; set; } = 2f;
@@ -47,6 +49,20 @@ internal sealed class MovementCheatService
 	internal void SetSimulationResimulating(bool value)
 	{
 		_isResimulating = value;
+	}
+
+	internal void SetFlightMode(FlightMode mode)
+	{
+		if (!Enum.IsDefined(typeof(FlightMode), mode))
+		{
+			mode = FlightMode.WorldAxis;
+		}
+		if (Mode == mode)
+		{
+			return;
+		}
+		Mode = mode;
+		_log.LogInfo($"[Movement] 飞行模式已切换为 {Mode.ToDisplayName()}。" );
 	}
 
 	internal void SetFlight(bool enabled)
@@ -173,6 +189,14 @@ internal sealed class MovementCheatService
 				}
 			}
 		}
+		else if (Mode == FlightMode.ViewDirection && !(movement.controller == null) && movement.controller.enabled && !IsMovementInputBlocked())
+		{
+			Vector3 velocity = GetViewDirectionVelocity(localPlayer);
+			if (velocity.sqrMagnitude > 0.0001f)
+			{
+				movement.controller.Move(velocity * Mathf.Max(deltaTime, 0.001f));
+			}
+		}
 		else if (!(movement.controller == null) && movement.controller.enabled && !IsMovementInputBlocked())
 		{
 			float verticalInput2 = GetVerticalInput();
@@ -220,7 +244,9 @@ internal sealed class MovementCheatService
 			{
 				movement.sendPluginGravityMultiplier(0f);
 			}
-			float num = MovementSpeedProfile.NormalizeMultiplier(FlightSpeed);
+			// View-direction flight supplies its own complete velocity; disable native
+			// horizontal movement to avoid moving twice during the same simulation tick.
+			float num = (Mode == FlightMode.ViewDirection) ? 0f : MovementSpeedProfile.NormalizeMultiplier(FlightSpeed);
 			if (!Mathf.Approximately(movement.pluginSpeedMultiplier, num))
 			{
 				movement.sendPluginSpeedMultiplier(num);
@@ -300,6 +326,33 @@ internal sealed class MovementCheatService
 			result.Normalize();
 		}
 		return result;
+	}
+
+	private Vector3 GetViewDirectionVelocity(Player player)
+	{
+		Vector3 forward = player.look?.aim?.forward ?? player.transform.forward;
+		if (forward.sqrMagnitude < 0.001f)
+		{
+			forward = player.transform.forward;
+		}
+		forward.Normalize();
+		Vector3 horizontalForward = new Vector3(forward.x, 0f, forward.z);
+		if (horizontalForward.sqrMagnitude < 0.001f)
+		{
+			horizontalForward = player.transform.forward;
+			horizontalForward.y = 0f;
+		}
+		horizontalForward.Normalize();
+		Vector3 right = Vector3.Cross(Vector3.up, horizontalForward).normalized;
+		float forwardInput = (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f);
+		float strafeInput = (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f);
+		float verticalInput = GetVerticalInput();
+		Vector3 horizontal = (verticalInput != 0f ? horizontalForward : forward) * forwardInput + right * strafeInput;
+		if (horizontal.sqrMagnitude > 1f)
+		{
+			horizontal.Normalize();
+		}
+		return horizontal * HorizontalMetersPerSecond + Vector3.up * (verticalInput * VerticalMetersPerSecond);
 	}
 
 	private static float GetVerticalInput()

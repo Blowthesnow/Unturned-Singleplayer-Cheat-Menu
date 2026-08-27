@@ -26,6 +26,10 @@ internal sealed class WorkshopTranslationCacheEntry
 
 	public string ActionKey { get; set; }
 
+	public string AssetType { get; set; }
+
+	public string LocalizationKey { get; set; }
+
 	public string ApiProtocol { get; set; }
 
 	public string Provider { get; set; }

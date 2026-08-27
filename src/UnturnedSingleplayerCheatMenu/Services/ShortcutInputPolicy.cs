@@ -34,6 +34,10 @@ internal static class ShortcutInputPolicy
 
 	internal static bool IsAllowedShortcut(KeyboardShortcut shortcut)
 	{
+		if (shortcut.MainKey == KeyCode.None)
+		{
+			return true;
+		}
 		if (shortcut.MainKey != KeyCode.None && shortcut.MainKey != KeyCode.Mouse0 && shortcut.MainKey != KeyCode.Mouse1)
 		{
 			if (!IsKeyboardKey(shortcut.MainKey))
@@ -67,19 +71,6 @@ internal static class ShortcutInputPolicy
 		if (Input.GetKeyDown(shortcut.MainKey))
 		{
 			return shortcut.Modifiers.All(Input.GetKey);
-		}
-		return false;
-	}
-
-	internal static bool IsGuiEvent(Event current, KeyboardShortcut shortcut)
-	{
-		if (current == null || current.type != EventType.KeyDown || !IsAllowedShortcut(shortcut) || GetMouseButtonIndex(shortcut.MainKey) >= 0)
-		{
-			return false;
-		}
-		if (current.keyCode == shortcut.MainKey)
-		{
-			return shortcut.Modifiers.All((KeyCode modifier) => IsModifierPressed(current, modifier));
 		}
 		return false;
 	}
@@ -118,24 +109,4 @@ internal static class ShortcutInputPolicy
 		return false;
 	}
 
-	private static bool IsModifierPressed(Event current, KeyCode modifier)
-	{
-		switch (modifier)
-		{
-		case KeyCode.RightShift:
-		case KeyCode.LeftShift:
-			return current.shift;
-		case KeyCode.RightControl:
-		case KeyCode.LeftControl:
-			return current.control;
-		case KeyCode.RightAlt:
-		case KeyCode.LeftAlt:
-			return current.alt;
-		case KeyCode.RightMeta:
-		case KeyCode.LeftMeta:
-			return current.command;
-		default:
-			return Input.GetKey(modifier);
-		}
-	}
 }

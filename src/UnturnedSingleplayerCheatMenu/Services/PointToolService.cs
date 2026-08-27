@@ -179,7 +179,7 @@ internal sealed class PointToolService
 		}
 	}
 
-	private static bool IsInteractionPaused()
+	internal static bool IsInteractionPaused()
 	{
 		CheatMenuPlugin instance = CheatMenuPlugin.Instance;
 		if ((object)instance == null || !instance.IsMenuOpen)
@@ -1242,7 +1242,6 @@ internal sealed class PointToolService
 		object value = target.Value;
 		if (!(value is InteractableVehicle vehicle))
 		{
-			ushort index2;
 			if (!(value is BarricadeDrop barricadeDrop))
 			{
 				if (!(value is StructureDrop structureDrop))
@@ -1268,18 +1267,20 @@ internal sealed class PointToolService
 					}
 					return false;
 				}
-				if (!StructureManager.tryGetInfo(structureDrop.model, out var x2, out var y2, out index2, out var _))
+				StructureDrop resolvedStructureDrop = StructureManager.FindStructureByRootTransform(structureDrop.model);
+				if (resolvedStructureDrop == null || !StructureManager.tryGetRegion(resolvedStructureDrop.model, out var x2, out var y2, out var _))
 				{
 					return false;
 				}
-				StructureManager.destroyStructure(structureDrop, x2, y2, Vector3.zero, wasPickedUp: false);
+				StructureManager.destroyStructure(resolvedStructureDrop, x2, y2, Vector3.zero, wasPickedUp: false);
 				return true;
 			}
-			if (!BarricadeManager.tryGetInfo(barricadeDrop.model, out var x3, out var y3, out var plant, out index2, out var _))
+			BarricadeDrop resolvedBarricadeDrop = BarricadeManager.FindBarricadeByRootTransform(barricadeDrop.model);
+			if (resolvedBarricadeDrop == null || !BarricadeManager.tryGetRegion(resolvedBarricadeDrop.model, out var x3, out var y3, out var plant, out var _))
 			{
 				return false;
 			}
-			BarricadeManager.destroyBarricade(barricadeDrop, x3, y3, plant);
+			BarricadeManager.destroyBarricade(resolvedBarricadeDrop, x3, y3, plant);
 			return true;
 		}
 		return DeleteVehicle(vehicle);

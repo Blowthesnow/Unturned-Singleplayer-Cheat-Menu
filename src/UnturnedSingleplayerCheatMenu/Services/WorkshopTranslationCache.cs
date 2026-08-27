@@ -130,7 +130,7 @@ internal sealed class WorkshopTranslationCache
 		{
 			value = new WorkshopTranslationCacheDocument
 			{
-				SchemaVersion = 1,
+				SchemaVersion = WorkshopTextIdentity.AssetScopedSchemaVersion,
 				SourceLanguage = sourceLanguage,
 				TargetLanguage = targetLanguage,
 				Entries = _entries.Values.Select(Clone).OrderBy<WorkshopTranslationCacheEntry, string>((WorkshopTranslationCacheEntry entry) => entry.Key, StringComparer.Ordinal).ToList()
@@ -239,6 +239,8 @@ internal sealed class WorkshopTranslationCache
 			AssetGuid = source.AssetGuid,
 			LegacyId = source.LegacyId,
 			ActionKey = source.ActionKey,
+			AssetType = source.AssetType,
+			LocalizationKey = source.LocalizationKey,
 			ApiProtocol = source.ApiProtocol,
 			Provider = source.Provider,
 			Model = source.Model,

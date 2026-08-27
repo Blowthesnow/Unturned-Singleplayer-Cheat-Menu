@@ -329,6 +329,10 @@ internal sealed class InventoryArrangePlanner
 
 	private static string MergeKey(InventoryArrangeItem item)
 	{
+		if (item.IsHotkeyBound)
+		{
+			return "hotkey|" + item.ItemKey;
+		}
 		if (!item.IsAmmoContainer)
 		{
 			return item.AssetGuid + "|" + item.Quality + "|" + item.StateHash + "|" + item.MaxAmount;

@@ -28,9 +28,9 @@ public sealed class PluginRuntimeHost : MonoBehaviour
 		_plugin?.RunUpdateCallback("独立 RuntimeHost.Update");
 	}
 
-	public void OnGUI()
+	public void LateUpdate()
 	{
-		_plugin?.RunGuiCallback("独立 RuntimeHost.OnGUI");
+		_plugin?.RunLateUpdateCallback();
 	}
 
 	private void OnDestroy()

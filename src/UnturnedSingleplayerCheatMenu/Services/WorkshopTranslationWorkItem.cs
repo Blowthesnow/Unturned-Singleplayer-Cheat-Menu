@@ -18,7 +18,13 @@ internal sealed class WorkshopTranslationWorkItem
 
 	internal string ActionKey { get; }
 
-	internal WorkshopTranslationWorkItem(string key, WorkshopTextField field, string sourceText, string assetName, string assetGuid, ushort legacyId, string actionKey)
+	internal string AssetType { get; }
+
+	internal string LocalizationKey { get; }
+
+	internal int SchemaVersion { get; }
+
+	internal WorkshopTranslationWorkItem(string key, WorkshopTextField field, string sourceText, string assetName, string assetGuid, ushort legacyId, string actionKey, string assetType, string localizationKey, int schemaVersion)
 	{
 		Key = key;
 		Field = field;
@@ -27,5 +33,8 @@ internal sealed class WorkshopTranslationWorkItem
 		AssetGuid = assetGuid;
 		LegacyId = legacyId;
 		ActionKey = actionKey;
+		AssetType = assetType;
+		LocalizationKey = localizationKey;
+		SchemaVersion = schemaVersion;
 	}
 }

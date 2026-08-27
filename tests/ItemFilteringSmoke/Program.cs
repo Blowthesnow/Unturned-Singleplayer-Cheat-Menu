@@ -1,4 +1,5 @@
 using SDG.Unturned;
+using System.Reflection;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Services;
 
@@ -7,6 +8,32 @@ static void Check(bool condition, string message)
     if (!condition)
         throw new InvalidOperationException(message);
 }
+
+FieldInfo assetOriginField = typeof(Asset).GetField("origin", BindingFlags.Instance | BindingFlags.NonPublic)
+    ?? throw new InvalidOperationException("Asset.origin was not found.");
+FieldInfo coreOriginField = typeof(Assets).GetField("coreOrigin", BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new InvalidOperationException("Assets.coreOrigin was not found.");
+FieldInfo legacyOfficialOriginField = typeof(Assets).GetField("legacyOfficialOrigin", BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new InvalidOperationException("Assets.legacyOfficialOrigin was not found.");
+ItemAsset originTestAsset = new();
+AssetOrigin coreOrigin = new() { name = "Vanilla Built-in Assets" };
+AssetOrigin legacyOfficialOrigin = new() { name = "Official (Legacy)" };
+AssetOrigin workshopOrigin = new() { name = "Workshop File (123)", workshopFileId = 123UL };
+AssetOrigin otherOrigin = new() { name = "Map Test" };
+coreOriginField.SetValue(null, coreOrigin);
+legacyOfficialOriginField.SetValue(null, legacyOfficialOrigin);
+
+assetOriginField.SetValue(originTestAsset, coreOrigin);
+Check(AssetOriginClassifier.IsOfficial(originTestAsset), "Core origin should classify as official.");
+Check(!AssetOriginClassifier.IsWorkshop(originTestAsset), "Core origin should not classify as workshop.");
+assetOriginField.SetValue(originTestAsset, legacyOfficialOrigin);
+Check(AssetOriginClassifier.IsOfficial(originTestAsset), "Legacy official origin should classify as official.");
+assetOriginField.SetValue(originTestAsset, workshopOrigin);
+Check(AssetOriginClassifier.IsWorkshop(originTestAsset), "Non-zero workshop file ID should classify as workshop.");
+Check(!AssetOriginClassifier.IsOfficial(originTestAsset), "Workshop origin should not classify as official.");
+assetOriginField.SetValue(originTestAsset, otherOrigin);
+Check(!AssetOriginClassifier.IsOfficial(originTestAsset) && !AssetOriginClassifier.IsWorkshop(originTestAsset),
+    "Map or miscellaneous origin should remain outside official and workshop.");
 
 ItemFilterSnapshot gun = new(
     ItemPrimaryCategory.Weapons,

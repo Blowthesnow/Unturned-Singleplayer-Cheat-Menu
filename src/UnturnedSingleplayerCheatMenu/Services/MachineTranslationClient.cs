@@ -622,7 +622,7 @@ internal sealed class MachineTranslationClient : IWorkshopTranslationClient, IDi
 		object obj = jToken.SelectToken("translation")?.Value<string>();
 		if (obj == null)
 		{
-			JToken? jToken2 = jToken.SelectToken("translation[0]");
+			JToken jToken2 = jToken.SelectToken("translation[0]");
 			if (jToken2 == null)
 			{
 				return null;

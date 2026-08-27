@@ -13,6 +13,7 @@
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\GunFireModeFilter.cs" Link="GunFireModeFilter.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\ItemOriginFilter.cs" Link="ItemOriginFilter.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\ItemPrimaryCategory.cs" Link="ItemPrimaryCategory.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\AssetOriginClassifier.cs" Link="AssetOriginClassifier.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\ItemFilterService.cs" Link="ItemFilterService.cs" />
     <Reference Include="Assembly-CSharp" HintPath="I:\Steam\steamapps\common\Unturned\Unturned_Data\Managed\Assembly-CSharp.dll" Private="true" />
     <Reference Include="UnturnedDat" HintPath="I:\Steam\steamapps\common\Unturned\Unturned_Data\Managed\UnturnedDat.dll" Private="true" />

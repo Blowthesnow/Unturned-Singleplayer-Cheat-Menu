@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-08-27 (source push; unreleased)
+
+### Added
+
+- Added guarded automatic pickup with configurable range, scheduling, request limits, quality filtering, pause gates, diagnostics, and persisted whitelist/blacklist rules.
+- Added persistent infinite storage with an independent UI, quantity/state-aware item semantics, bulk transfer, and crafting material/output overflow support.
+- Added creature health-bar HUD, item/vehicle hover details, ammo compatibility details, view-direction flight, and expanded global shortcut actions.
+- Added Smoke coverage for metadata, automatic pickup, infinite storage, creature health bars, flight mode, inventory planning, and hover details.
+
+### Improved
+
+- Inventory arrange now supports per-container page scope and keeps hotkey-bound item coordinates synchronized through apply, rollback, and exception recovery.
+- Workshop and vanilla localization now tracks fields independently and uses asset-scoped cache identity (asset type, GUID, localization key, and schema version).
+- Expanded NPC dialogue, quest, object interaction, and vendor text handling while preserving rich-text and dialogue placeholders.
+
+### Fixed
+
+- Prevented localized fields from being skipped or overwritten when another field on the same asset already contains Chinese text.
+- Added conservative handling for ambiguous legacy infinite-storage entries so stateful items are not silently merged or split.
+
+### Verification
+
+- Release build passes with zero warnings and zero errors across the plugin and 15 Smoke projects.
+- This entry documents a source-only push. No tag, release package, or GitHub Release was created; complete live-game acceptance remains separate and was not rerun in this source update.
+
 ## [1.7.0] - 2026-08-21
 
 ### Added

@@ -5,10 +5,13 @@ using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 using HarmonyLib;
 using SDG.Unturned;
 using UnityEngine;
+using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Patches;
 using UnturnedSingleplayerCheatMenu.Services;
@@ -16,7 +19,7 @@ using UnturnedSingleplayerCheatMenu.UI;
 
 namespace UnturnedSingleplayerCheatMenu;
 
-[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.7.0")]
+[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.9.0")]
 [BepInProcess("Unturned.exe")]
 public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
@@ -24,7 +27,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
-	public const string PluginVersion = "1.7.0";
+	public const string PluginVersion = "1.9.0";
 
 	private Harmony _harmony;
 
@@ -32,9 +35,47 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private ConfigEntry<KeyboardShortcut> _toggleShortcut;
 
+	private ConfigEntry<KeyboardShortcut> _infiniteStorageShortcut;
+
 	private ConfigEntry<KeyboardShortcut> _arrangeCurrentShortcut;
 
 	private ConfigEntry<KeyboardShortcut> _arrangeAllCarriedShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleGodModeShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleInfiniteNeedsShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _restoreEverythingShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _refillNeedsShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleFlightShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleNoclipShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _togglePointToolEnabledShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _nextPointToolModeShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleCreatureHealthBarsShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleAutoPickupShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleInfiniteStorageEnabledShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleFreezeTimeShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _setDayShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _setNightShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleFullMoonShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _clearWeatherShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _disableWeatherShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _callAirdropShortcut;
 
 	private ConfigEntry<string> _inventoryArrangeCustomKeys;
 
@@ -44,9 +85,17 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private ConfigEntry<bool> _inventoryArrangeCrossPage;
 
+	private ConfigEntry<bool> _inventoryArrangeIncludeBackpackPage;
+
+	private ConfigEntry<bool> _inventoryArrangeIncludeVestPage;
+
+	private ConfigEntry<bool> _inventoryArrangeIncludeShirtPage;
+
+	private ConfigEntry<bool> _inventoryArrangeIncludePantsPage;
+
 	private ConfigEntry<bool> _inventoryArrangeProtectEquipped;
 
-	private ConfigEntry<bool> _inventoryArrangePreserveHotkeys;
+	private ConfigEntry<bool> _inventoryArrangeFixHotkeyItems;
 
 	private ConfigEntry<float> _uiScale;
 
@@ -74,9 +123,43 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private ConfigEntry<bool> _pointToolShowHud;
 
+	private ConfigEntry<bool> _creatureHealthBarEnabled;
+
+	private ConfigEntry<bool> _autoPickupEnabled;
+	private ConfigEntry<bool> _infiniteStorageEnabled;
+	private ConfigEntry<bool> _infiniteStoragePickupPriority;
+
+	private ConfigEntry<float> _autoPickupRange;
+
+	private ConfigEntry<float> _autoPickupLegacyScanRadius;
+
+	private ConfigEntry<float> _autoPickupLegacyRequestRange;
+
+	private ConfigEntry<float> _autoPickupFrequencyHz;
+
+	private ConfigEntry<int> _autoPickupRequestsPerTick;
+
+	private ConfigEntry<int> _autoPickupDropBlockMinutes;
+
+	private ConfigEntry<bool> _autoPickupQualityFilterEnabled;
+
+	private ConfigEntry<int> _autoPickupMinimumQuality;
+
+	private ConfigEntry<string> _autoPickupFilterMode;
+
+	private ConfigEntry<string> _autoPickupRulesPath;
+
+	private ConfigEntry<bool> _autoPickupPauseWhenMenuOpen;
+
+	private ConfigEntry<bool> _autoPickupPauseWhenDead;
+
+	private ConfigEntry<string> _autoPickupDiagnostics;
+
 	private ConfigEntry<float> _flightSpeed;
 
 	private ConfigEntry<float> _flightVerticalSpeed;
+
+	private ConfigEntry<string> _flightMode;
 
 	private ConfigEntry<bool> _noclipSafeExit;
 
@@ -122,6 +205,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private PointToolHud _pointToolHud;
 
+	private CreatureHealthBarHud _creatureHealthBarHud;
+
 	private GlobalShortcutManager _shortcutManager;
 
 	private float _nextMaintenanceTime;
@@ -130,15 +215,13 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private int _lastWorkshopSnapshotVersion = -1;
 
-	private int _lastGuiCallbackFrame = -1;
-
-	private EventType _lastGuiEventType = EventType.Ignore;
+	private int _infiniteStorageRefreshFrame = -1;
 
 	private bool _menuOpen;
 
-	private bool _hasLoggedUpdateCallback;
+	private bool _infiniteStorageOpen;
 
-	private bool _hasLoggedOnGuiCallback;
+	private bool _hasLoggedUpdateCallback;
 
 	private bool _hasLoggedVehicleIconFallback;
 
@@ -159,6 +242,16 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private bool _windowWasShowingCursor;
 
 	private bool _hasCapturedUnityCursor;
+
+	private static readonly PointToolMode[] ShortcutPointToolModes = new PointToolMode[6]
+	{
+		PointToolMode.Smart,
+		PointToolMode.Inspect,
+		PointToolMode.Repair,
+		PointToolMode.Teleport,
+		PointToolMode.Utility,
+		PointToolMode.Delete
+	};
 
 	private bool _cursorWasVisible;
 
@@ -184,6 +277,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal InventoryArrangeFeature InventoryArrange { get; private set; }
 
+	internal AutoPickupFeature AutoPickup { get; private set; }
+
+	internal InfiniteStorageRuntime InfiniteStorage { get; private set; }
+
+	internal CreatureHealthBarService CreatureHealthBars { get; private set; }
+
 	internal float UiScale => Mathf.Clamp(_uiScale.Value, 0.75f, 1.5f);
 
 	internal int PageSize => Mathf.Clamp(_pageSize.Value, 12, 80);
@@ -191,6 +290,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal string ShortcutLabel => GetShortcutLabel("menu.toggle");
 
 	internal bool IsMenuOpen => _menuOpen;
+
+	internal bool IsInfiniteStorageOpen => _infiniteStorageOpen;
+
+	internal bool IsInfiniteStoragePickupPriorityEnabled => _infiniteStoragePickupPriority?.Value == true;
 
 	internal string LastMainTab => _lastMainTab?.Value ?? "Character";
 
@@ -309,6 +412,152 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		base.Logger.LogInfo(obj?.Message ?? "Inventory arrange is not ready.");
 	}
 
+	private bool EnsureShortcutSingleplayer(string actionId, string inputSource)
+	{
+		if (SingleplayerGuard.IsReady)
+		{
+			return true;
+		}
+		string text = "单人世界不可用：" + SingleplayerGuard.RejectionReason;
+		base.Logger.LogWarning($"全局快捷键 {actionId} ({inputSource}) 被拒绝：{text}");
+		_ui?.ShowGlobalShortcutStatus(text, warning: true);
+		return false;
+	}
+
+	private void ReportShortcut(string actionId, string inputSource, string message, bool warning = false)
+	{
+		base.Logger.LogInfo($"全局快捷键 {actionId} ({inputSource})：{message}");
+		_ui?.ShowGlobalShortcutStatus(message, warning);
+	}
+
+	private void HandleGodModeShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleGodMode, inputSource)) return;
+		Actions.SetGodMode(!Actions.GodModeEnabled);
+		ReportShortcut(GlobalShortcutActions.ToggleGodMode, inputSource, Actions.GodModeEnabled ? "无敌模式已开启。" : "无敌模式已关闭。");
+	}
+
+	private void HandleInfiniteNeedsShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleInfiniteNeeds, inputSource)) return;
+		Actions.SetInfiniteNeeds(!Actions.InfiniteNeedsEnabled);
+		ReportShortcut(GlobalShortcutActions.ToggleInfiniteNeeds, inputSource, Actions.InfiniteNeedsEnabled ? "无限生存状态已开启。" : "无限生存状态已关闭。");
+	}
+
+	private void HandleRestoreEverythingShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.RestoreEverything, inputSource)) return;
+		bool result = Actions.RestoreEverything();
+		ReportShortcut(GlobalShortcutActions.RestoreEverything, inputSource, result ? "角色状态已全部恢复。" : "恢复失败。", !result);
+	}
+
+	private void HandleRefillNeedsShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.RefillNeeds, inputSource)) return;
+		bool result = Actions.RefillNeeds();
+		ReportShortcut(GlobalShortcutActions.RefillNeeds, inputSource, result ? "生存状态已补满。" : "补满失败。", !result);
+	}
+
+	private void HandleFlightShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleFlight, inputSource)) return;
+		Movement.SetFlight(!Movement.FlightEnabled);
+		ReportShortcut(GlobalShortcutActions.ToggleFlight, inputSource, Movement.FlightEnabled ? "飞行已开启。" : "飞行已关闭。");
+	}
+
+	private void HandleNoclipShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleNoclip, inputSource)) return;
+		Movement.SetNoclip(!Movement.NoclipEnabled);
+		ReportShortcut(GlobalShortcutActions.ToggleNoclip, inputSource, Movement.NoclipEnabled ? "穿墙已开启。" : "穿墙已关闭。");
+	}
+
+	private void HandlePointToolEnabledShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.TogglePointToolEnabled, inputSource)) return;
+		SetPointToolEnabled(!PointTool.Enabled);
+		ReportShortcut(GlobalShortcutActions.TogglePointToolEnabled, inputSource, PointTool.Enabled ? "准星工具已开启。" : "准星工具已关闭。");
+	}
+
+	private void HandleNextPointToolModeShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.NextPointToolMode, inputSource)) return;
+		int index = Array.IndexOf(ShortcutPointToolModes, PointTool.Mode);
+		PointToolMode nextMode = ShortcutPointToolModes[(index + 1 + ShortcutPointToolModes.Length) % ShortcutPointToolModes.Length];
+		SetPointToolMode(nextMode);
+		ReportShortcut(GlobalShortcutActions.NextPointToolMode, inputSource, "准星工具模式已切换为 " + nextMode + "。");
+	}
+
+	private void HandleCreatureHealthBarsShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleCreatureHealthBars, inputSource)) return;
+		SetCreatureHealthBarEnabled(!CreatureHealthBarEnabled);
+		ReportShortcut(GlobalShortcutActions.ToggleCreatureHealthBars, inputSource, CreatureHealthBarEnabled ? "生物生命条已开启。" : "生物生命条已关闭。");
+	}
+
+	private void HandleAutoPickupShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleAutoPickup, inputSource)) return;
+		SetAutoPickupEnabled(!(_autoPickupEnabled?.Value ?? false));
+		ReportShortcut(GlobalShortcutActions.ToggleAutoPickup, inputSource, (_autoPickupEnabled?.Value ?? false) ? "自动拾取已开启。" : "自动拾取已关闭。");
+	}
+
+	private void HandleInfiniteStorageEnabledShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleInfiniteStorageEnabled, inputSource)) return;
+		SetInfiniteStorageEnabled(!(_infiniteStorageEnabled?.Value ?? false));
+		ReportShortcut(GlobalShortcutActions.ToggleInfiniteStorageEnabled, inputSource, (_infiniteStorageEnabled?.Value ?? false) ? "无限储存功能已开启。" : "无限储存功能已关闭。");
+	}
+
+	private void HandleFreezeTimeShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleFreezeTime, inputSource)) return;
+		Actions.SetFreezeTime(!Actions.FreezeTimeEnabled);
+		ReportShortcut(GlobalShortcutActions.ToggleFreezeTime, inputSource, Actions.FreezeTimeEnabled ? "时间已冻结。" : "时间已恢复流动。");
+	}
+
+	private void HandleSetDayShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.SetDay, inputSource)) return;
+		Actions.SetDay();
+		ReportShortcut(GlobalShortcutActions.SetDay, inputSource, "已切换到白天。");
+	}
+
+	private void HandleSetNightShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.SetNight, inputSource)) return;
+		Actions.SetNight();
+		ReportShortcut(GlobalShortcutActions.SetNight, inputSource, "已切换到夜晚。");
+	}
+
+	private void HandleFullMoonShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleFullMoon, inputSource)) return;
+		Actions.SetFullMoon(!LightingManager.isFullMoon);
+		ReportShortcut(GlobalShortcutActions.ToggleFullMoon, inputSource, LightingManager.isFullMoon ? "已开启满月。" : "已关闭满月。");
+	}
+
+	private void HandleClearWeatherShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ClearWeather, inputSource)) return;
+		Actions.ClearWeather();
+		ReportShortcut(GlobalShortcutActions.ClearWeather, inputSource, "当前天气已清除，后续仍可自然调度。");
+	}
+
+	private void HandleDisableWeatherShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.DisableWeather, inputSource)) return;
+		Actions.DisableWeather();
+		ReportShortcut(GlobalShortcutActions.DisableWeather, inputSource, "当前天气和自然天气调度已关闭。", warning: true);
+	}
+
+	private void HandleCallAirdropShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.CallAirdrop, inputSource)) return;
+		bool result = Actions.CallAirdrop();
+		ReportShortcut(GlobalShortcutActions.CallAirdrop, inputSource, result ? "空投已呼叫。" : "空投呼叫失败。", !result);
+	}
+
 	internal InventoryArrangeSettings GetInventoryArrangeSettings()
 	{
 		InventorySortRegistry.TryParseCustom(_inventoryArrangeCustomKeys?.Value, out var keys);
@@ -318,9 +567,13 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			Preset = preset,
 			AutoRotate = (_inventoryArrangeAutoRotate?.Value ?? true),
 			AllowCrossPage = (_inventoryArrangeCrossPage?.Value ?? true),
+			IncludeBackpackPage = (_inventoryArrangeIncludeBackpackPage?.Value ?? true),
+			IncludeVestPage = (_inventoryArrangeIncludeVestPage?.Value ?? true),
+			IncludeShirtPage = (_inventoryArrangeIncludeShirtPage?.Value ?? true),
+			IncludePantsPage = (_inventoryArrangeIncludePantsPage?.Value ?? true),
 			ProtectEquipped = (_inventoryArrangeProtectEquipped?.Value ?? true),
 			CustomKeys = (keys ?? new List<InventorySortKeySpec>()),
-			PreserveHotkeys = (_inventoryArrangePreserveHotkeys?.Value ?? true)
+			FixHotkeyItems = (_inventoryArrangeFixHotkeyItems?.Value ?? true)
 		};
 	}
 
@@ -344,14 +597,51 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		PersistInterfaceState(_inventoryArrangeCrossPage, value);
 	}
 
+	private void NormalizeConfiguredInfiniteStorageShortcut()
+	{
+		if (_infiniteStorageShortcut == null || ShortcutInputPolicy.IsAllowedShortcut(_infiniteStorageShortcut.Value))
+		{
+			return;
+		}
+		_infiniteStorageShortcut.Value = new KeyboardShortcut(KeyCode.Keypad0, KeyCode.LeftControl);
+		try
+		{
+			base.Config.Save();
+		}
+		catch (Exception arg)
+		{
+			base.Logger.LogWarning($"Infinite storage shortcut was normalized for this session but could not be saved: {arg}");
+		}
+	}
+
+	internal void SetInventoryArrangeIncludeBackpackPage(bool value)
+	{
+		PersistInterfaceState(_inventoryArrangeIncludeBackpackPage, value);
+	}
+
+	internal void SetInventoryArrangeIncludeVestPage(bool value)
+	{
+		PersistInterfaceState(_inventoryArrangeIncludeVestPage, value);
+	}
+
+	internal void SetInventoryArrangeIncludeShirtPage(bool value)
+	{
+		PersistInterfaceState(_inventoryArrangeIncludeShirtPage, value);
+	}
+
+	internal void SetInventoryArrangeIncludePantsPage(bool value)
+	{
+		PersistInterfaceState(_inventoryArrangeIncludePantsPage, value);
+	}
+
 	internal void SetInventoryArrangeProtectEquipped(bool value)
 	{
 		PersistInterfaceState(_inventoryArrangeProtectEquipped, value);
 	}
 
-	internal void SetInventoryArrangePreserveHotkeys(bool value)
+	internal void SetInventoryArrangeFixHotkeyItems(bool value)
 	{
-		PersistInterfaceState(_inventoryArrangePreserveHotkeys, value);
+		PersistInterfaceState(_inventoryArrangeFixHotkeyItems, value);
 	}
 
 	internal KeyboardShortcut GetShortcut(string actionId)
@@ -361,7 +651,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal string GetShortcutLabel(string actionId)
 	{
-		return _shortcutManager?.GetLabel(actionId) ?? GetShortcut(actionId).ToString();
+		KeyboardShortcut shortcut = GetShortcut(actionId);
+		if (shortcut.MainKey == KeyCode.None)
+		{
+			return PluginLocalization.CurrentLanguage == PluginLanguage.English ? "Unbound" : "未设置";
+		}
+		return _shortcutManager?.GetLabel(actionId) ?? shortcut.ToString();
 	}
 
 	internal string GetShortcutDisplayName(string actionId)
@@ -376,15 +671,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal KeyboardShortcut GetShortcutDefault(string actionId)
 	{
-		if (!(actionId == "inventory.arrange.current"))
-		{
-			if (!(actionId == "inventory.arrange.all-carried"))
-			{
-				return new KeyboardShortcut(KeyCode.End);
-			}
-			return new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl, KeyCode.LeftShift);
-		}
-		return new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl);
+		return _shortcutManager?.GetDefaultShortcut(actionId) ?? new KeyboardShortcut(KeyCode.End);
 	}
 
 	internal void LogRuntimeHostCreated(PluginRuntimeHost host)
@@ -471,6 +758,9 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_toggleShortcut = base.Config.Bind("General", "ToggleShortcut", new KeyboardShortcut(KeyCode.End), PluginLocalization.Translate("打开或关闭单人作弊菜单。默认 End，可自由修改。仅在真正的单人世界中生效。"));
 		NormalizeConfiguredToggleShortcut();
 		_shortcutManager = new GlobalShortcutManager(base.Logger);
+		_infiniteStorageShortcut = base.Config.Bind("General", "InfiniteStorageShortcut", new KeyboardShortcut(KeyCode.Keypad0, KeyCode.LeftControl), "打开或关闭独立的无限储存页面。默认左 Ctrl + 数字小键盘 0。");
+		NormalizeConfiguredInfiniteStorageShortcut();
+		_shortcutManager.Register("infinite-storage.toggle", "无限储存", _infiniteStorageShortcut, new KeyboardShortcut(KeyCode.Keypad0, KeyCode.LeftControl), HandleInfiniteStorageShortcut);
 		_shortcutManager.Register("menu.toggle", "打开或关闭菜单", _toggleShortcut, new KeyboardShortcut(KeyCode.End), HandleToggleShortcut);
 		_arrangeCurrentShortcut = base.Config.Bind("General", "ArrangeCurrentShortcut", new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl), "整理当前容器；可在右下角全局快捷键窗口中修改。默认 Ctrl+I。仅在单人模式生效。");
 		_arrangeAllCarriedShortcut = base.Config.Bind("General", "ArrangeAllCarriedShortcut", new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl, KeyCode.LeftShift), "整理全部随身容器；可在右下角全局快捷键窗口中修改。默认 Ctrl+Shift+I。仅在单人模式生效。");
@@ -478,12 +768,58 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_inventoryArrangePreset = base.Config.Bind("InventoryArrange", "Preset", "Compatibility", "Compatibility, Compact, Type, Name, LargeFirst, SmallFirst, Quality, Rarity, StackFill, Ammo, Hotkey, LowMovement, Custom.");
 		_inventoryArrangeAutoRotate = base.Config.Bind("InventoryArrange", "AutoRotate", defaultValue: true, "允许整理时自动旋转物品。");
 		_inventoryArrangeCrossPage = base.Config.Bind("InventoryArrange", "AllowCrossPage", defaultValue: true, "允许在整理范围内跨随身页安置。");
+		_inventoryArrangeIncludeBackpackPage = base.Config.Bind("InventoryArrange", "IncludeBackpackPage", defaultValue: true, "整理时包含背包页。");
+		_inventoryArrangeIncludeVestPage = base.Config.Bind("InventoryArrange", "IncludeVestPage", defaultValue: true, "整理时包含背心页。");
+		_inventoryArrangeIncludeShirtPage = base.Config.Bind("InventoryArrange", "IncludeShirtPage", defaultValue: true, "整理时包含上衣页。");
+		_inventoryArrangeIncludePantsPage = base.Config.Bind("InventoryArrange", "IncludePantsPage", defaultValue: true, "整理时包含裤子页。");
 		_inventoryArrangeProtectEquipped = base.Config.Bind("InventoryArrange", "ProtectEquipped", defaultValue: true, "保护当前装备物品。");
-		_inventoryArrangePreserveHotkeys = base.Config.Bind("InventoryArrange", "PreserveHotkeys", defaultValue: true, "保护热键绑定物品。");
+		ConfigDefinition configDefinition = new ConfigDefinition("InventoryArrange", "FixHotkeyItems");
+		bool flag = base.Config.ContainsKey(configDefinition);
+		_inventoryArrangeFixHotkeyItems = base.Config.Bind(configDefinition, defaultValue: true, new ConfigDescription("固定热键绑定物品；关闭时整理会更新热键坐标。"));
+		if (!flag && base.Config.TryGetEntry(new ConfigDefinition("InventoryArrange", "PreserveHotkeys"), out ConfigEntry<bool> entry))
+		{
+			_inventoryArrangeFixHotkeyItems.Value = entry.Value;
+		}
 		NormalizeConfiguredInventoryShortcut(_arrangeCurrentShortcut);
 		NormalizeConfiguredInventoryShortcut(_arrangeAllCarriedShortcut);
 		_shortcutManager.Register("inventory.arrange.current", "整理当前容器", _arrangeCurrentShortcut, new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl), HandleArrangeCurrentShortcut);
 		_shortcutManager.Register("inventory.arrange.all-carried", "整理全部随身容器", _arrangeAllCarriedShortcut, new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl, KeyCode.LeftShift), HandleArrangeAllCarriedShortcut);
+		_toggleGodModeShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleGodMode, new KeyboardShortcut(KeyCode.None), "Toggle god mode.");
+		_toggleInfiniteNeedsShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleInfiniteNeeds, new KeyboardShortcut(KeyCode.None), "Toggle infinite needs.");
+		_restoreEverythingShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.RestoreEverything, new KeyboardShortcut(KeyCode.None), "Restore health and injuries.");
+		_refillNeedsShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.RefillNeeds, new KeyboardShortcut(KeyCode.None), "Refill survival needs.");
+		_toggleFlightShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleFlight, new KeyboardShortcut(KeyCode.None), "Toggle flight.");
+		_toggleNoclipShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleNoclip, new KeyboardShortcut(KeyCode.None), "Toggle noclip.");
+		_togglePointToolEnabledShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.TogglePointToolEnabled, new KeyboardShortcut(KeyCode.None), "Toggle point tool.");
+		_nextPointToolModeShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.NextPointToolMode, new KeyboardShortcut(KeyCode.None), "Cycle point tool mode.");
+		_toggleCreatureHealthBarsShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleCreatureHealthBars, new KeyboardShortcut(KeyCode.None), "Toggle creature health bars.");
+		_toggleAutoPickupShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleAutoPickup, new KeyboardShortcut(KeyCode.None), "Toggle automatic pickup.");
+		_toggleInfiniteStorageEnabledShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleInfiniteStorageEnabled, new KeyboardShortcut(KeyCode.None), "Toggle infinite storage feature.");
+		_toggleFreezeTimeShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleFreezeTime, new KeyboardShortcut(KeyCode.None), "Toggle frozen time.");
+		_setDayShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.SetDay, new KeyboardShortcut(KeyCode.None), "Set daytime.");
+		_setNightShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.SetNight, new KeyboardShortcut(KeyCode.None), "Set nighttime.");
+		_toggleFullMoonShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleFullMoon, new KeyboardShortcut(KeyCode.None), "Toggle full moon.");
+		_clearWeatherShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ClearWeather, new KeyboardShortcut(KeyCode.None), "Clear current weather.");
+		_disableWeatherShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.DisableWeather, new KeyboardShortcut(KeyCode.None), "Disable weather scheduling.");
+		_callAirdropShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.CallAirdrop, new KeyboardShortcut(KeyCode.None), "Call an airdrop.");
+		_shortcutManager.Register(GlobalShortcutActions.ToggleGodMode, "无敌模式", _toggleGodModeShortcut, new KeyboardShortcut(KeyCode.None), HandleGodModeShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleInfiniteNeeds, "无限生存状态", _toggleInfiniteNeedsShortcut, new KeyboardShortcut(KeyCode.None), HandleInfiniteNeedsShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.RestoreEverything, "恢复角色状态", _restoreEverythingShortcut, new KeyboardShortcut(KeyCode.None), HandleRestoreEverythingShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.RefillNeeds, "补满生存状态", _refillNeedsShortcut, new KeyboardShortcut(KeyCode.None), HandleRefillNeedsShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleFlight, "飞行", _toggleFlightShortcut, new KeyboardShortcut(KeyCode.None), HandleFlightShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleNoclip, "穿墙", _toggleNoclipShortcut, new KeyboardShortcut(KeyCode.None), HandleNoclipShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.TogglePointToolEnabled, "准星工具", _togglePointToolEnabledShortcut, new KeyboardShortcut(KeyCode.None), HandlePointToolEnabledShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.NextPointToolMode, "准星工具模式", _nextPointToolModeShortcut, new KeyboardShortcut(KeyCode.None), HandleNextPointToolModeShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleCreatureHealthBars, "生物生命条", _toggleCreatureHealthBarsShortcut, new KeyboardShortcut(KeyCode.None), HandleCreatureHealthBarsShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleAutoPickup, "自动拾取", _toggleAutoPickupShortcut, new KeyboardShortcut(KeyCode.None), HandleAutoPickupShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleInfiniteStorageEnabled, "无限储存功能", _toggleInfiniteStorageEnabledShortcut, new KeyboardShortcut(KeyCode.None), HandleInfiniteStorageEnabledShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleFreezeTime, "冻结时间", _toggleFreezeTimeShortcut, new KeyboardShortcut(KeyCode.None), HandleFreezeTimeShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.SetDay, "切换为白天", _setDayShortcut, new KeyboardShortcut(KeyCode.None), HandleSetDayShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.SetNight, "切换为夜晚", _setNightShortcut, new KeyboardShortcut(KeyCode.None), HandleSetNightShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleFullMoon, "强制满月", _toggleFullMoonShortcut, new KeyboardShortcut(KeyCode.None), HandleFullMoonShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ClearWeather, "清除当前天气", _clearWeatherShortcut, new KeyboardShortcut(KeyCode.None), HandleClearWeatherShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.DisableWeather, "关闭天气调度", _disableWeatherShortcut, new KeyboardShortcut(KeyCode.None), HandleDisableWeatherShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.CallAirdrop, "呼叫空投", _callAirdropShortcut, new KeyboardShortcut(KeyCode.None), HandleCallAirdropShortcut);
 		_uiScale = base.Config.Bind("Interface", "Scale", 1f, PluginLocalization.Translate("菜单缩放，范围 0.75 到 1.5。"));
 		_pageSize = base.Config.Bind("Interface", "CardsPerPage", 32, PluginLocalization.Translate("物品/车辆每页卡片数量，范围 12 到 80。"));
 		_vehicleIconResolution = base.Config.Bind("Interface", "VehicleIconResolution", 128, PluginLocalization.Translate("车辆缩略图宽度：128、192 或 256；高度自动使用 4:3 比例。"));
@@ -498,8 +834,36 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_pointToolShowId = base.Config.Bind("PointTool", "ShowId", defaultValue: true, "Show target ID and GUID in the point HUD.");
 		_pointToolShowHealth = base.Config.Bind("PointTool", "ShowHealth", defaultValue: true, "Show target health or durability in the point HUD.");
 		_pointToolShowHud = base.Config.Bind("Interface", "ShowPointToolHud", defaultValue: true, "Show the point-tool HUD.");
+		_creatureHealthBarEnabled = base.Config.Bind("CreatureHealthBar", "Enabled", defaultValue: false, "Show zombie and animal health bars in singleplayer.");
+		_autoPickupEnabled = base.Config.Bind("AutoPickup", "Enabled", defaultValue: false, "Enable automatic pickup in a true singleplayer world.");
+		_infiniteStorageEnabled = base.Config.Bind("InfiniteStorage", "Enabled", defaultValue: false, "Enable the persistent infinite storage. Disabled by default.");
+		_infiniteStoragePickupPriority = base.Config.Bind("InfiniteStorage", "PickupPriority", defaultValue: false, "Store automatically picked-up items in infinite storage before trying the carried inventory.");
+		_autoPickupLegacyScanRadius = base.Config.Bind("AutoPickup", "ScanRadius", 40f, "Legacy scan radius; migrated to Range.");
+		_autoPickupLegacyRequestRange = base.Config.Bind("AutoPickup", "RequestRange", 40f, "Legacy request range; migrated to Range.");
+		_autoPickupRange = base.Config.Bind("AutoPickup", "Range", 40f, "Automatic pickup distance in meters, clamped to 1-1000.");
+		if (Mathf.Approximately(_autoPickupRange.Value, 40f))
+		{
+			float legacyRange = Mathf.Min(_autoPickupLegacyScanRadius.Value, _autoPickupLegacyRequestRange.Value);
+			if (!Mathf.Approximately(legacyRange, 40f))
+			{
+				_autoPickupRange.Value = Mathf.Clamp(legacyRange, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange);
+			}
+		}
+		_autoPickupLegacyScanRadius.Value = _autoPickupRange.Value;
+		_autoPickupLegacyRequestRange.Value = _autoPickupRange.Value;
+		_autoPickupFrequencyHz = base.Config.Bind("AutoPickup", "FrequencyHz", 10f, "Drop scan frequency, clamped to 1-20 Hz.");
+		_autoPickupRequestsPerTick = base.Config.Bind("AutoPickup", "RequestsPerTick", 4, "Maximum native pickup requests per scan, clamped to 1-16.");
+		_autoPickupDropBlockMinutes = base.Config.Bind("AutoPickup", "DropBlockMinutes", 1, "Temporarily block automatic pickup for an item ID after the player drops it, clamped to 1-1440 minutes.");
+		_autoPickupQualityFilterEnabled = base.Config.Bind("AutoPickup", "QualityFilterEnabled", defaultValue: false, "Ignore automatically picked-up items below the configured minimum quality.");
+		_autoPickupMinimumQuality = base.Config.Bind("AutoPickup", "MinimumQuality", 0, "Minimum automatic-pickup item quality, clamped to 0-100 when quality filtering is enabled.");
+		_autoPickupFilterMode = base.Config.Bind("AutoPickup", "FilterMode", "BlacklistOnly", "BlacklistOnly or WhitelistThenBlacklist; whitelist state is also persisted in the rules document.");
+		_autoPickupRulesPath = base.Config.Bind("AutoPickup", "RulesPath", "AutoPickup.rules.json", "Relative paths are resolved under BepInEx/config.");
+		_autoPickupPauseWhenMenuOpen = base.Config.Bind("AutoPickup", "PauseWhenMenuOpen", defaultValue: true, "Pause new pickup scans while the cheat menu is open.");
+		_autoPickupPauseWhenDead = base.Config.Bind("AutoPickup", "PauseWhenDead", defaultValue: true, "Pause and clear pending pickup work while the player is dead.");
+		_autoPickupDiagnostics = base.Config.Bind("AutoPickup", "Diagnostics", "Failures", "Off, Failures, Summary, or Verbose.");
 		_flightSpeed = base.Config.Bind("Movement", "FlightSpeed", 3f, "Horizontal flight speed multiplier.");
 		_flightVerticalSpeed = base.Config.Bind("Movement", "FlightVerticalSpeed", 2f, "Vertical flight speed multiplier.");
+		_flightMode = base.Config.Bind("Movement", "FlightMode", "WorldAxis", "WorldAxis or ViewDirection.");
 		_noclipSafeExit = base.Config.Bind("Movement", "NoClipSafeExit", defaultValue: true, "Search for a safe position when noclip is disabled.");
 		_workshopLocalizationEnabled = base.Config.Bind("WorkshopLocalization", "Enabled", defaultValue: false, "Apply cached translations to loaded Workshop assets.");
 		_workshopLocalizationApiProtocol = base.Config.Bind("WorkshopLocalization", "ApiProtocol", "OpenAICompatible", "Translation API protocol. Configure it in the in-game Translation page.");
@@ -562,7 +926,24 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			VerticalSpeed = Mathf.Clamp(_flightVerticalSpeed.Value, 1f, 10f),
 			SafeExit = _noclipSafeExit.Value
 		};
+		Movement.SetFlightMode(ParseFlightMode(_flightMode.Value, base.Logger));
 		_pointToolHud = new PointToolHud(base.Logger);
+		_creatureHealthBarHud = new CreatureHealthBarHud(base.Logger);
+		CreatureHealthBars = new CreatureHealthBarService(base.Logger, new CreatureHealthBarSettings
+		{
+			Enabled = _creatureHealthBarEnabled.Value,
+			DamageDisplayDuration = ReadConfigFloat("CreatureHealthBar", "DamageDisplayDuration", 10f, "Seconds to show a creature after confirmed damage."),
+			CrosshairRange = ReadConfigFloat("CreatureHealthBar", "CrosshairRange", 100f, "Maximum crosshair target range in meters."),
+			DisplayRange = ReadConfigFloat("CreatureHealthBar", "DisplayRange", 100f, "Maximum health bar display range in meters."),
+			MaxVisibleBars = ReadConfigInt("CreatureHealthBar", "MaxVisibleBars", 12, "Maximum number of visible creature health bars."),
+			ShowAnimals = ReadConfigBool("CreatureHealthBar", "ShowAnimals", true, "Show animal health bars."),
+			ShowZombies = ReadConfigBool("CreatureHealthBar", "ShowZombies", true, "Show zombie health bars."),
+			OcclusionCheckHz = ReadConfigFloat("CreatureHealthBar", "OcclusionCheckHz", 10f, "Health bar occlusion checks per second."),
+			HealthRefreshHz = ReadConfigFloat("CreatureHealthBar", "HealthRefreshHz", 20f, "Health value refreshes per second."),
+			BarScaleReferenceDistance = ReadConfigFloat("CreatureHealthBar", "BarScaleReferenceDistance", 18f, "Distance in meters at which the health bar uses its base size."),
+			MaxBarScale = ReadConfigFloat("CreatureHealthBar", "MaxBarScale", 1.5f, "Maximum near-distance health bar scale."),
+			Diagnostics = ReadConfigBool("CreatureHealthBar", "Diagnostics", false, "Enable health bar diagnostics.")
+		}, _creatureHealthBarHud);
 		PointTool = new PointToolService(base.Logger, _pointToolHud)
 		{
 			Enabled = _pointToolEnabled.Value,
@@ -573,16 +954,35 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			ShowHealth = _pointToolShowHealth.Value,
 			ShowHud = _pointToolShowHud.Value
 		};
+		AutoPickup = new AutoPickupFeature(base.Logger, GetAutoPickupSettings(), _autoPickupRulesPath.Value);
+		InfiniteStorage = new InfiniteStorageRuntime(base.Logger) { Enabled = _infiniteStorageEnabled.Value };
+		AutoPickupRuleDocument autoPickupRules = AutoPickup.Rules;
+		_autoPickupFilterMode.Value = autoPickupRules.Mode.ToString();
 		_ui = new CheatMenuOverlayUi(this);
 		_runtimeHost = PluginRuntimeHost.Create(this);
 		Favorites.Load();
 		Teleports.Load();
 		Assets.onAssetsRefreshed = (AssetsRefreshed)Delegate.Combine(Assets.onAssetsRefreshed, new AssetsRefreshed(OnAssetsRefreshed));
 		InstallRuntimePatches();
-		base.Logger.LogInfo("Unturned Singleplayer Cheat Menu 1.7.0 已加载。快捷键：" + ShortcutLabel + "；严格限制：单人模式。");
+		base.Logger.LogInfo("Unturned Singleplayer Cheat Menu 1.9.0 已加载。快捷键：" + ShortcutLabel + "；严格限制：单人模式。");
 		base.Logger.LogInfo("Plugin UI language: " + PluginLocalization.CurrentLanguageName + "; configured=" + _language.Value + "; Unturned=" + Provider.language + ".");
 		Version version = typeof(BaseUnityPlugin).Assembly.GetName().Version;
 		base.Logger.LogInfo($"检测环境：Unturned {Provider.APP_VERSION}，Unity {Application.unityVersion}，BepInEx {version}。");
+	}
+
+	private float ReadConfigFloat(string section, string key, float value, string description)
+	{
+		return base.Config.Bind(section, key, value, description).Value;
+	}
+
+	private int ReadConfigInt(string section, string key, int value, string description)
+	{
+		return base.Config.Bind(section, key, value, description).Value;
+	}
+
+	private bool ReadConfigBool(string section, string key, bool value, string description)
+	{
+		return base.Config.Bind(section, key, value, description).Value;
 	}
 
 	private bool PersistInterfaceState<T>(ConfigEntry<T> entry, T value)
@@ -644,13 +1044,24 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			_ui?.OnLocalizedAssetViewsRefreshed();
 		}
 		_shortcutManager?.ProcessUpdate(Time.frameCount, Time.realtimeSinceStartup, _ui?.IsCapturingShortcut ?? false);
+		if (_infiniteStorageOpen && _infiniteStorageRefreshFrame >= 0 && Time.frameCount >= _infiniteStorageRefreshFrame)
+		{
+			_infiniteStorageRefreshFrame = -1;
+			if (Catalog.IsDirty)
+			{
+				RefreshCatalog();
+			}
+		}
 		InventoryArrange?.OnPlayerInitialized();
 		InventoryArrange?.PumpQuickTransfer();
-		if (_menuOpen && !SingleplayerGuard.IsReady)
+		AutoPickup?.Pump(_menuOpen || _infiniteStorageOpen);
+		InfiniteStorage?.Pump();
+		if ((_menuOpen || _infiniteStorageOpen) && !SingleplayerGuard.IsReady)
 		{
 			SetMenuOpen(open: false);
+			SetInfiniteStorageOpen(open: false);
 		}
-		else if (_menuOpen)
+		else if (_menuOpen || _infiniteStorageOpen)
 		{
 			MaintainMenuInputCapture();
 			_ui.Maintain();
@@ -664,13 +1075,18 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 				PointTool.Enabled = false;
 			}
 			_pointToolHud?.Hide();
+			CreatureHealthBars?.Pump();
 		}
 		else
 		{
 			Movement?.Pump();
 			PointTool?.Pump();
+			CreatureHealthBars?.Pump();
 			_pointToolHud?.SetMovement(Movement?.FlightEnabled ?? false, Movement?.NoclipEnabled ?? false, Movement?.FlightSpeed ?? 0f);
 		}
+		// The BepInEx plugin component can be destroyed after startup, while Harmony's
+		// Update postfix remains active. Render here as the reliable fallback path.
+		CreatureHealthBars?.RenderLate();
 		if (Time.unscaledTime >= _nextMaintenanceTime)
 		{
 			_nextMaintenanceTime = Time.unscaledTime + 0.2f;
@@ -678,40 +1094,9 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		}
 	}
 
-	private void OnGUI()
+	internal void RunLateUpdateCallback()
 	{
-		RunGuiCallback("Unity OnGUI");
-	}
-
-	internal void RunGuiCallback(string callbackSource)
-	{
-		Event current = Event.current;
-		EventType eventType = current?.type ?? EventType.Ignore;
-		if (_lastGuiCallbackFrame == Time.frameCount && _lastGuiEventType == eventType)
-		{
-			return;
-		}
-		_lastGuiCallbackFrame = Time.frameCount;
-		_lastGuiEventType = eventType;
-		if (!_hasLoggedOnGuiCallback)
-		{
-			_hasLoggedOnGuiCallback = true;
-			base.Logger.LogInfo(callbackSource + " 回调已运行，菜单绘制通道已启用。");
-		}
-		CheatMenuOverlayUi ui = _ui;
-		if (ui != null && ui.IsCapturingShortcut)
-		{
-			if (current != null && current.type == EventType.KeyDown)
-			{
-				current.Use();
-			}
-			return;
-		}
-		GlobalShortcutManager shortcutManager = _shortcutManager;
-		if (shortcutManager != null && shortcutManager.ProcessGuiEvent(current, Time.frameCount, Time.realtimeSinceStartup, _ui?.IsCapturingShortcut ?? false))
-		{
-			current.Use();
-		}
+		CreatureHealthBars?.RenderLate();
 	}
 
 	private void HandleToggleShortcut(string inputSource)
@@ -727,13 +1112,27 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void OnDestroy()
 	{
-		base.Logger.LogWarning("BepInEx 插件宿主 OnDestroy 已触发；保留跨场景运行宿主与补丁直到进程退出。");
+		base.Logger.LogInfo("BepInEx plugin component was destroyed; runtime services remain active until application quit.");
+	}
+
+	private void HandleInfiniteStorageShortcut(string inputSource)
+	{
+		if (!SingleplayerGuard.IsReady)
+		{
+			base.Logger.LogWarning("Cannot open infinite storage: " + SingleplayerGuard.RejectionReason);
+			return;
+		}
+		SetInfiniteStorageOpen(!_infiniteStorageOpen);
+		base.Logger.LogInfo("Infinite storage shortcut triggered via " + inputSource + ": " + (_infiniteStorageOpen ? "opened" : "closed") + ".");
 	}
 
 	private void OnApplicationQuit()
 	{
 		try
 		{
+			CreatureHealthBars?.Dispose();
+			AutoPickup?.Dispose();
+			InfiniteStorage?.Dispose();
 			Assets.onAssetsRefreshed = (AssetsRefreshed)Delegate.Remove(Assets.onAssetsRefreshed, new AssetsRefreshed(OnAssetsRefreshed));
 			WorkshopLocalization?.Dispose();
 			_harmony?.UnpatchSelf();
@@ -747,6 +1146,11 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal void CloseMenu()
 	{
 		SetMenuOpen(open: false);
+	}
+
+	internal void CloseInfiniteStorage()
+	{
+		SetInfiniteStorageOpen(open: false);
 	}
 
 	internal void SetWorkshopLocalizationApiProtocol(string protocol)
@@ -903,6 +1307,143 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		}
 	}
 
+	internal bool CreatureHealthBarEnabled => _creatureHealthBarEnabled?.Value ?? false;
+
+	internal void SetCreatureHealthBarEnabled(bool value)
+	{
+		bool enabled = value && SingleplayerGuard.IsReady;
+		PersistInterfaceState(_creatureHealthBarEnabled, enabled);
+		if (CreatureHealthBars != null)
+		{
+			CreatureHealthBars.SetEnabled(enabled);
+		}
+	}
+
+	internal void SetAutoPickupEnabled(bool value)
+	{
+		PersistInterfaceState(_autoPickupEnabled, value && SingleplayerGuard.IsReady);
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetInfiniteStorageEnabled(bool value)
+	{
+		bool enabled = value && SingleplayerGuard.IsReady;
+		PersistInterfaceState(_infiniteStorageEnabled, enabled);
+		if (InfiniteStorage != null)
+		{
+			InfiniteStorage.Enabled = enabled;
+			if (!enabled) InfiniteStorage.Flush();
+		}
+	}
+
+	internal void SetInfiniteStoragePickupPriority(bool value)
+	{
+		PersistInterfaceState(_infiniteStoragePickupPriority, value && SingleplayerGuard.IsReady);
+	}
+
+	internal void SetAutoPickupRange(float value)
+	{
+		float normalized = Mathf.Clamp(value, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange);
+		PersistInterfaceState(_autoPickupRange, normalized);
+		PersistInterfaceState(_autoPickupLegacyScanRadius, normalized);
+		PersistInterfaceState(_autoPickupLegacyRequestRange, normalized);
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupScanRadius(float value)
+	{
+		SetAutoPickupRange(value);
+	}
+
+	internal void SetAutoPickupRequestRange(float value)
+	{
+		SetAutoPickupRange(value);
+	}
+
+	internal void SetAutoPickupFrequency(float value)
+	{
+		PersistInterfaceState(_autoPickupFrequencyHz, Mathf.Clamp(value, AutoPickupSettings.MinFrequencyHz, AutoPickupSettings.MaxFrequencyHz));
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupRequestsPerTick(int value)
+	{
+		PersistInterfaceState(_autoPickupRequestsPerTick, Mathf.Clamp(value, AutoPickupSettings.MinRequestsPerTick, AutoPickupSettings.MaxRequestsPerTick));
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupDropBlockMinutes(int value)
+	{
+		PersistInterfaceState(_autoPickupDropBlockMinutes, Mathf.Clamp(value, AutoPickupSettings.MinDropBlockMinutes, AutoPickupSettings.MaxDropBlockMinutes));
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupQualityFilterEnabled(bool value)
+	{
+		PersistInterfaceState(_autoPickupQualityFilterEnabled, value);
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupMinimumQuality(int value)
+	{
+		PersistInterfaceState(_autoPickupMinimumQuality, Mathf.Clamp(value, AutoPickupSettings.MinQuality, AutoPickupSettings.MaxQuality));
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupPauseWhenMenuOpen(bool value)
+	{
+		PersistInterfaceState(_autoPickupPauseWhenMenuOpen, value);
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupPauseWhenDead(bool value)
+	{
+		PersistInterfaceState(_autoPickupPauseWhenDead, value);
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupDiagnostics(AutoPickupDiagnosticsLevel value)
+	{
+		PersistInterfaceState(_autoPickupDiagnostics, value.ToString());
+		RefreshAutoPickupSettings();
+	}
+
+	internal AutoPickupRuleLoadResult SetAutoPickupRules(bool enabled, AutoPickupFilterMode mode, IEnumerable<ItemFilterRule> rules)
+	{
+		AutoPickupFilterMode normalizedMode = enabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly;
+		PersistInterfaceState(_autoPickupFilterMode, normalizedMode.ToString());
+		return AutoPickup.SaveRules(enabled, normalizedMode, rules);
+	}
+
+	internal AutoPickupRuleLoadResult SetAutoPickupWhitelistEnabled(bool enabled)
+	{
+		AutoPickupRuleDocument document = AutoPickup.Rules;
+		return SetAutoPickupRules(enabled, enabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly, document.Rules);
+	}
+
+	private AutoPickupSettings GetAutoPickupSettings()
+	{
+		AutoPickupDiagnosticsLevel diagnostics = Enum.TryParse(_autoPickupDiagnostics?.Value, ignoreCase: true, out AutoPickupDiagnosticsLevel parsedDiagnostics) ? parsedDiagnostics : AutoPickupDiagnosticsLevel.Failures;
+		return new AutoPickupSettings
+		{
+			Enabled = _autoPickupEnabled?.Value ?? false,
+			Range = _autoPickupRange?.Value ?? 40f,
+			FrequencyHz = _autoPickupFrequencyHz?.Value ?? 10f,
+			RequestsPerTick = _autoPickupRequestsPerTick?.Value ?? 4,
+			DropBlockMinutes = _autoPickupDropBlockMinutes?.Value ?? AutoPickupSettings.MinDropBlockMinutes,
+			QualityFilterEnabled = _autoPickupQualityFilterEnabled?.Value ?? false,
+			MinimumQuality = _autoPickupMinimumQuality?.Value ?? AutoPickupSettings.MinQuality,
+			PauseWhenMenuOpen = _autoPickupPauseWhenMenuOpen?.Value ?? true,
+			PauseWhenDead = _autoPickupPauseWhenDead?.Value ?? true,
+			Diagnostics = diagnostics
+		}.Normalize();
+	}
+
+	private void RefreshAutoPickupSettings()
+	{
+		AutoPickup?.UpdateSettings(GetAutoPickupSettings());
+	}
+
 	internal void SetPointToolMode(PointToolMode value)
 	{
 		PointTool.Mode = value;
@@ -945,6 +1486,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		PersistInterfaceState(_flightVerticalSpeed, Movement.VerticalSpeed);
 	}
 
+	internal void SetFlightMode(FlightMode mode)
+	{
+		Movement.SetFlightMode(mode);
+		PersistInterfaceState(_flightMode, mode.ToString());
+	}
+
 	internal void SetNoclipSafeExit(bool value)
 	{
 		Movement.SafeExit = value;
@@ -971,6 +1518,19 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		return result;
 	}
 
+	private static FlightMode ParseFlightMode(string value, ManualLogSource log)
+	{
+		if (!Enum.TryParse<FlightMode>(value, ignoreCase: true, out var result) || !Enum.IsDefined(typeof(FlightMode), result))
+		{
+			if (!string.IsNullOrWhiteSpace(value))
+			{
+				log?.LogWarning($"飞行模式配置无效：{value}，已回退为 WorldAxis。" );
+			}
+			return FlightMode.WorldAxis;
+		}
+		return result;
+	}
+
 	internal void RefreshCatalog()
 	{
 		Catalog.Refresh();
@@ -991,6 +1551,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void SetMenuOpen(bool open)
 	{
+		if (open && _infiniteStorageOpen)
+		{
+			SetInfiniteStorageOpen(open: false);
+		}
 		if (_menuOpen != open && (!open || SingleplayerGuard.IsReady))
 		{
 			_menuOpen = open;
@@ -1008,6 +1572,35 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 				PluginLocalization.Initialize(_language.Value, Provider.language);
 				RefreshCatalog();
 				_ui.OnOpened();
+			}
+		}
+	}
+
+	private void SetInfiniteStorageOpen(bool open)
+	{
+		if (_infiniteStorageOpen == open || (open && !SingleplayerGuard.IsReady))
+		{
+			return;
+		}
+		_infiniteStorageOpen = open;
+		if (open)
+		{
+			if (_menuOpen)
+			{
+				SetMenuOpen(open: false);
+			}
+			CaptureMenuInput();
+			PluginLocalization.Initialize(_language.Value, Provider.language);
+			_ui.OpenInfiniteStorage();
+			_infiniteStorageRefreshFrame = Catalog.IsDirty ? Time.frameCount + 1 : -1;
+		}
+		else
+		{
+			_infiniteStorageRefreshFrame = -1;
+			_ui.CloseInfiniteStorage();
+			if (!_menuOpen)
+			{
+				ReleaseMenuInput();
 			}
 		}
 	}
@@ -1088,16 +1681,11 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	{
 		CheatMenuPlugin instance = Instance;
 		instance?.RunUpdateCallback("游戏更新 Harmony Postfix");
-		if (__originalMethod?.DeclaringType == typeof(PlayerUI) && (object)instance != null && instance._menuOpen && SingleplayerGuard.IsReady)
+		if (__originalMethod?.DeclaringType == typeof(PlayerUI) && (object)instance != null && (instance._menuOpen || instance._infiniteStorageOpen) && SingleplayerGuard.IsReady)
 		{
 			instance.MaintainMenuInputCapture();
 			instance._ui.Maintain();
 		}
-	}
-
-	private static void GameOnGuiPostfix()
-	{
-		Instance?.RunGuiCallback("游戏 OnGUI Harmony Postfix");
 	}
 
 	private void InstallRuntimePatches()
@@ -1107,11 +1695,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		InventoryArrangePatch.Install(_harmony, base.Logger, InventoryArrange);
 		PointToolInteractionPatch.Install(_harmony, base.Logger);
 		WorkshopLocalizationPatch.Install(_harmony, base.Logger);
+		InfiniteStorageCraftingPatch.Install(_harmony, base.Logger);
 		PatchUpdateLoop(typeof(Provider));
 		PatchUpdateLoop(typeof(MenuUI));
 		PatchUpdateLoop(typeof(PlayerUI));
-		PatchOnGuiLoop(typeof(MenuUI));
-		PatchOnGuiLoop(typeof(PlayerUI));
 		try
 		{
 			MethodInfo methodInfo = (from methodInfo2 in AccessTools.GetDeclaredMethods(typeof(PlayerLife))
@@ -1151,22 +1738,4 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		}
 	}
 
-	private void PatchOnGuiLoop(Type targetType)
-	{
-		try
-		{
-			MethodInfo methodInfo = AccessTools.DeclaredMethod(targetType, "OnGUI", Type.EmptyTypes);
-			if (methodInfo == null)
-			{
-				throw new MissingMethodException(targetType.FullName, "OnGUI");
-			}
-			MethodInfo method = AccessTools.Method(typeof(CheatMenuPlugin), "GameOnGuiPostfix");
-			_harmony.Patch(methodInfo, null, new HarmonyMethod(method));
-			base.Logger.LogInfo("绘制回调补丁已注册：" + targetType.FullName + ".OnGUI。");
-		}
-		catch (Exception arg)
-		{
-			base.Logger.LogWarning($"无法挂接 {targetType.FullName}.OnGUI；将继续尝试其他绘制入口。\n{arg}");
-		}
-	}
 }

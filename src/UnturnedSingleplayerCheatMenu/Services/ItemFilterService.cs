@@ -357,12 +357,15 @@ internal static class ItemFilterService
 
 	private static ItemOriginFilter GetOrigin(ItemAsset asset)
 	{
-		return asset.assetOrigin switch
+		if (AssetOriginClassifier.IsOfficial(asset))
 		{
-			EAssetOrigin.OFFICIAL => ItemOriginFilter.Official,
-			EAssetOrigin.WORKSHOP => ItemOriginFilter.Workshop,
-			_ => ItemOriginFilter.MapOrOther,
-		};
+			return ItemOriginFilter.Official;
+		}
+		if (AssetOriginClassifier.IsWorkshop(asset))
+		{
+			return ItemOriginFilter.Workshop;
+		}
+		return ItemOriginFilter.MapOrOther;
 	}
 
 	private static bool MatchesFireModes(ItemFilterSnapshot item, GunFireModeFilter selected)

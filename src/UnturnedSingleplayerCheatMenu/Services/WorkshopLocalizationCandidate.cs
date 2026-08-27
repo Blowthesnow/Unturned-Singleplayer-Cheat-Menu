@@ -19,4 +19,10 @@ internal sealed class WorkshopLocalizationCandidate
 	internal ushort LegacyId { get; set; }
 
 	internal string ActionKey { get; set; }
+
+	internal string AssetType { get; set; }
+
+	internal string LocalizationKey { get; set; }
+
+	internal int SchemaVersion { get; set; }
 }

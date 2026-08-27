@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupContracts.cs" Link="AutoPickupContracts.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupScheduler.cs" Link="AutoPickupScheduler.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupRuleStore.cs" Link="AutoPickupRuleStore.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\ItemFilterMatcher.cs" Link="ItemFilterMatcher.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Permissions" Version="8.0.0" />
+    <Reference Include="Newtonsoft.Json" HintPath="..\..\lib\Newtonsoft.Json.dll" Private="true" />
+  </ItemGroup>
+</Project>

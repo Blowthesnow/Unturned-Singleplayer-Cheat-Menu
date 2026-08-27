@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeAction.cs" Link="InventoryArrangeAction.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeContainer.cs" Link="InventoryArrangeContainer.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeItem.cs" Link="InventoryArrangeItem.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangePlacement.cs" Link="InventoryArrangePlacement.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangePlan.cs" Link="InventoryArrangePlan.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangePlanner.cs" Link="InventoryArrangePlanner.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeSettings.cs" Link="InventoryArrangeSettings.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortDirection.cs" Link="InventorySortDirection.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortKey.cs" Link="InventorySortKey.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortKeySpec.cs" Link="InventorySortKeySpec.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortPreset.cs" Link="InventorySortPreset.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortProfile.cs" Link="InventorySortProfile.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortRegistry.cs" Link="InventorySortRegistry.cs" />
+  </ItemGroup>
+</Project>

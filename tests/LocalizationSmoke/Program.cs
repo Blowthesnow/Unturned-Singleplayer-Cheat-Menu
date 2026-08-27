@@ -1,4 +1,5 @@
 using UnturnedSingleplayerCheatMenu.Services;
+using UnturnedSingleplayerCheatMenu.Models;
 using System.Text.RegularExpressions;
 
 static void Equal<T>(T expected, T actual, string message)
@@ -69,7 +70,44 @@ string[] dynamicUiSamples =
     "已删除传送点：Home。",
     "当前时间：1,234 / 3,600（34%）",
     "时间已设置为周期的 50% 。",
-    "物品：100（模组 20）    车辆：50（模组 10）"
+    "物品：100（模组 20）    车辆：50（模组 10）",
+    "Running  ·  候选 12  ·  成功 8  ·  失败 1  ·  重试 2",
+    "当前 2 条白名单物品。",
+    "当前 3 条黑名单物品；黑名单始终优先。",
+    "15 件  ·  第 2/3 页",
+    "ID 363  ·  点击取消黑名单",
+    "ID 363  ·  点击加入黑名单",
+    "ID 363  ·  点击取消白名单",
+    "ID 363  ·  点击加入白名单",
+    "已将 Maplestrike 加入黑名单。",
+    "已取消物品 ID 363 的黑名单。",
+    "已将 Maplestrike 加入白名单。",
+    "已取消物品 ID 363 的白名单。",
+    "当前背包去重后 15 件  ·  第 2/3 页",
+    "已存储 12 个背包格。",
+    "显示 2 / 5 条目；总数量 1,024。",
+    "ID 363  ·  ×1,024  ·  品质 100  ·  无状态",
+    "ID 363  ·  ×1,024  ·  品质 100  ·  状态 8B",
+    "ID 44  ·  剩余弹药 40  ·  无状态",
+    "ID 44  ·  剩余弹药 40  ·  状态 2B",
+    "ID 1200  ·  剩余弹药 5  ·  品质 73  ·  无状态",
+    "ID 1200  ·  剩余弹药 5  ·  品质 73  ·  状态 2B",
+    "已取出 12 个物品。"
+    ,"显示 2 / 5 条目；资源 1,024，完整物品 3 个。"
+    ,"库存 1,024"
+    ,"库存 2 个 | 弹药 40/40"
+    ,"库存 2 个 | 弹药 40/40 | 品质 73%"
+    ,"库存 2 个 | 燃料 5/10"
+    ,"库存 2 个 | 燃料 5/10 | 品质 73%"
+    ,"库存 2 个 | 水 5/10"
+    ,"库存 2 个 | 水 5/10 | 品质 73%"
+    ,"库存 2 个 | 品质 73% | 状态独立保存"
+    ,"库存 2 个 | 品质 73%"
+    ,"库存 2 个 | 状态独立保存"
+    ,"库存 2 个 | 保守状态隔离"
+    ,"库存 2 个"
+    ,"已取出 12 单位。"
+    ,"已取出 2 个完整物品。"
 };
 
 foreach (string sample in dynamicUiSamples)
@@ -93,7 +131,7 @@ foreach (Match match in stringLiterals)
     staticChineseTemplates.Add(literal);
     Equal(false, PluginLocalization.Translate(literal) == literal, $"Static UI template should have an English translation: {literal}");
 }
-Equal(352, staticChineseTemplates.Count, "Active overlay static localization template count");
+Equal(455, staticChineseTemplates.Count, "Active overlay static localization template count");
 
 PluginLocalization.Initialize("Chinese", "English");
 Equal("单人作弊指令菜单", PluginLocalization.Translate("单人作弊指令菜单"), "Chinese source should remain unchanged");
@@ -102,5 +140,25 @@ Equal("EN", PluginLocalization.SwitchButtonLabel, "Chinese UI should offer the E
 Equal("语言已切换为中文。", PluginLocalization.LanguageChangedMessage(true), "Chinese switch success message");
 Equal("语言已切换为中文，但配置文件保存失败。", PluginLocalization.LanguageChangedMessage(false), "Chinese switch persistence failure message");
 Equal("位置 2", PluginLocalization.DefaultTeleportName(2), "Chinese default teleport name");
+
+string source = "<color=#FF0000><name_npc></color><br><pause> Meet <name_char>";
+WorkshopProtectedText protectedText = WorkshopRichTextProtector.Protect(source);
+Equal(6, protectedText.Tokens.Count, "NPC dialogue tags should all be protected");
+Equal(true, WorkshopRichTextProtector.TryRestore(protectedText, "见到 " + protectedText.Text, out string restored, out string restoreError), "NPC dialogue tags should restore");
+Equal("见到 " + source, restored, "NPC dialogue tags should retain their original text and order");
+Equal(false, WorkshopRichTextProtector.TryRestore(protectedText, "见到 __USCM_PROTECTED_0000__", out _, out _), "Missing protected tokens must be rejected");
+Equal(false, WorkshopRichTextProtector.TryRestore(protectedText, protectedText.Text + " __USCM_PROTECTED_0000__", out _, out _), "Duplicate protected tokens must be rejected");
+Equal(false, WorkshopRichTextProtector.TryRestore(protectedText, protectedText.Text.Replace("__USCM_PROTECTED_0000__", "__USCM_PROTECTED_9999__"), out _, out _), "Unknown protected tokens must be rejected");
+string reorderedTokens = protectedText.Text.Replace("__USCM_PROTECTED_0000__", "__USCM_PROTECTED_9998__").Replace("__USCM_PROTECTED_0001__", "__USCM_PROTECTED_0000__").Replace("__USCM_PROTECTED_9998__", "__USCM_PROTECTED_0001__");
+Equal(false, WorkshopRichTextProtector.TryRestore(protectedText, reorderedTokens, out _, out _), "Reordered protected tokens must be rejected");
+
+string sameSource = "Open the gate";
+string dialogueKey = WorkshopTextIdentity.CreateAssetKey("English", "Schinese", WorkshopTextField.DialogueMessagePage, "DialogueAsset", "11111111111111111111111111111111", "Message_0_Page_0", sameSource);
+string differentGuidKey = WorkshopTextIdentity.CreateAssetKey("English", "Schinese", WorkshopTextField.DialogueMessagePage, "DialogueAsset", "22222222222222222222222222222222", "Message_0_Page_0", sameSource);
+string differentLocalizationKey = WorkshopTextIdentity.CreateAssetKey("English", "Schinese", WorkshopTextField.DialogueMessagePage, "DialogueAsset", "11111111111111111111111111111111", "Message_1_Page_0", sameSource);
+string differentTypeKey = WorkshopTextIdentity.CreateAssetKey("English", "Schinese", WorkshopTextField.ObjectInteract, "ObjectAsset", "11111111111111111111111111111111", "Interact", sameSource);
+Equal(false, dialogueKey == differentGuidKey, "Asset-scoped keys must distinguish asset GUIDs");
+Equal(false, dialogueKey == differentLocalizationKey, "Asset-scoped keys must distinguish localization keys");
+Equal(false, dialogueKey == differentTypeKey, "Asset-scoped keys must distinguish fields and asset types");
 
 Console.WriteLine("Localization smoke checks passed.");
