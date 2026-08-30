@@ -18,7 +18,7 @@ using UnturnedSingleplayerCheatMenu.UI;
 
 namespace UnturnedSingleplayerCheatMenu;
 
-[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.9.0")]
+[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.95.0")]
 [BepInProcess("Unturned.exe")]
 public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
@@ -26,7 +26,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
-	public const string PluginVersion = "1.9.0";
+	public const string PluginVersion = "1.95.0";
 	private const int CurrentMinimapSchemaVersion = 3;
 
 	private ConfigEntry<string> _language;
@@ -1124,7 +1124,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		Favorites.Load();
 		Teleports.Load();
 		_runtimeContext.SubscribeLifecycle();
-		base.Logger.LogInfo("Unturned Singleplayer Cheat Menu 1.9.0 已加载。快捷键：" + ShortcutLabel + "；严格限制：单人模式。");
+		base.Logger.LogInfo("Unturned Singleplayer Cheat Menu " + PluginVersion + " 已加载。快捷键：" + ShortcutLabel + "；严格限制：单人模式。");
 		base.Logger.LogInfo("Plugin UI language: " + PluginLocalization.CurrentLanguageName + "; configured=" + _language.Value + "; Unturned=" + Provider.language + ".");
 		Version version = typeof(BaseUnityPlugin).Assembly.GetName().Version;
 		base.Logger.LogInfo($"检测环境：Unturned {Provider.APP_VERSION}，Unity {Application.unityVersion}，BepInEx {version}。");

@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.95.0] - 2026-08-30 (current source; unreleased)
+
 ### Added
 
 - Added an editable minimap HUD with circular/square layouts; persisted anchors, offsets, size, radius, and zoom shortcuts; player, group, teleport, zombie, animal, player, and item markers; six item-rarity filters; other-floor indicators; and native-map, realtime-surface, height-slice, or fallback-grid backgrounds.
@@ -16,7 +18,9 @@ All notable changes to this project are documented here.
 - Replaced transient runtime host/driver ownership with `PluginRuntimeContext`, `PluginRuntimeComposition`, a static per-frame `RuntimeUpdatePatch` bridge, and one persistent `PluginUiRoot` for menu, HUD, modal, input, and teardown ownership.
 - Split the former monolithic overlay into feature views, presenters, view hosts, state stores, search/edit controllers, toast/window helpers, and deferred destruction outside active Canvas rebuilds.
 - Replaced per-widget font creation with a shared validated Windows system-font provider and unified HUD text under the root canvas.
+- Synchronized the project, assembly, BepInEx plugin metadata, startup log, and About dialog to current source version `1.95.0`.
 - Workshop localization now normalizes up to two API keys, creates one worker per key, dispatches batches concurrently, supports batch sizes from `1–100`, and treats unsupported Mono `MaxConnectionsPerServer` setters as a compatibility fallback rather than a startup failure.
+- Item and vehicle cards now share a fitted thumbnail viewport that updates from each texture's actual aspect ratio, preventing square item icons and wide vehicle renders from being stretched.
 - Vehicle thumbnails now always use the generated auto-framing camera and highest available LOD; authored `Icon2/Icon` transforms are ignored and cache format version `2` invalidates incompatible PNG keys without deleting existing files.
 - Automatic pickup can explicitly follow minimap range and rarity settings, both disabled by default; its rule picker covers the complete carried inventory including the Hands page.
 - Reference preparation now removes the production IMGUI dependency, includes TextMeshPro/TextCore assemblies, and can explicitly remove retired references after path validation.
@@ -33,9 +37,9 @@ All notable changes to this project are documented here.
 
 - Final merged-main Release build completed with zero warnings and zero errors.
 - All 19 recursively discovered Smoke projects passed serially: assembly metadata, automatic pickup, configuration transactions, creature health bars, favorites serialization, flight, infinite storage, inventory arrangement, item filtering, hover tooltips, localization, minimap, movement speed, point-tool actions, shortcut toggles, teleport serialization, uGUI architecture, vehicle thumbnails, and Workshop localization.
-- The locally built source artifact is `852,992` bytes with SHA-256 `6588462CCC704ABC0F941DBFE49AD88C083C0AF3AD6942DBB9980D8F4A33997B`; it was not packaged, deployed, tagged, or published as a release.
+- The locally built `1.95.0.0` source artifact is `852,992` bytes with SHA-256 `4C643DAECC1A0CB4421F47ACA58383275FE659C4D2C989B16CE3B0008E5EFA03`; it was not packaged, deployed, tagged, or published as a release.
 
-## [1.9.0] - 2026-08-27 (source push; unreleased)
+## [1.9.0] - 2026-08-27 (`tooltip-feature` source push; unreleased)
 
 ### Added
 
@@ -59,6 +63,27 @@ All notable changes to this project are documented here.
 
 - Release build passes with zero warnings and zero errors across the plugin and 15 Smoke projects.
 - This entry documents a source-only push. No tag, release package, or GitHub Release was created; complete live-game acceptance remains separate and was not rerun in this source update.
+
+## [1.8.0] - 2026-08-24 (source recovery checkpoint; unreleased)
+
+### Added
+
+- Added Workshop/Vanilla asset-text scanning, translation queues, batching, retry/cache/progress handling, native-UI application, and preservation of existing Chinese localization.
+- Added inventory arrangement planning and rollback, page/all-carried scope, equipment and hotbar protection, automatic rotation, presets, and Ctrl/Shift quick transfer.
+- Added a configurable global-shortcut framework around the existing menu toggle and the new inventory-arrangement actions.
+- Added the UI state, focus, selectable, icon-binding, and progress connections required by these v1.8-stage features.
+
+### Recovery
+
+- Reconstructed source lost during an intermediate reset from the last runnable plugin DLL, then checked the recovered API usage against the local Unturned assemblies.
+- Restored v1.7 and older PointTool, movement, teleport, filtering, favorites, thumbnail, and world-control code only as baseline recovery; those existing behaviors are not counted as v1.8 additions.
+- Kept project and plugin metadata at `1.7.0`; this checkpoint did not create a v1.8 tag, package, or GitHub Release.
+- Detailed scope and exclusions are recorded in [the v1.8 recovery log](docs/V1.8_RECOVERY_CHANGELOG.md).
+
+### Verification
+
+- Historical recovery evidence records a zero-warning/zero-error Release build, eight passing Smoke projects, local `Assembly-CSharp.dll` API checks, and 83 top-level recovered type/signature matches.
+- The historical game check did not claim byte identity with the recovered DLL; this changelog cleanup did not rerun the old commit or relabel current-source automation as v1.8 runtime acceptance.
 
 ## [1.7.0] - 2026-08-21
 

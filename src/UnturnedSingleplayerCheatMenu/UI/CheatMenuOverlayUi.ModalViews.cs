@@ -52,7 +52,7 @@ internal sealed partial class CheatMenuOverlayUi
 			CreateText(gameObject2.transform, "关于此插件", 17, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
 			CreateFlexibleSpacer(gameObject2.transform);
 			Button button = CreateWindowCloseButton(gameObject2.transform, HideAboutDialog, "关闭关于窗口。");
-			CreateText(gameObject.transform, "Unturned Singleplayer Cheat Menu v1.9.0", 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
+			CreateText(gameObject.transform, "Unturned Singleplayer Cheat Menu v" + CheatMenuPlugin.PluginVersion, 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
 			CreateText(gameObject.transform, "作者：Blowthesnow", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft);
 			SetLayout(CreateText(gameObject.transform, "此插件完全免费。如果你在其他地方购买了此插件，请立刻申请退款。", 13, CheatMenuStyle.Warning, TextAnchor.MiddleLeft).gameObject, -1f, 46f);
 			CreateText(gameObject.transform, "项目地址", 12, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Bold);
