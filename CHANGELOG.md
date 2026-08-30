@@ -31,7 +31,9 @@ All notable changes to this project are documented here.
 
 ### Verification
 
-- Final merged-main build and Smoke evidence will be recorded before this source-only push.
+- Final merged-main Release build completed with zero warnings and zero errors.
+- All 19 recursively discovered Smoke projects passed serially: assembly metadata, automatic pickup, configuration transactions, creature health bars, favorites serialization, flight, infinite storage, inventory arrangement, item filtering, hover tooltips, localization, minimap, movement speed, point-tool actions, shortcut toggles, teleport serialization, uGUI architecture, vehicle thumbnails, and Workshop localization.
+- The locally built source artifact is `852,992` bytes with SHA-256 `6588462CCC704ABC0F941DBFE49AD88C083C0AF3AD6942DBB9980D8F4A33997B`; it was not packaged, deployed, tagged, or published as a release.
 
 ## [1.9.0] - 2026-08-27 (source push; unreleased)
 
