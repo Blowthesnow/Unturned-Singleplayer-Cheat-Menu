@@ -132,7 +132,9 @@ internal sealed class InventoryArrangeFeature
 		{
 			if (!ApplyPlan(inventory, captured, inventoryArrangePlan, out reason))
 			{
-				string text = (Restore(inventory, captured, out var reason2) ? ("整理未完成，已恢复执行前库存：" + reason) : ("整理失败且恢复失败；请停止继续操作并查看 BepInEx 日志。原因：" + reason + "；恢复：" + reason2));
+				string text = (Restore(inventory, captured, out var reason2)
+					? ("整理未完成，已恢复执行前库存：" + PluginLocalization.Translate(reason))
+					: ("整理失败且恢复失败；请停止继续操作并查看 BepInEx 日志。原因：" + PluginLocalization.Translate(reason) + "；恢复：" + PluginLocalization.Translate(reason2)));
 				_log?.LogError(text);
 				return Publish(success: false, text, inventoryArrangePlan);
 			}
@@ -140,7 +142,9 @@ internal sealed class InventoryArrangeFeature
 			CapturedInventory capturedInventory = Capture(inventory, GetPages(inventory, scope, inventoryArrangeSettings), inventoryArrangeSettings);
 			if (!string.Equals(captured.Fingerprint, capturedInventory.Fingerprint, StringComparison.Ordinal))
 			{
-				string text2 = (Restore(inventory, captured, out var reason3) ? "整理后校验发现物品指纹变化，已恢复执行前库存。" : ("整理后校验失败且恢复失败；请停止继续操作并查看日志。恢复：" + reason3));
+				string text2 = (Restore(inventory, captured, out var reason3)
+					? "整理后校验发现物品指纹变化，已恢复执行前库存。"
+					: ("整理后校验失败且恢复失败；请停止继续操作并查看日志。恢复：" + PluginLocalization.Translate(reason3)));
 				flag = false;
 				_log?.LogError(text2);
 				return Publish(success: false, text2, inventoryArrangePlan);
@@ -157,7 +161,9 @@ internal sealed class InventoryArrangeFeature
 			string text3 = "整理出现异常；请查看 BepInEx 日志。";
 			if (flag)
 			{
-				text3 = (Restore(inventory, captured, out var reason4) ? "整理出现异常，已恢复执行前库存和热键坐标。" : ("整理出现异常且恢复失败；请停止继续操作并查看 BepInEx 日志。恢复：" + reason4));
+				text3 = (Restore(inventory, captured, out var reason4)
+					? "整理出现异常，已恢复执行前库存和热键坐标。"
+					: ("整理出现异常且恢复失败；请停止继续操作并查看 BepInEx 日志。恢复：" + PluginLocalization.Translate(reason4)));
 			}
 			_log?.LogError(text3 + "\n" + ex);
 			return Publish(success: false, text3, inventoryArrangePlan);
@@ -466,7 +472,7 @@ internal sealed class InventoryArrangeFeature
 		{
 			if (!Restore(Player.LocalPlayer.inventory, _journalBefore, out reason))
 			{
-				return Publish(success: false, "撤销失败，无法恢复原始位置：" + reason, null);
+				return Publish(success: false, "撤销失败，无法恢复原始位置：" + PluginLocalization.Translate(reason), null);
 			}
 			bool flag = string.Equals(Capture(Player.LocalPlayer.inventory, _journalPages, _settings?.Invoke() ?? new InventoryArrangeSettings()).LayoutFingerprint, _journalBefore.LayoutFingerprint, StringComparison.Ordinal);
 			_journalBefore = null;
@@ -761,7 +767,7 @@ internal sealed class InventoryArrangeFeature
 		LastResult = new InventoryArrangeResult
 		{
 			Success = success,
-			Message = message,
+			Message = PluginLocalization.Translate(message),
 			Plan = plan
 		};
 		return LastResult;

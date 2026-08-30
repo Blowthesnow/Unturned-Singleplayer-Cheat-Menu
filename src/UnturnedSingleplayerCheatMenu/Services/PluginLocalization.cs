@@ -204,6 +204,139 @@ internal static class PluginLocalization
 		dictionary["单人作弊指令菜单"] = "Singleplayer Cheat Menu";
 		dictionary["仅限 SINGLEPLAYER"] = "SINGLEPLAYER ONLY";
 		dictionary["关于此插件"] = "About This Plugin";
+		dictionary["从收藏中移除此条目。"] = "Remove this entry from favorites.";
+		dictionary["将此条目添加到收藏。"] = "Add this entry to favorites.";
+		dictionary["选择“{0}”传送标记样式。"] = "Select the “{0}” teleport marker style.";
+		dictionary["打开传送标记颜色选择器。"] = "Open the teleport marker color picker.";
+		dictionary["将此预设颜色载入当前传送标记颜色预览。"] = "Load this preset into the current teleport marker color preview.";
+		dictionary["打开删除传送点“{0}”的确认窗口。"] = "Open the confirmation dialog to delete teleport point “{0}”.";
+		dictionary["将每轮原生拾取请求上限增加 1；到 16 后循环回 1。"] = "Increase the native pickup request limit per tick by 1; after 16 it wraps to 1.";
+		dictionary["在关闭、摘要和逐项诊断日志之间循环切换。"] = "Cycle diagnostics between off, summary, and per-item logging.";
+		dictionary["打开白名单管理页，查看或移除已加入的物品。"] = "Open whitelist management to review or remove listed items.";
+		dictionary["从当前背包选择要加入自动拾取白名单的物品。"] = "Choose items from the current backpack to add to the auto-pickup whitelist.";
+		dictionary["打开黑名单管理页，查看或移除已加入的物品。"] = "Open blacklist management to review or remove listed items.";
+		dictionary["从当前背包选择要加入自动拾取黑名单的物品。"] = "Choose items from the current backpack to add to the auto-pickup blacklist.";
+		dictionary["从当前背包继续选择要加入白名单的物品。"] = "Choose more items from the current backpack to add to the whitelist.";
+		dictionary["从当前背包继续选择要加入黑名单的物品。"] = "Choose more items from the current backpack to add to the blacklist.";
+		dictionary["点击将此物品从自动拾取白名单移除。"] = "Click to remove this item from the auto-pickup whitelist.";
+		dictionary["点击将此物品加入自动拾取白名单。"] = "Click to add this item to the auto-pickup whitelist.";
+		dictionary["点击将此物品从自动拾取黑名单移除。"] = "Click to remove this item from the auto-pickup blacklist.";
+		dictionary["点击将此物品加入自动拾取黑名单。"] = "Click to add this item to the auto-pickup blacklist.";
+		dictionary["关闭白名单物品选择窗口。"] = "Close the whitelist item picker.";
+		dictionary["关闭黑名单物品选择窗口。"] = "Close the blacklist item picker.";
+		dictionary["将每次给予的物品数量减少 1，最低为 1。"] = "Decrease the item quantity given per click by 1, down to 1.";
+		dictionary["将每次给予的物品数量增加 1，最高为 255。"] = "Increase the item quantity given per click by 1, up to 255.";
+		dictionary["打开物品类型、来源、稀有度和装备槽位筛选面板。"] = "Open filters for item type, origin, rarity, and equipment slot.";
+		dictionary["重新读取当前已加载的原版、地图和 Workshop 物品资产。"] = "Reload the currently loaded official, map, and Workshop item assets.";
+		dictionary["将每次生成的载具数量减少 1，最低为 1。"] = "Decrease the number of vehicles spawned per click by 1, down to 1.";
+		dictionary["将每次生成的载具数量增加 1，最高为 20。"] = "Increase the number of vehicles spawned per click by 1, up to 20.";
+		dictionary["设置车辆卡片缩略图的尺寸和取景倍率。"] = "Configure the size and framing scale of vehicle-card thumbnails.";
+		dictionary["重新读取当前已加载的原版、地图和 Workshop 载具资产。"] = "Reload the currently loaded official, map, and Workshop vehicle assets.";
+		dictionary["切换到已收藏物品列表。"] = "Switch to the favorite items list.";
+		dictionary["切换到已收藏载具列表。"] = "Switch to the favorite vehicles list.";
+		dictionary["将收藏物品每次给予的数量减少 1，最低为 1。"] = "Decrease the favorite-item quantity given per click by 1, down to 1.";
+		dictionary["将收藏物品每次给予的数量增加 1，最高为 255。"] = "Increase the favorite-item quantity given per click by 1, up to 255.";
+		dictionary["打开收藏物品的类型、来源、稀有度和装备槽位筛选面板。"] = "Open type, origin, rarity, and equipment-slot filters for favorite items.";
+		dictionary["将收藏载具每次生成的数量减少 1，最低为 1。"] = "Decrease the favorite-vehicle spawn quantity by 1, down to 1.";
+		dictionary["将收藏载具每次生成的数量增加 1，最高为 20。"] = "Increase the favorite-vehicle spawn quantity by 1, up to 20.";
+		dictionary["重新读取当前已加载资产，并刷新已收藏物品和载具。"] = "Reload the currently loaded assets and refresh favorite items and vehicles.";
+		dictionary["只显示“{0}”分类中的车辆。"] = "Show only vehicles in the “{0}” category.";
+		dictionary["只显示“{0}”分类中的物品。"] = "Show only items in the “{0}” category.";
+		dictionary["清除当前已应用的全部高级物品筛选条件。"] = "Clear all currently applied advanced item filters.";
+		dictionary["移除“{0}”筛选条件。"] = "Remove the “{0}” filter.";
+		dictionary["关闭筛选面板并放弃尚未应用的更改。"] = "Close the filter panel and discard unapplied changes.";
+		dictionary["清除筛选面板中的高级条件；点击应用后才会影响结果。"] = "Clear the advanced conditions in this panel; results change only after Apply.";
+		dictionary["放弃筛选面板中尚未应用的更改。"] = "Discard unapplied changes in the filter panel.";
+		dictionary["应用面板中的筛选条件并刷新当前物品结果。"] = "Apply the panel's filters and refresh the current item results.";
+		dictionary["切换“{0}”中的“{1}”筛选选项。"] = "Toggle the “{1}” option under the “{0}” filter.";
+		dictionary["点击卡片按当前数量给予此物品。"] = "Click the card to give this item in the current quantity.";
+		dictionary["点击卡片按当前数量在玩家前方生成此载具。"] = "Click the card to spawn the current quantity of this vehicle in front of the player.";
+		dictionary["切换到上一页结果。"] = "Switch to the previous page of results.";
+		dictionary["切换到下一页结果。"] = "Switch to the next page of results.";
+		dictionary["将六个输入框中的数值写入当前角色的生命与生存状态。"] = "Apply the six input values to the current character's health and survival stats.";
+		dictionary["恢复生命、生存状态并治疗当前伤势。"] = "Restore health and survival stats and treat current injuries.";
+		dictionary["将饱食、水分、免疫、体力和氧气全部补满。"] = "Refill food, water, immunity, stamina, and oxygen to maximum.";
+		dictionary["停止流血并治愈骨折，不改动其他角色数值。"] = "Stop bleeding and heal fractures without changing other character stats.";
+		dictionary["按左侧输入值增加角色经验，单次范围为 1 到 100000000。"] = "Add the value entered on the left to experience, from 1 to 100000000 per use.";
+		dictionary["按左侧输入的正数或负数增减角色声望。"] = "Increase or decrease reputation using the positive or negative value entered on the left.";
+		dictionary["将当前角色所有尚未满级的技能提升到满级。"] = "Raise every skill that is not yet maxed to its maximum level.";
+		dictionary["将每次从无限储存取出的数量减少 1，最低为 1。"] = "Decrease the amount withdrawn from infinite storage by 1, down to 1.";
+		dictionary["将每次从无限储存取出的数量增加 1，最高为 255。"] = "Increase the amount withdrawn from infinite storage by 1, up to 255.";
+		dictionary["打开无限储存物品的详细筛选面板。"] = "Open detailed filters for items in infinite storage.";
+		dictionary["将准星工具最大作用距离增加 25 米；到 250 米后循环回 25 米。"] = "Increase the crosshair tool's maximum range by 25 m; after 250 m it wraps to 25 m.";
+		dictionary["打开准星工具模式列表；当前为“{0}”。"] = "Open the crosshair tool mode list; the current mode is “{0}”.";
+		dictionary["将准星工具切换为“{0}”模式。"] = "Switch the crosshair tool to “{0}” mode.";
+		dictionary["切换到小地图“{0}”设置页。"] = "Switch to the minimap's “{0}” settings page.";
+		dictionary["循环切换小地图视口形状。"] = "Cycle through the minimap viewport shapes.";
+		dictionary["循环切换小地图在屏幕上的锚点位置。"] = "Cycle through the minimap's screen anchor positions.";
+		dictionary["循环切换小地图使用的背景来源。"] = "Cycle through the minimap background sources.";
+		dictionary["允许小地图显示所有稀有度的地面物品。"] = "Allow the minimap to show ground items of every rarity.";
+		dictionary["取消所有物品稀有度，小地图将不显示地面物品标记。"] = "Deselect every item rarity so the minimap shows no ground-item markers.";
+		dictionary["关闭关于窗口。"] = "Close the About window.";
+		dictionary["在系统浏览器中打开此插件的 GitHub 项目页面。"] = "Open this plugin's GitHub project page in the system browser.";
+		dictionary["在系统浏览器中打开作者的爱发电支持页面。"] = "Open the author's Afdian support page in the system browser.";
+		dictionary["关闭字体选择窗口。"] = "Close the font picker.";
+		dictionary["将菜单界面字体切换为“{0}”。"] = "Switch the menu UI font to “{0}”.";
+		dictionary["关闭快捷键设置窗口。"] = "Close the shortcut settings window.";
+		dictionary["滚动到“{0}”快捷键分组。"] = "Scroll to the “{0}” shortcut group.";
+		dictionary["等待输入并把新按键绑定到“{0}”。"] = "Wait for input and bind the new key to “{0}”.";
+		dictionary["清除“{0}”的当前快捷键绑定。"] = "Clear the current shortcut binding for “{0}”.";
+		dictionary["将“{0}”恢复为默认快捷键。"] = "Restore the default shortcut for “{0}”.";
+		dictionary["切换到地图视图，在 GPS 图层上查看和选择传送位置。"] = "Switch to map view to inspect and choose teleport positions on the GPS layer.";
+		dictionary["切换到传送点视图，保存、使用或删除当前地图的传送点。"] = "Switch to teleport-point view to save, use, or delete points for the current map.";
+		dictionary["重新从当前地图目录读取 Map.png 或 Chart.png。"] = "Reload Map.png or Chart.png from the current map directory.";
+		dictionary["缩小当前地图视图以显示更大范围。"] = "Zoom out the current map view to show a larger area.";
+		dictionary["放大当前地图视图以查看更小范围。"] = "Zoom in the current map view to inspect a smaller area.";
+		dictionary["把地图视图中心移动到本地玩家当前位置。"] = "Center the map view on the local player's current position.";
+		dictionary["用输入的名称、标记样式和颜色保存当前玩家位置。"] = "Save the player's current position with the entered name, marker style, and color.";
+		dictionary["传送到保存点“{0}”；被阻挡、地图不符或在载具中时会失败。"] = "Teleport to saved point “{0}”; this fails if blocked, on another map, or while in a vehicle.";
+		dictionary["保留此传送点并关闭删除确认窗口。"] = "Keep this teleport point and close the delete confirmation.";
+		dictionary["永久删除传送点“{0}”。"] = "Permanently delete teleport point “{0}”.";
+		dictionary["切换到“{0}”工具页面。"] = "Switch to the “{0}” tools page.";
+		dictionary["打开翻译 API 协议列表；选择后可配置对应的 Endpoint、API Key 和 Model。"] = "Open the translation API protocol list; then configure its Endpoint, API Key, and Model below.";
+		dictionary["重新扫描已加载资产，并立即把已有缓存译文应用到显示 Getter。"] = "Rescan loaded assets and immediately apply cached translations to display getters.";
+		dictionary["从磁盘重新读取翻译缓存，替换当前内存中的缓存内容。"] = "Reload the translation cache from disk, replacing the in-memory cache.";
+		dictionary["仅向翻译服务提交缓存中尚不存在的当前资产文本。"] = "Submit only current asset text that is not already in the cache.";
+		dictionary["忽略现有缓存，重新提交当前资产文本并覆盖对应缓存译文。"] = "Ignore the existing cache, resubmit current asset text, and overwrite matching cached translations.";
+		dictionary["取消当前正在运行的扫描或翻译任务；已写入缓存的结果会保留。"] = "Cancel the current scan or translation task; results already written to cache are kept.";
+		dictionary["增加一个并行翻译密钥输入框，最多 2 个。"] = "Add an input for another parallel translation key, up to 2.";
+		dictionary["删除此翻译密钥输入框，并保存其余密钥。"] = "Delete this translation-key input and save the remaining keys.";
+		dictionary["使用“{0}”协议连接翻译服务。"] = "Use the “{0}” protocol to connect to the translation service.";
+		dictionary["立即把当前世界时间切换到白天时段。"] = "Immediately set the current world time to daytime.";
+		dictionary["立即把当前世界时间切换到夜晚时段。"] = "Immediately set the current world time to nighttime.";
+		dictionary["冻结或恢复世界时间的自然流动。"] = "Freeze or resume the natural flow of world time.";
+		dictionary["强制启用或关闭当前世界的满月状态。"] = "Force the current world's full-moon state on or off.";
+		dictionary["在当前地图的可用空投节点立即触发一次空投。"] = "Trigger an airdrop immediately at an available airdrop node on the current map.";
+		dictionary["使用当前地图的默认雨天资产立即开始降雨。"] = "Start rain immediately using the current map's default rain asset.";
+		dictionary["使用当前地图的默认雪天资产立即开始暴雪。"] = "Start a blizzard immediately using the current map's default snow asset.";
+		dictionary["结束当前天气效果，但保留后续自然天气调度。"] = "End the current weather effect while keeping future natural weather scheduling.";
+		dictionary["结束当前天气并关闭后续自然天气调度。"] = "End the current weather and disable future natural weather scheduling.";
+		dictionary["重新读取当前已加载的原版、地图和 Workshop 物品与载具资产。"] = "Reload the currently loaded official, map, and Workshop item and vehicle assets.";
+		dictionary["查看并修改全局快捷键绑定。"] = "View and edit global shortcut bindings.";
+		dictionary["查看插件版本、项目主页和支持链接。"] = "View the plugin version, project page, and support link.";
+		dictionary["关闭无限储存窗口。"] = "Close the infinite storage window.";
+		dictionary["切换界面语言并立即重建当前菜单。"] = "Switch the UI language and immediately rebuild the current menu.";
+		dictionary["选择此菜单使用的界面字体。"] = "Choose the UI font used by this menu.";
+		dictionary["关闭作弊菜单。"] = "Close the cheat menu.";
+		dictionary["切换到“{0}”主页面。"] = "Switch to the “{0}” main page.";
+		dictionary["关闭载具缩略图设置且不保存本次更改。"] = "Close vehicle thumbnail settings without saving these changes.";
+		dictionary["选择 128 × 96 缩略图：生成最快、缓存占用最低。"] = "Choose 128 × 96 thumbnails: fastest to generate and lowest cache usage.";
+		dictionary["选择 192 × 144 缩略图：在清晰度与生成开销之间平衡。"] = "Choose 192 × 144 thumbnails: balances clarity and generation cost.";
+		dictionary["选择 256 × 192 缩略图：更清晰，但首次生成更慢。"] = "Choose 256 × 192 thumbnails: clearer, but slower on first generation.";
+		dictionary["放弃本次缩略图尺寸和取景倍率更改。"] = "Discard these thumbnail size and framing-scale changes.";
+		dictionary["保存缩略图尺寸和取景倍率；后续车辆卡片使用新设置。"] = "Save the thumbnail size and framing scale for future vehicle cards.";
+		dictionary["关闭颜色选择器并放弃本次颜色更改。"] = "Close the color picker and discard this color change.";
+		dictionary["放弃本次传送标记颜色更改。"] = "Discard this teleport marker color change.";
+		dictionary["将当前预览颜色用于传送标记。"] = "Use the current preview color for teleport markers.";
+		dictionary["字体"] = "Font";
+		dictionary["选择界面字体"] = "Choose UI Font";
+		dictionary["当前字体："] = "Current font: ";
+		dictionary["仅显示能够完整呈现插件常用简体中文字符的已安装系统字体。"] = "Only installed system fonts that can render the plugin's common Simplified Chinese characters are shown.";
+		dictionary["未找到支持中文的系统字体。"] = "No Chinese-capable system font was found.";
+		dictionary["可用中文字体：{0} 个"] = "Chinese-capable fonts: {0}";
+		dictionary["字体切换失败。"] = "The UI font could not be changed.";
+		dictionary["界面字体已切换为："] = "UI font changed to: ";
+		dictionary["界面字体已切换，但配置文件保存失败。"] = "The UI font changed for this session, but the configuration file could not be saved.";
 		dictionary["作者：Blowthesnow"] = "Author: Blowthesnow";
 		dictionary["此插件完全免费。如果你在其他地方购买了此插件，请立刻申请退款。"] = "This plugin is completely free. If you bought it somewhere else, please request a refund immediately.";
 		dictionary["项目地址"] = "Project";
@@ -216,6 +349,12 @@ internal static class PluginLocalization
 		dictionary["准星"] = "Crosshair";
 		dictionary["生物生命条"] = "Creature Health Bars";
 		dictionary["自动化"] = "Automation";
+		dictionary["小地图开关"] = "Minimap Toggle";
+		dictionary["小地图放大"] = "Minimap Zoom In";
+		dictionary["小地图缩小"] = "Minimap Zoom Out";
+		dictionary["固定组合"] = "Fixed Gesture";
+		dictionary["Alt + 鼠标滚轮上"] = "Alt + Mouse Wheel Up";
+		dictionary["Alt + 鼠标滚轮下"] = "Alt + Mouse Wheel Down";
 		dictionary["打开或关闭菜单"] = "Toggle Menu";
 		dictionary["当前快捷键："] = "Current shortcut: ";
 		dictionary["点击“开始设置”，然后按下要使用的键盘键、鼠标中键或鼠标侧键；鼠标左键和右键不可用，可先按住 Ctrl / Alt / Shift / Win 作为组合键。"] = "Click “Start Setup”, then press a keyboard key, middle mouse button, or side mouse button. Left and right mouse buttons are unavailable; hold Ctrl / Alt / Shift / Win first for a combination.";
@@ -225,6 +364,10 @@ internal static class PluginLocalization
 		dictionary["全局快捷键已更新。"] = "Global shortcut updated.";
 		dictionary["全局快捷键已更新，但配置文件保存失败。"] = "Global shortcut updated, but the configuration file could not be saved.";
 		dictionary["各模式功能介绍"] = "Mode Descriptions";
+		dictionary["准星工具不可用"] = "Crosshair tool unavailable";
+		dictionary["插件尚未完成交互服务初始化。"] = "The interaction service has not finished initializing.";
+		dictionary["移动工具不可用"] = "Movement tools unavailable";
+		dictionary["插件尚未完成移动服务初始化。"] = "The movement service has not finished initializing.";
 		dictionary["切换飞行模式：在世界轴与视角指向之间切换。"] = "Switch flight mode between world-axis and view-direction movement.";
 		dictionary["根据准星目标自动选择单一动作：维修、实用、准星传送、检查或 Shift + 中键删除。"] = "Automatically chooses one action for the crosshair target: repair, utility, crosshair teleport, inspect, or Shift + middle-click delete.";
 		dictionary["查看准星指向对象的名称、ID / GUID、生命 / 耐久和位置等信息。"] = "Shows the crosshair target's name, ID / GUID, health / durability, position, and other details.";
@@ -564,7 +707,11 @@ internal static class PluginLocalization
 		dictionary["开始翻译（未缓存文本）"] = "Start translation (uncached text)";
 		dictionary["请求发送到哪里。大模型通常是 Chat/Message 地址；云翻译使用供应商的 REST 地址。可保留默认值，也可以改成代理地址。"] = "Where requests are sent. Large models usually use a Chat/Message URL; cloud translation uses the provider REST URL. You can keep the default or use a proxy.";
 		dictionary["云翻译供应商发给你的访问密钥或应用 ID。"] = "The access key or application ID issued by the cloud translation provider.";
+		dictionary["云翻译供应商发给你的访问密钥或应用 ID。最多添加 2 个，并按密钥并行翻译。"] = "The access key or application ID issued by the cloud translation provider. Add up to two keys to translate in parallel.";
 		dictionary["大模型平台发给你的 API Key；不会写入日志。\nOllama 本地服务通常不需要填写。"] = "The API key issued by the large-model platform; it is never logged.\nLocal Ollama usually does not need one.";
+		dictionary["大模型平台发给你的 API Key；不会写入日志。最多添加 2 个，并按密钥并行翻译。\nOllama 本地服务通常不需要填写。"] = "The API key issued by the large-model platform; it is never logged. Add up to two keys to translate in parallel.\nLocal Ollama usually does not need one.";
+		dictionary["增加一个并行翻译密钥，最多 2 个。"] = "Add another parallel translation key, up to two.";
+		dictionary["删除此翻译密钥输入框。"] = "Remove this translation key field.";
 		dictionary["部分云翻译供应商需要的第二段密钥：腾讯云 SecretKey、百度 Secret Key 或有道密钥。"] = "The second credential required by some cloud providers: Tencent SecretKey, Baidu Secret Key, or Youdao secret.";
 		dictionary["云服务资源所在区域。例如腾讯云 ap-guangzhou、微软 Translator 的资源区域。"] = "The cloud resource region, such as Tencent ap-guangzhou or the Microsoft Translator resource region.";
 		dictionary["云项目或资源的数字/字符串 ID；没有要求的供应商可以留空。"] = "The cloud project or resource ID; leave it empty when the provider does not require one.";
@@ -615,6 +762,9 @@ internal static class PluginLocalization
 		dictionary[" 的收藏状态。"] = " favorite state.";
 		dictionary["。支持 Map.png / Chart.png。"] = ". Supports Map.png / Chart.png.";
 		dictionary["；供应商："] = "; provider:";
+		dictionary["；密钥："] = "; keys:";
+		dictionary["；并行："] = "; parallel workers:";
+		dictionary[" 路；目标语言："] = "; target language:";
 		dictionary["；模型："] = "; model:";
 		dictionary["；默认禁止自动掉落。"] = "; automatic dropping is disabled by default.";
 		dictionary["；目标语言："] = "; target language:";
@@ -638,7 +788,7 @@ internal static class PluginLocalization
 		dictionary["检查"] = "Inspect";
 		dictionary["交互"] = "Interaction";
 		dictionary["开始翻译（未缓存）"] = "Start Translation (Uncached)";
-		dictionary["每次发送给翻译接口的文本数量，范围 1-50。数量越小越稳，但请求次数更多；修改后下次翻译任务生效。"] = "Texts sent per translation request, from 1 to 50. Smaller batches are more reliable but require more requests; changes apply to the next task.";
+		dictionary["每次发送给翻译接口的文本数量，范围 1-100。数量越小越稳，但请求次数更多；修改后下次翻译任务生效。"] = "Texts sent per translation request, from 1 to 100. Smaller batches are more reliable but require more requests; changes apply to the next task.";
 		dictionary["每批翻译数量"] = "Texts Per Batch";
 		dictionary["名称"] = "Name";
 		dictionary["排序预设："] = "Sort Preset:";
@@ -728,6 +878,10 @@ internal static class PluginLocalization
 		dictionary["自动拾取已启用；关闭菜单后开始扫描。"] = "Auto pickup enabled; scanning starts after closing the menu.";
 		dictionary["自动拾取已关闭。"] = "Auto pickup disabled.";
 		dictionary["自动拾取已开启。"] = "Auto pickup enabled.";
+		dictionary["小地图已开启。"] = "Minimap enabled.";
+		dictionary["小地图已关闭。"] = "Minimap disabled.";
+		dictionary["小地图已放大，可见半径 {0:0} 米。"] = "Minimap zoomed in; visible radius: {0:0} m.";
+		dictionary["小地图已缩小，可见半径 {0:0} 米。"] = "Minimap zoomed out; visible radius: {0:0} m.";
 		dictionary["无限储存功能"] = "Infinite Storage Feature";
 		dictionary["无限储存功能已开启。"] = "Infinite storage feature enabled.";
 		dictionary["无限储存功能已关闭。"] = "Infinite storage feature disabled.";
@@ -815,10 +969,151 @@ internal static class PluginLocalization
 		dictionary["关闭"] = "Off";
 		dictionary["摘要"] = "Summary";
 		dictionary["逐项"] = "Verbose";
+		dictionary["物品收藏  {0}"] = "Item Favorites  {0}";
+		dictionary["车辆收藏  {0}"] = "Vehicle Favorites  {0}";
+		dictionary["飞行模式：{0}"] = "Flight mode: {0}";
+		dictionary["飞行模式已切换为 {0}。"] = "Flight mode changed to {0}.";
+		dictionary["世界轴"] = "World Axis";
+		dictionary["视角指向"] = "View Direction";
+		dictionary["当前地图尚未加载完成。"] = "The current map has not finished loading.";
+		dictionary["当前地图没有可读取的 Map.png / Chart.png；仍可保存当前位置传送点。"] = "The current map has no readable Map.png or Chart.png; the current position can still be saved as a teleport point.";
+		dictionary["字体名称不能为空。"] = "The font name cannot be empty.";
+		dictionary["紧凑"] = "Compact";
+		dictionary["类型"] = "Type";
+		dictionary["大件优先"] = "Large First";
+		dictionary["小件优先"] = "Small First";
+		dictionary["品质优先"] = "Quality First";
+		dictionary["堆叠整理"] = "Stack Fill";
+		dictionary["热键优先"] = "Hotkey First";
+		dictionary["低扰动"] = "Low Movement";
+		dictionary["自定义"] = "Custom";
+		dictionary["参考兼容"] = "Compatibility";
+		dictionary["整理正在执行，已忽略重复请求。"] = "Inventory arrangement is already running; the duplicate request was ignored.";
+		dictionary["跨箱集中正在执行，已忽略重复请求。"] = "A cross-container transfer is already running; the duplicate request was ignored.";
+		dictionary["当前没有可用的本地单人玩家库存。"] = "No local singleplayer inventory is available.";
+		dictionary["当前不在储物箱与随身库存之间，放行原生操作。"] = "The current action is not between storage and carried inventory; the native action was allowed.";
+		dictionary["角色装备切换中，放行原生操作。"] = "Equipment is busy; the native action was allowed.";
+		dictionary["源坐标没有可转移的有效物品，放行原生操作。"] = "The source slot has no valid transferable item; the native action was allowed.";
+		dictionary["目标容器没有可用空位，放行原生操作。"] = "The target container has no free slot; the native action was allowed.";
+		dictionary["已接管原生快速转移：正在集中同一资产的物品。"] = "Native quick transfer was intercepted; items with the same asset are being consolidated.";
+		dictionary["源格子在批量转移期间发生变化，已停止集中。"] = "The source slot changed during batch transfer; consolidation was stopped.";
+		dictionary["原生库存未确认转移结果，已停止批量集中。"] = "The native inventory did not confirm the transfer; batch consolidation was stopped.";
+		dictionary["整理后校验发现物品指纹变化，已恢复执行前库存。"] = "Post-arrangement validation detected changed item fingerprints; the pre-operation inventory was restored.";
+		dictionary["整理出现异常；请查看 BepInEx 日志。"] = "Inventory arrangement failed unexpectedly; check the BepInEx log.";
+		dictionary["整理出现异常，已恢复执行前库存和热键坐标。"] = "Inventory arrangement failed unexpectedly; the pre-operation inventory and hotkey positions were restored.";
+		dictionary["整理正在执行，暂不能撤销。"] = "Inventory arrangement is running and cannot be undone yet.";
+		dictionary["撤销已失效：整理后的库存已被外部操作改变。"] = "Undo is no longer valid because the arranged inventory was changed externally.";
+		dictionary["已撤销上次整理。"] = "The last inventory arrangement was undone.";
+		dictionary["撤销后校验失败，请查看 BepInEx 日志。"] = "Post-undo validation failed; check the BepInEx log.";
+		dictionary["角色装备切换中，无法撤销。"] = "Equipment is busy, so the arrangement cannot be undone.";
+		dictionary["库存包含无法解析的物品，无法安全撤销。"] = "The inventory contains an item that cannot be resolved, so it cannot be safely undone.";
+		dictionary["角色装备切换中，已取消整理。"] = "Equipment is busy; inventory arrangement was canceled.";
+		dictionary["库存包含无法解析的物品，已取消整理以避免丢失物品。"] = "The inventory contains an item that cannot be resolved; arrangement was canceled to avoid item loss.";
+		dictionary["当前上下文没有可用库存容器。"] = "No inventory container is available in the current context.";
+		dictionary["计划引用了不存在的源物品。"] = "The plan references a source item that no longer exists.";
+		dictionary["原生库存 API 拒绝放置计划中的物品。"] = "The native inventory API rejected placement of an item in the plan.";
+		dictionary["原生 API 拒绝恢复原始位置。"] = "The native API rejected restoration of the original position.";
+		dictionary["整理输入不可用。"] = "Inventory arrangement input is unavailable.";
+		dictionary["没有可整理的库存容器。"] = "No inventory container is available for arrangement.";
+		dictionary["受保护物品的位置无效，已取消整理。"] = "A protected item has an invalid position; arrangement was canceled.";
+		dictionary["预检无法完整安置所有物品；不会修改库存，也不会自动掉落。"] = "The preflight check could not place every item; the inventory was not modified and no items were dropped.";
+		dictionary["低扰动整理发现原位置无效，已取消整理。"] = "Low-movement arrangement found an invalid original position; arrangement was canceled.";
+		dictionary["小地图"] = "Minimap";
+		dictionary["小地图与世界雷达"] = "Minimap & World Radar";
+		dictionary["常规"] = "General";
+		dictionary["标记"] = "Markers";
+		dictionary["地下"] = "Underground";
+		dictionary["联动"] = "Links";
+		dictionary["启用小地图"] = "Enable minimap";
+		dictionary["布局编辑"] = "Edit layout";
+		dictionary["进入后插件窗口会隐藏；拖动或缩放小地图，按回车键应用。正常状态不拦截鼠标。"] = "The plugin window hides during layout editing. Drag or resize the minimap, then press Enter to apply. Normal mode does not block the mouse.";
+		dictionary["跟随小地图范围"] = "Follow minimap range";
+		dictionary["默认关闭；开启后只由小地图可见半径单向约束自动拾取距离。"] = "Disabled by default; when enabled, only the minimap visible radius constrains auto-pickup range one way.";
+		dictionary["跟随小地图稀有度"] = "Follow minimap rarities";
+		dictionary["默认关闭；开启后小地图稀有度掩码会额外约束自动拾取，不会反向影响雷达显示。"] = "Disabled by default; when enabled, the minimap rarity mask additionally constrains auto pickup without affecting radar visibility.";
+		dictionary[" 像素"] = " px";
+		dictionary[" 米"] = " m";
+		dictionary[" 次/秒"] = " Hz";
+		dictionary[" 秒"] = " s";
+		dictionary["形状："] = "Shape: ";
+		dictionary["锚点："] = "Anchor: ";
+		dictionary["背景："] = "Background: ";
+		dictionary["背景"] = "Background";
+		dictionary["扫描"] = "Scan";
+		dictionary["大小"] = "Size";
+		dictionary["可见半径"] = "Visible radius";
+		dictionary["实时建筑"] = "Realtime buildings";
+		dictionary["指南针"] = "Compass";
+		dictionary["坐标"] = "Coordinates";
+		dictionary["圆形与正方形视口均已预创建；切换不会在画布重建期间销毁后重建。"] = "Circle and square viewports are pre-created; switching never destroys and rebuilds them during a canvas rebuild.";
+		dictionary["原生标记"] = "Native markers";
+		dictionary["传送点"] = "Teleport points";
+		dictionary["其他玩家"] = "Other players";
+		dictionary["僵尸"] = "Zombies";
+		dictionary["动物"] = "Animals";
+		dictionary["地面物品"] = "Ground items";
+		dictionary["物品稀有度"] = "Item rarities";
+		dictionary["普通"] = "Common";
+		dictionary["罕见"] = "Uncommon";
+		dictionary["稀有"] = "Rare";
+		dictionary["史诗"] = "Epic";
+		dictionary["传奇"] = "Legendary";
+		dictionary["神话"] = "Mythical";
+		dictionary["全选"] = "Select all";
+		dictionary["全不选"] = "Select none";
+		dictionary["合并"] = "Merge";
+		dictionary["同层"] = "Same floor";
+		dictionary["显示其他楼层"] = "Show other floors";
+		dictionary["默认显示全部楼层；淡化的三角图形表示目标在上方或下方。"] = "All floors are shown by default; dimmed triangle icons indicate targets above or below.";
+		dictionary["5 点双向探针按连续厚度判定；薄楼板与楼层间空气不会累计。"] = "Five bidirectional probes use continuous thickness; thin floors and air gaps between floors are not accumulated.";
+		dictionary["探针"] = "Probe";
+		dictionary["合并间隙"] = "Merge gap";
+		dictionary["进入厚度"] = "Enter thickness";
+		dictionary["退出厚度"] = "Exit thickness";
+		dictionary["进入延时"] = "Enter delay";
+		dictionary["退出延时"] = "Exit delay";
+		dictionary["楼板排除"] = "Floor exclusion";
+		dictionary["切片上方"] = "Slice above";
+		dictionary["切片下方"] = "Slice below";
+		dictionary["安全关系必须满足：楼板排除 ≤ 退出厚度 < 进入厚度；无效组合会回退默认值。"] = "The safe relationship must be floor exclusion ≤ exit thickness < enter thickness; invalid combinations fall back to defaults.";
+		dictionary["两个联动均默认关闭，并且只允许小地图设置单向约束自动拾取。"] = "Both links are disabled by default and only allow minimap settings to constrain auto pickup one way.";
+		dictionary["拾取范围跟随小地图"] = "Use minimap pickup range";
+		dictionary["拾取稀有度跟随小地图"] = "Use minimap rarity filter";
+		dictionary["小地图物品层始终读取原始地面物品快照；自动拾取关闭、品质、名单和丢弃抑制都不会隐藏物品图形。"] = "The minimap item layer always reads raw ground-item snapshots; auto-pickup state, quality, lists, and drop suppression never hide item icons.";
+		dictionary["地下白名单辅助证据："] = "Underground allowlist auxiliary evidence: ";
+		dictionary["是"] = "Yes";
+		dictionary["否"] = "No";
 		English = dictionary;
 		Chinese = new Dictionary<string, string>(StringComparer.Ordinal) { ["Workshop"] = "创意工坊" };
-		EnglishPatterns = new PatternTranslation[88]
+		EnglishPatterns = new PatternTranslation[]
 		{
+			new PatternTranslation("^每轮 ([\\d,]+) 个请求$", "$1 requests per tick"),
+			new PatternTranslation("^显示 ([\\d,]+) 辆已加载收藏车辆。$", "Showing $1 loaded favorite vehicles."),
+			new PatternTranslation("^最大距离 ([\\d,.]+)m$", "Maximum range: $1m"),
+			new PatternTranslation("^状态：(.+?)  ·  默认关闭  ·  北向固定$", "State: $1  ·  disabled by default  ·  north-up"),
+			new PatternTranslation("^形状：(.+)$", "Shape: $1"),
+			new PatternTranslation("^锚点：(.+)$", "Anchor: $1"),
+			new PatternTranslation("^当前可见半径：(.+?) 米  ·  稀有度：(.+)$", "Visible radius: $1 m  ·  rarities: $2"),
+			new PatternTranslation("^背景：(.+?)  ·  厚遮挡探针：(\\d+)/(\\d+)  ·  最大连续厚度：(.+?) 米$", "Background: $1  ·  thick probes: $2/$3  ·  max continuous thickness: $4 m"),
+			new PatternTranslation("^地下白名单辅助证据：是$", "Underground allowlist auxiliary evidence: yes"),
+			new PatternTranslation("^地下白名单辅助证据：否$", "Underground allowlist auxiliary evidence: no"),
+			new PatternTranslation("^背景：(.+)$", "Background: $1"),
+			new PatternTranslation("^已传送到地图坐标 X (.+?) · Z (.+?)。$", "Teleported to map coordinates X $1 · Z $2."),
+			new PatternTranslation("^预览：(\\d+)%$", "Preview: $1%"),
+			new PatternTranslation("^无法读取系统字体列表：(.+)$", "Could not read the system font list: $1"),
+			new PatternTranslation("^系统中未安装字体：(.+)$", "The font is not installed: $1"),
+			new PatternTranslation("^该字体不包含插件所需的简体中文字符：(.+)$", "The font does not contain the Simplified Chinese characters required by the plugin: $1"),
+			new PatternTranslation("^Unity 无法加载系统字体：(.+)$", "Unity could not load the system font: $1"),
+			new PatternTranslation("^该字体缺少简体中文字符 U\\+([0-9A-Fa-f]+)：(.+)$", "The font is missing Simplified Chinese character U+$1: $2"),
+			new PatternTranslation("^加载系统字体失败：(.+)$", "Failed to load the system font: $1"),
+			new PatternTranslation("^预览：移动 (\\d+)，归并 (\\d+)，跨页 (\\d+)。$", "Preview: $1 moves, $2 merges, $3 cross-page placements."),
+			new PatternTranslation("^已整理：移动 (\\d+)，归并 (\\d+)，跨页 (\\d+)。$", "Arranged: $1 moves, $2 merges, $3 cross-page placements."),
+			new PatternTranslation("^同物品跨箱集中完成：已转移 (\\d+) 件。$", "Cross-container consolidation complete: moved $1 items."),
+			new PatternTranslation("^整理未完成，已恢复执行前库存：(.+)$", "Arrangement did not complete; the pre-operation inventory was restored: $1"),
+			new PatternTranslation("^整理失败且恢复失败；请停止继续操作并查看 BepInEx 日志。原因：(.+?)；恢复：(.+)$", "Arrangement and restoration both failed; stop further operations and check the BepInEx log. Cause: $1; restoration: $2"),
+			new PatternTranslation("^整理后校验失败且恢复失败；请停止继续操作并查看日志。恢复：(.+)$", "Post-arrangement validation and restoration both failed; stop further operations and check the log. Restoration: $1"),
+			new PatternTranslation("^整理出现异常且恢复失败；请停止继续操作并查看 BepInEx 日志。恢复：(.+)$", "Inventory arrangement and restoration both failed unexpectedly; stop further operations and check the BepInEx log. Restoration: $1"),
+			new PatternTranslation("^撤销失败，无法恢复原始位置：(.+)$", "Undo failed because the original positions could not be restored: $1"),
 			new PatternTranslation("^飞行模式：世界轴$", "Flight mode: World Axis"),
 			new PatternTranslation("^飞行模式：视角指向$", "Flight mode: View Direction"),
 			new PatternTranslation("^飞行模式已切换为 世界轴。$", "Flight mode changed to World Axis."),
@@ -827,6 +1122,7 @@ internal static class PluginLocalization
 			new PatternTranslation("^文本总数 (\\d+) · 缓存命中 (\\d+) · 中文跳过 (\\d+) · 待翻译 (\\d+) · 完成 (\\d+) · 失败 (\\d+)$", "Texts $1 · cache hits $2 · Chinese skipped $3 · pending $4 · completed $5 · failed $6"),
 			new PatternTranslation("^文本总数 (\\d+) · 缓存命中 (\\d+) · 待翻译 (\\d+) · 完成 (\\d+) · 失败 (\\d+)$", "Texts $1 · cache hits $2 · pending $3 · completed $4 · failed $5"),
 			new PatternTranslation("^机翻 API：(.+?)；协议：(.+?)；目标语言：(.+?)；模型：(.+)$", "Translation API: $1; protocol: $2; target language: $3; model: $4"),
+			new PatternTranslation("^翻译接口：(.+?)；供应商：(.+?)；密钥：(\\d+)/(\\d+)；并行：(\\d+) 路；目标语言：(.+?)；模型：(.+)$", "Translation: $1; provider: $2; keys: $3/$4; parallel workers: $5; target language: $6; model: $7"),
 			new PatternTranslation("^翻译接口：(.+?)；供应商：(.+?)；目标语言：(.+?)；模型：(.+)$", "Translation: $1; provider: $2; target language: $3; model: $4"),
 			new PatternTranslation("^缓存文件：(.+)$", "Cache file: $1"),
 			new PatternTranslation("^筛选 (\\d+)$", "Filter $1"),

@@ -18,12 +18,21 @@ internal sealed class MachineTranslationClient : IWorkshopTranslationClient, IDi
 	private readonly HttpClient _httpClient;
 
 	internal MachineTranslationClient()
-		: this(new HttpClientHandler
+		: this(CreateDefaultHandler())
+	{
+	}
+
+	private static HttpMessageHandler CreateDefaultHandler()
+	{
+		HttpClientHandler handler = new HttpClientHandler
 		{
 			AllowAutoRedirect = false,
 			UseProxy = true
-		})
-	{
+		};
+		HttpClientHandlerCompatibility.TrySetMaxConnectionsPerServer(
+			value => handler.MaxConnectionsPerServer = value,
+			MachineTranslationSettings.MaxApiKeyCount);
+		return handler;
 	}
 
 	internal MachineTranslationClient(HttpMessageHandler handler)

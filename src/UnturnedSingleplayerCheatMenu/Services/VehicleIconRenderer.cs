@@ -84,18 +84,13 @@ internal sealed class VehicleIconRenderer
 
 	private Texture2D Render(VehicleAsset asset, VehicleThumbnailRenderSettings settings)
 	{
-		Texture2D texture2D = RenderAttempt(asset, settings, forceGeneratedCamera: false, out var usedGeneratedCamera);
-		if (!usedGeneratedCamera)
-		{
-			return texture2D;
-		}
+		Texture2D texture2D = RenderAttempt(asset, settings);
 		if (TryFinalizeTexture(texture2D))
 		{
 			return texture2D;
 		}
 		DestroyTexture(texture2D);
-		_plugin?.LogVehicleIconFallback(asset, "透明图检测后的自动取景重拍");
-		texture2D = RenderAttempt(asset, settings, forceGeneratedCamera: true, out var _);
+		texture2D = RenderAttempt(asset, settings);
 		if (TryFinalizeTexture(texture2D))
 		{
 			return texture2D;
@@ -104,9 +99,8 @@ internal sealed class VehicleIconRenderer
 		return null;
 	}
 
-	private Texture2D RenderAttempt(VehicleAsset asset, VehicleThumbnailRenderSettings settings, bool forceGeneratedCamera, out bool usedGeneratedCamera)
+	private Texture2D RenderAttempt(VehicleAsset asset, VehicleThumbnailRenderSettings settings)
 	{
-		usedGeneratedCamera = false;
 		Transform transform = VehicleTool.getVehicle(asset.id, 0, 0, asset, null);
 		if (transform == null)
 		{
@@ -117,34 +111,8 @@ internal sealed class VehicleIconRenderer
 			transform.position = new Vector3(-256f, -256f, 0f);
 			Renderer[] componentsInChildren = transform.GetComponentsInChildren<Renderer>(includeInactive: true);
 			SetPreviewLayers(componentsInChildren);
-			Transform transform2 = (forceGeneratedCamera ? null : transform.Find("Icon2"));
-			float orthoSize = asset.size2_z;
-			if (transform2 == null)
-			{
-				transform2 = (forceGeneratedCamera ? null : transform.Find("Icon"));
-				if (transform2 == null)
-				{
-					transform2 = CreateGeneratedIconTransform(transform, componentsInChildren, settings, out orthoSize);
-					usedGeneratedCamera = true;
-					if (!forceGeneratedCamera)
-					{
-						_plugin?.LogVehicleIconFallback(asset, "缺少可用 Icon2 时的自动取景");
-					}
-				}
-				else
-				{
-					orthoSize = CalculateOrthoSize(transform2, GetRenderableBounds(componentsInChildren), 1f);
-					_plugin?.LogVehicleIconFallback(asset, "旧版 Icon 取景");
-				}
-			}
-			else if (!IsUsableSize(orthoSize))
-			{
-				orthoSize = CalculateOrthoSize(transform2, GetRenderableBounds(componentsInChildren), 1f);
-			}
-			if (usedGeneratedCamera)
-			{
-				ForceHighestLod(transform);
-			}
+			Transform transform2 = CreateGeneratedIconTransform(transform, componentsInChildren, settings, out float orthoSize);
+			ForceHighestLod(transform);
 			Texture2D result = ItemTool.captureIcon(asset.id, 0, transform, transform2, settings.Width, settings.Height, Mathf.Max(0.25f, orthoSize), readableOnCPU: true);
 			transform = null;
 			return result;
@@ -188,15 +156,6 @@ internal sealed class VehicleIconRenderer
 		{
 			UnityEngine.Object.Destroy(texture);
 		}
-	}
-
-	private static bool IsUsableSize(float value)
-	{
-		if (value > 0.01f && !float.IsNaN(value))
-		{
-			return !float.IsInfinity(value);
-		}
-		return false;
 	}
 
 	private static void ForceHighestLod(Transform model)

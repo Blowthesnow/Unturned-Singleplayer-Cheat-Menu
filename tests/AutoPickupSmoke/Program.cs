@@ -19,6 +19,9 @@ Assert(minimum.RequestsPerTick == 16, "Request budget must retain the 16-request
 
 AutoPickupSettings maximum = new AutoPickupSettings { Range = 5000f }.Normalize();
 Assert(maximum.Range == AutoPickupSettings.MaxRange, "Pickup range must clamp to the user-visible 1000m maximum.");
+AutoPickupSettings linkDefaults = new AutoPickupSettings();
+Assert(!linkDefaults.UseMinimapRange && !linkDefaults.UseMinimapRarityFilter,
+    "Minimap range/rarity links must remain explicit opt-ins.");
 AutoPickupSettings dropBlock = new AutoPickupSettings { DropBlockMinutes = 0 }.Normalize();
 Assert(dropBlock.DropBlockMinutes == AutoPickupSettings.MinDropBlockMinutes, "Drop block duration must clamp to the 1-minute minimum.");
 dropBlock.DropBlockMinutes = 9999;
@@ -150,13 +153,49 @@ finally
 
 string repositoryRoot = Environment.CurrentDirectory;
 string runtimeSourcePath = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "AutoPickup", "AutoPickupRuntime.cs");
+string rawItemIndexPath = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "Minimap", "NearbyItemIndex.cs");
 string pluginSourcePath = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "CheatMenuPlugin.cs");
-string uiSourcePath = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "UI", "CheatMenuOverlayUi.cs");
-Assert(File.Exists(runtimeSourcePath) && File.Exists(pluginSourcePath) && File.Exists(uiSourcePath), "Run AutoPickupSmoke from the repository root so runtime contracts can be inspected.");
+string runtimeContextPath = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "Services", "PluginRuntimeContext.cs");
+string minimapSourceDirectory = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "Minimap");
+string uiSourceDirectory = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "UI");
+Assert(File.Exists(runtimeSourcePath) && File.Exists(rawItemIndexPath) && File.Exists(pluginSourcePath) &&
+       File.Exists(runtimeContextPath) && Directory.Exists(minimapSourceDirectory) && Directory.Exists(uiSourceDirectory),
+    "Run AutoPickupSmoke from the repository root so runtime and raw-index contracts can be inspected.");
 string runtimeSource = File.ReadAllText(runtimeSourcePath);
+string rawItemIndexSource = File.ReadAllText(rawItemIndexPath);
 string pluginSource = File.ReadAllText(pluginSourcePath);
-string uiSource = File.ReadAllText(uiSourcePath);
+string runtimeContextSource = File.ReadAllText(runtimeContextPath);
+string minimapSource = string.Join("\n", Directory.EnumerateFiles(minimapSourceDirectory, "*.cs").OrderBy(path => path, StringComparer.Ordinal).Select(File.ReadAllText));
+string uiSource = string.Join("\n", Directory.EnumerateFiles(uiSourceDirectory, "*.cs").OrderBy(path => path, StringComparer.Ordinal).Select(File.ReadAllText));
+Assert(uiSource.Contains("for (byte page = PlayerInventory.SLOTS; page < PlayerInventory.STORAGE", StringComparison.Ordinal),
+    "The whitelist/blacklist picker must enumerate the complete carried inventory, including the Hands page.");
 Assert(runtimeSource.Contains("SingleplayerGuard.IsReady", StringComparison.Ordinal), "Every runtime pump must retain the singleplayer hard gate.");
+Assert(!rawItemIndexSource.Contains("AutoPickupDropGate", StringComparison.Ordinal) &&
+      !rawItemIndexSource.Contains("AllowsQuality", StringComparison.Ordinal) &&
+      !rawItemIndexSource.Contains("ItemFilterMatcher", StringComparison.Ordinal) &&
+      !rawItemIndexSource.Contains("takeItem", StringComparison.Ordinal),
+    "The shared ground-item index must enumerate raw client-known drops without pickup-specific gates or actions.");
+Assert(runtimeSource.Contains("AutoPickupCandidateAdapter", StringComparison.Ordinal) &&
+      !runtimeSource.Contains("internal sealed class DropScanner", StringComparison.Ordinal),
+    "AutoPickup must consume the raw index through its own adapter instead of owning Region enumeration.");
+Assert(!runtimeSource.Contains("DropScanner.", StringComparison.Ordinal),
+    "AutoPickupRuntime still references the removed DropScanner type.");
+Assert(runtimeSource.Contains("ResolveEffectiveRange()", StringComparison.Ordinal) &&
+      runtimeSource.Contains("if (!_settings.UseMinimapRange)", StringComparison.Ordinal) &&
+      runtimeSource.Contains("if (_settings.UseMinimapRarityFilter && !AllowsMinimapRarity(candidate.Asset))", StringComparison.Ordinal),
+    "Auto-pickup does not apply its two explicit minimap link gates only on the pickup-consumer path.");
+Assert(pluginSource.Contains("Config.Bind(\"AutoPickup\", \"UseMinimapRange\", defaultValue: false", StringComparison.Ordinal) &&
+      pluginSource.Contains("Config.Bind(\"AutoPickup\", \"UseMinimapRarityFilter\", defaultValue: false", StringComparison.Ordinal),
+    "Minimap linkage is not persisted as two disabled-by-default AutoPickup options.");
+Assert(runtimeContextSource.Contains("Mathf.Max(radius, autoRadius)", StringComparison.Ordinal) &&
+      runtimeContextSource.Contains("Mathf.Max(frequency, autoFrequency)", StringComparison.Ordinal) &&
+      runtimeContextSource.Contains("_nearbyItemIndex.Refresh", StringComparison.Ordinal),
+    "Auto-pickup and minimap do not share one max-radius/max-frequency raw item scan.");
+Assert(!minimapSource.Contains("AutoPickupDropGate", StringComparison.Ordinal) &&
+      !minimapSource.Contains("AllowsQuality", StringComparison.Ordinal) &&
+      !minimapSource.Contains("ItemFilterMatcher", StringComparison.Ordinal) &&
+      !minimapSource.Contains("ItemManager.takeItem", StringComparison.Ordinal),
+    "Minimap item visibility is still coupled to pickup-only gates or actions.");
 Assert(runtimeSource.Contains("ItemManager.takeItem", StringComparison.Ordinal), "Pickup must use the game's native ItemManager.takeItem path.");
 Assert(!runtimeSource.Contains("Physics.Raycast", StringComparison.Ordinal) && !runtimeSource.Contains("Physics.Linecast", StringComparison.Ordinal), "Drop scanning must not add a visibility ray gate.");
 Assert(!runtimeSource.Contains("player.transform.position =", StringComparison.Ordinal), "Auto pickup must never move the player to reach a drop.");

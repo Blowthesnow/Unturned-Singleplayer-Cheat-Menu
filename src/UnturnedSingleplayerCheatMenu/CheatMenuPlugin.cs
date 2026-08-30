@@ -2,16 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
-using HarmonyLib;
 using SDG.Unturned;
 using UnityEngine;
 using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
+using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Patches;
 using UnturnedSingleplayerCheatMenu.Services;
@@ -28,10 +27,11 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
 	public const string PluginVersion = "1.9.0";
-
-	private Harmony _harmony;
+	private const int CurrentMinimapSchemaVersion = 3;
 
 	private ConfigEntry<string> _language;
+
+	private ConfigEntry<string> _fontFamily;
 
 	private ConfigEntry<KeyboardShortcut> _toggleShortcut;
 
@@ -60,6 +60,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private ConfigEntry<KeyboardShortcut> _toggleCreatureHealthBarsShortcut;
 
 	private ConfigEntry<KeyboardShortcut> _toggleAutoPickupShortcut;
+
+	private ConfigEntry<KeyboardShortcut> _toggleMinimapShortcut;
 
 	private ConfigEntry<KeyboardShortcut> _toggleInfiniteStorageEnabledShortcut;
 
@@ -109,6 +111,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private ConfigEntry<string> _lastTeleportView;
 
+	private ConfigEntry<float> _windowPositionX;
+
+	private ConfigEntry<float> _windowPositionY;
+
 	private ConfigEntry<bool> _pointToolEnabled;
 
 	private ConfigEntry<string> _pointToolMode;
@@ -131,10 +137,6 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private ConfigEntry<float> _autoPickupRange;
 
-	private ConfigEntry<float> _autoPickupLegacyScanRadius;
-
-	private ConfigEntry<float> _autoPickupLegacyRequestRange;
-
 	private ConfigEntry<float> _autoPickupFrequencyHz;
 
 	private ConfigEntry<int> _autoPickupRequestsPerTick;
@@ -154,6 +156,44 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private ConfigEntry<bool> _autoPickupPauseWhenDead;
 
 	private ConfigEntry<string> _autoPickupDiagnostics;
+	private ConfigEntry<bool> _autoPickupUseMinimapRange;
+	private ConfigEntry<bool> _autoPickupUseMinimapRarityFilter;
+
+	private ConfigEntry<int> _minimapSchemaVersion;
+	private ConfigEntry<bool> _minimapEnabled;
+	private ConfigEntry<string> _minimapShape;
+	private ConfigEntry<string> _minimapAnchor;
+	private ConfigEntry<float> _minimapOffsetX;
+	private ConfigEntry<float> _minimapOffsetY;
+	private ConfigEntry<float> _minimapSize;
+	private ConfigEntry<float> _minimapVisibleRadius;
+	private ConfigEntry<string> _minimapBackgroundMode;
+	private ConfigEntry<float> _minimapBackgroundRenderHz;
+	private ConfigEntry<float> _minimapWorldScanHz;
+	private ConfigEntry<bool> _minimapShowLoadedBuildings;
+	private ConfigEntry<float> _minimapOcclusionProbeHz;
+	private ConfigEntry<float> _minimapOcclusionEnterThickness;
+	private ConfigEntry<float> _minimapOcclusionExitThickness;
+	private ConfigEntry<float> _minimapOcclusionEnterDelay;
+	private ConfigEntry<float> _minimapOcclusionExitDelay;
+	private ConfigEntry<float> _minimapOcclusionMergeGap;
+	private ConfigEntry<float> _minimapFloorExclusionMaxThickness;
+	private ConfigEntry<bool> _minimapShowCompass;
+	private ConfigEntry<bool> _minimapShowCoordinates;
+	private ConfigEntry<bool> _minimapShowNativeMapMarkers;
+	private ConfigEntry<bool> _minimapShowTeleportMarkers;
+	private ConfigEntry<bool> _minimapShowZombies;
+	private ConfigEntry<bool> _minimapShowAnimals;
+	private ConfigEntry<bool> _minimapShowPlayers;
+	private ConfigEntry<bool> _minimapShowItems;
+	private ConfigEntry<string> _minimapItemRarityMask;
+	private ConfigEntry<float> _minimapItemMergePixels;
+	private ConfigEntry<float> _minimapUndergroundSliceAbove;
+	private ConfigEntry<float> _minimapUndergroundSliceBelow;
+	private ConfigEntry<float> _minimapSameFloorTolerance;
+	private ConfigEntry<bool> _minimapShowOtherFloors;
+	private ConfigEntry<bool> _minimapLayoutEditMode;
+	private bool _minimapConfigurationWarningLogged;
 
 	private ConfigEntry<float> _flightSpeed;
 
@@ -199,29 +239,24 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private CheatMenuOverlayUi _ui;
 
-	private PluginRuntimeHost _runtimeHost;
+	private PluginUiRoot _uiRoot;
+
+	private PluginRuntimeContext _runtimeContext;
 
 	private VehicleIconRenderer _vehicleIconRenderer;
 
 	private PointToolHud _pointToolHud;
 
 	private CreatureHealthBarHud _creatureHealthBarHud;
+	private NearbyItemIndex _nearbyItemIndex;
+
+	private readonly UiInputCaptureController _inputCapture = new UiInputCaptureController();
 
 	private GlobalShortcutManager _shortcutManager;
-
-	private float _nextMaintenanceTime;
-
-	private int _lastRuntimeUpdateFrame = -1;
-
-	private int _lastWorkshopSnapshotVersion = -1;
-
-	private int _infiniteStorageRefreshFrame = -1;
 
 	private bool _menuOpen;
 
 	private bool _infiniteStorageOpen;
-
-	private bool _hasLoggedUpdateCallback;
 
 	private bool _hasLoggedVehicleIconFallback;
 
@@ -235,14 +270,6 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private bool _hasLoggedVehicleIconCacheWriteFailure;
 
-	private SleekWindow _capturedWindow;
-
-	private bool _windowWasEnabled;
-
-	private bool _windowWasShowingCursor;
-
-	private bool _hasCapturedUnityCursor;
-
 	private static readonly PointToolMode[] ShortcutPointToolModes = new PointToolMode[6]
 	{
 		PointToolMode.Smart,
@@ -253,11 +280,9 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		PointToolMode.Delete
 	};
 
-	private bool _cursorWasVisible;
-
-	private CursorLockMode _cursorWasLocked;
-
 	internal static CheatMenuPlugin Instance { get; private set; }
+
+	internal ManualLogSource PluginLogger => Logger;
 
 	internal AssetCatalog Catalog { get; private set; }
 
@@ -279,6 +304,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal AutoPickupFeature AutoPickup { get; private set; }
 
+	internal MinimapFeature Minimap { get; private set; }
+
 	internal InfiniteStorageRuntime InfiniteStorage { get; private set; }
 
 	internal CreatureHealthBarService CreatureHealthBars { get; private set; }
@@ -290,6 +317,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal string ShortcutLabel => GetShortcutLabel("menu.toggle");
 
 	internal bool IsMenuOpen => _menuOpen;
+	internal bool IsMinimapLayoutEditActive => Minimap?.Settings.LayoutEditMode ?? false;
 
 	internal bool IsInfiniteStorageOpen => _infiniteStorageOpen;
 
@@ -299,11 +327,35 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal string LastTeleportView => _lastTeleportView?.Value ?? "Map";
 
+	internal Vector2 NormalizedWindowPosition => new Vector2(_windowPositionX?.Value ?? 0f, _windowPositionY?.Value ?? 0f);
+
+	internal string SelectedFontFamily => SystemFontProvider.SelectedSystemFont;
+
 	internal VehicleThumbnailRenderSettings VehicleThumbnailSettings { get; private set; }
 
 	internal WorkshopLocalizationService WorkshopLocalization { get; private set; }
 
 	internal string InventoryArrangeCustomKeys => _inventoryArrangeCustomKeys?.Value ?? "Type:Ascending,Area:Descending,Name:Ascending";
+
+	internal IReadOnlyList<SystemFontFamilyOption> GetInstalledChineseFontFamilies()
+	{
+		return SystemFontProvider.GetInstalledChineseFontFamilies(base.Logger);
+	}
+
+	internal bool TrySetFontFamily(string fontFamily, out bool persisted, out string error)
+	{
+		persisted = false;
+		if (!SystemFontProvider.TrySelectSystemFont(fontFamily, base.Logger, out error))
+		{
+			return false;
+		}
+		persisted = PersistInterfaceState(_fontFamily, SystemFontProvider.SelectedSystemFont);
+		if (!persisted)
+		{
+			error = "界面字体已切换，但配置文件保存失败。";
+		}
+		return true;
+	}
 
 	internal bool SetLastMainTab(string value)
 	{
@@ -313,6 +365,32 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal bool SetLastTeleportView(string value)
 	{
 		return PersistInterfaceState(_lastTeleportView, value);
+	}
+
+	internal void SetWindowPosition(Vector2 normalizedPosition)
+	{
+		if (_windowPositionX == null || _windowPositionY == null)
+		{
+			return;
+		}
+		normalizedPosition.x = float.IsNaN(normalizedPosition.x) || float.IsInfinity(normalizedPosition.x) ? 0f : Mathf.Clamp(normalizedPosition.x, -1f, 1f);
+		normalizedPosition.y = float.IsNaN(normalizedPosition.y) || float.IsInfinity(normalizedPosition.y) ? 0f : Mathf.Clamp(normalizedPosition.y, -1f, 1f);
+		bool saveOnConfigSet = base.Config.SaveOnConfigSet;
+		try
+		{
+			base.Config.SaveOnConfigSet = false;
+			_windowPositionX.Value = normalizedPosition.x;
+			_windowPositionY.Value = normalizedPosition.y;
+			base.Config.Save();
+		}
+		catch (Exception exception)
+		{
+			base.Logger.LogWarning($"窗口位置已在本次运行中更新，但配置文件保存失败。\n{exception}");
+		}
+		finally
+		{
+			base.Config.SaveOnConfigSet = saveOnConfigSet;
+		}
 	}
 
 	internal bool ApplyVehicleThumbnailSettings(int width, float framing)
@@ -372,14 +450,6 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		if (!ShortcutInputPolicy.IsAllowedShortcut(_toggleShortcut.Value))
 		{
 			_toggleShortcut.Value = new KeyboardShortcut(KeyCode.End);
-			try
-			{
-				base.Config.Save();
-			}
-			catch (Exception arg)
-			{
-				base.Logger.LogWarning($"快捷键配置无效，已在本次运行中恢复为 End，但配置保存失败：{arg}");
-			}
 		}
 	}
 
@@ -390,14 +460,6 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			return;
 		}
 		entry.Value = ((entry == _arrangeAllCarriedShortcut) ? new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl, KeyCode.LeftShift) : new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl));
-		try
-		{
-			base.Config.Save();
-		}
-		catch (Exception arg)
-		{
-			base.Logger.LogWarning($"Inventory shortcut was normalized for this session but could not be saved: {arg}");
-		}
 	}
 
 	private void HandleArrangeCurrentShortcut(string inputSource)
@@ -502,6 +564,48 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		ReportShortcut(GlobalShortcutActions.ToggleAutoPickup, inputSource, (_autoPickupEnabled?.Value ?? false) ? "自动拾取已开启。" : "自动拾取已关闭。");
 	}
 
+	private void HandleMinimapToggleShortcut(string inputSource)
+	{
+		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleMinimap, inputSource)) return;
+		bool enabled = false;
+		UpdateMinimapSettings(settings =>
+		{
+			settings.Enabled = !settings.Enabled;
+			if (!settings.Enabled) settings.LayoutEditMode = false;
+			enabled = settings.Enabled;
+		});
+		ReportShortcut(GlobalShortcutActions.ToggleMinimap, inputSource,
+			PluginLocalization.Translate(enabled ? "小地图已开启。" : "小地图已关闭。"));
+	}
+
+	private void HandleMinimapZoomInShortcut(string inputSource, float detents)
+	{
+		AdjustMinimapZoom(inputSource, MinimapZoomDirection.In, detents);
+	}
+
+	private void HandleMinimapZoomOutShortcut(string inputSource, float detents)
+	{
+		AdjustMinimapZoom(inputSource, MinimapZoomDirection.Out, detents);
+	}
+
+	private void AdjustMinimapZoom(string inputSource, MinimapZoomDirection direction, float detents)
+	{
+		string actionId = direction == MinimapZoomDirection.In
+			? GlobalShortcutActions.ZoomMinimapIn
+			: GlobalShortcutActions.ZoomMinimapOut;
+		if (!EnsureShortcutSingleplayer(actionId, inputSource)) return;
+		float radius = 100f;
+		UpdateMinimapSettings(settings =>
+		{
+			settings.VisibleRadiusMeters = MinimapZoomPolicy.Apply(settings.VisibleRadiusMeters, direction, detents);
+			radius = settings.VisibleRadiusMeters;
+		});
+		string template = direction == MinimapZoomDirection.In
+			? "小地图已放大，可见半径 {0:0} 米。"
+			: "小地图已缩小，可见半径 {0:0} 米。";
+		ReportShortcut(actionId, inputSource, string.Format(PluginLocalization.Translate(template), radius));
+	}
+
 	private void HandleInfiniteStorageEnabledShortcut(string inputSource)
 	{
 		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleInfiniteStorageEnabled, inputSource)) return;
@@ -604,14 +708,6 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			return;
 		}
 		_infiniteStorageShortcut.Value = new KeyboardShortcut(KeyCode.Keypad0, KeyCode.LeftControl);
-		try
-		{
-			base.Config.Save();
-		}
-		catch (Exception arg)
-		{
-			base.Logger.LogWarning($"Infinite storage shortcut was normalized for this session but could not be saved: {arg}");
-		}
 	}
 
 	internal void SetInventoryArrangeIncludeBackpackPage(bool value)
@@ -651,6 +747,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal string GetShortcutLabel(string actionId)
 	{
+		if (_shortcutManager?.IsFixedGesture(actionId) ?? false)
+		{
+			return _shortcutManager.GetLabel(actionId);
+		}
 		KeyboardShortcut shortcut = GetShortcut(actionId);
 		if (shortcut.MainKey == KeyCode.None)
 		{
@@ -672,11 +772,6 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal KeyboardShortcut GetShortcutDefault(string actionId)
 	{
 		return _shortcutManager?.GetDefaultShortcut(actionId) ?? new KeyboardShortcut(KeyCode.End);
-	}
-
-	internal void LogRuntimeHostCreated(PluginRuntimeHost host)
-	{
-		base.Logger.LogInfo($"独立运行宿主已创建：activeInHierarchy={host.gameObject.activeInHierarchy}，enabled={host.enabled}，" + $"vehicleIconService={_vehicleIconRenderer != null}。");
 	}
 
 	internal void LogVehicleIconFallback(VehicleAsset asset, string mode)
@@ -745,16 +840,34 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		}
 	}
 
-	internal void LogRuntimeHostStarted()
-	{
-		base.Logger.LogInfo("独立运行宿主 Start 已执行。");
-	}
-
 	private void Awake()
 	{
 		Instance = this;
+		_runtimeContext = new PluginRuntimeContext(this, base.Logger, _inputCapture);
+		try
+		{
+			Initialize();
+		}
+		catch (Exception exception)
+		{
+			base.Logger.LogError($"插件初始化失败，正在执行统一回滚。\n{exception}");
+			TransferRuntimeOwnership();
+			Teardown("Awake initialization failed");
+			throw;
+		}
+	}
+
+	private void Initialize()
+	{
+		PluginConfigInitializationTransaction.Run(base.Config, base.Logger, InitializeProtected);
+	}
+
+	private void InitializeProtected()
+	{
 		_language = base.Config.Bind("Interface", "Language", "Auto", "UI language. Auto follows Unturned; supported values: Auto, English, Chinese. / 界面语言：Auto 跟随 Unturned，也可填写 English 或 Chinese。");
 		PluginLocalization.Initialize(_language.Value, Provider.language);
+		_fontFamily = base.Config.Bind("Interface", "FontFamily", "Microsoft YaHei UI", "Installed system font used by the plugin UI. Only Chinese-capable fonts can be selected. / 插件界面使用的系统字体；只能选择支持中文的字体。");
+		SystemFontProvider.ConfigurePreferredFamily(_fontFamily.Value, base.Logger);
 		_toggleShortcut = base.Config.Bind("General", "ToggleShortcut", new KeyboardShortcut(KeyCode.End), PluginLocalization.Translate("打开或关闭单人作弊菜单。默认 End，可自由修改。仅在真正的单人世界中生效。"));
 		NormalizeConfiguredToggleShortcut();
 		_shortcutManager = new GlobalShortcutManager(base.Logger);
@@ -774,12 +887,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_inventoryArrangeIncludePantsPage = base.Config.Bind("InventoryArrange", "IncludePantsPage", defaultValue: true, "整理时包含裤子页。");
 		_inventoryArrangeProtectEquipped = base.Config.Bind("InventoryArrange", "ProtectEquipped", defaultValue: true, "保护当前装备物品。");
 		ConfigDefinition configDefinition = new ConfigDefinition("InventoryArrange", "FixHotkeyItems");
-		bool flag = base.Config.ContainsKey(configDefinition);
 		_inventoryArrangeFixHotkeyItems = base.Config.Bind(configDefinition, defaultValue: true, new ConfigDescription("固定热键绑定物品；关闭时整理会更新热键坐标。"));
-		if (!flag && base.Config.TryGetEntry(new ConfigDefinition("InventoryArrange", "PreserveHotkeys"), out ConfigEntry<bool> entry))
-		{
-			_inventoryArrangeFixHotkeyItems.Value = entry.Value;
-		}
 		NormalizeConfiguredInventoryShortcut(_arrangeCurrentShortcut);
 		NormalizeConfiguredInventoryShortcut(_arrangeAllCarriedShortcut);
 		_shortcutManager.Register("inventory.arrange.current", "整理当前容器", _arrangeCurrentShortcut, new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl), HandleArrangeCurrentShortcut);
@@ -794,6 +902,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_nextPointToolModeShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.NextPointToolMode, new KeyboardShortcut(KeyCode.None), "Cycle point tool mode.");
 		_toggleCreatureHealthBarsShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleCreatureHealthBars, new KeyboardShortcut(KeyCode.None), "Toggle creature health bars.");
 		_toggleAutoPickupShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleAutoPickup, new KeyboardShortcut(KeyCode.None), "Toggle automatic pickup.");
+		_toggleMinimapShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleMinimap, new KeyboardShortcut(KeyCode.None), "Toggle the minimap HUD.");
 		_toggleInfiniteStorageEnabledShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleInfiniteStorageEnabled, new KeyboardShortcut(KeyCode.None), "Toggle infinite storage feature.");
 		_toggleFreezeTimeShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.ToggleFreezeTime, new KeyboardShortcut(KeyCode.None), "Toggle frozen time.");
 		_setDayShortcut = base.Config.Bind("Shortcuts", GlobalShortcutActions.SetDay, new KeyboardShortcut(KeyCode.None), "Set daytime.");
@@ -812,6 +921,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_shortcutManager.Register(GlobalShortcutActions.NextPointToolMode, "准星工具模式", _nextPointToolModeShortcut, new KeyboardShortcut(KeyCode.None), HandleNextPointToolModeShortcut);
 		_shortcutManager.Register(GlobalShortcutActions.ToggleCreatureHealthBars, "生物生命条", _toggleCreatureHealthBarsShortcut, new KeyboardShortcut(KeyCode.None), HandleCreatureHealthBarsShortcut);
 		_shortcutManager.Register(GlobalShortcutActions.ToggleAutoPickup, "自动拾取", _toggleAutoPickupShortcut, new KeyboardShortcut(KeyCode.None), HandleAutoPickupShortcut);
+		_shortcutManager.Register(GlobalShortcutActions.ToggleMinimap, "小地图开关", _toggleMinimapShortcut, new KeyboardShortcut(KeyCode.None), HandleMinimapToggleShortcut);
 		_shortcutManager.Register(GlobalShortcutActions.ToggleInfiniteStorageEnabled, "无限储存功能", _toggleInfiniteStorageEnabledShortcut, new KeyboardShortcut(KeyCode.None), HandleInfiniteStorageEnabledShortcut);
 		_shortcutManager.Register(GlobalShortcutActions.ToggleFreezeTime, "冻结时间", _toggleFreezeTimeShortcut, new KeyboardShortcut(KeyCode.None), HandleFreezeTimeShortcut);
 		_shortcutManager.Register(GlobalShortcutActions.SetDay, "切换为白天", _setDayShortcut, new KeyboardShortcut(KeyCode.None), HandleSetDayShortcut);
@@ -820,12 +930,20 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_shortcutManager.Register(GlobalShortcutActions.ClearWeather, "清除当前天气", _clearWeatherShortcut, new KeyboardShortcut(KeyCode.None), HandleClearWeatherShortcut);
 		_shortcutManager.Register(GlobalShortcutActions.DisableWeather, "关闭天气调度", _disableWeatherShortcut, new KeyboardShortcut(KeyCode.None), HandleDisableWeatherShortcut);
 		_shortcutManager.Register(GlobalShortcutActions.CallAirdrop, "呼叫空投", _callAirdropShortcut, new KeyboardShortcut(KeyCode.None), HandleCallAirdropShortcut);
+		_shortcutManager.RegisterMouseWheel(GlobalShortcutActions.ZoomMinimapIn, "小地图放大",
+			ShortcutMouseWheelDirection.Up, KeyCode.LeftAlt, "Alt + 鼠标滚轮上", HandleMinimapZoomInShortcut);
+		_shortcutManager.RegisterMouseWheel(GlobalShortcutActions.ZoomMinimapOut, "小地图缩小",
+			ShortcutMouseWheelDirection.Down, KeyCode.LeftAlt, "Alt + 鼠标滚轮下", HandleMinimapZoomOutShortcut);
 		_uiScale = base.Config.Bind("Interface", "Scale", 1f, PluginLocalization.Translate("菜单缩放，范围 0.75 到 1.5。"));
 		_pageSize = base.Config.Bind("Interface", "CardsPerPage", 32, PluginLocalization.Translate("物品/车辆每页卡片数量，范围 12 到 80。"));
 		_vehicleIconResolution = base.Config.Bind("Interface", "VehicleIconResolution", 128, PluginLocalization.Translate("车辆缩略图宽度：128、192 或 256；高度自动使用 4:3 比例。"));
 		_vehicleIconFraming = base.Config.Bind("Interface", "VehicleIconFraming", 1f, PluginLocalization.Translate("自动取景倍率，范围 0.5 到 1.5，默认 1.0。"));
 		_lastMainTab = base.Config.Bind("Interface", "LastMainTab", "Character", "Last selected main menu tab.");
 		_lastTeleportView = base.Config.Bind("Interface", "LastTeleportView", "Map", "Last selected teleport subview: Map or Points.");
+		ConfigDefinition normalizedWindowXDefinition = new ConfigDefinition("Interface", "WindowPositionNormalizedX");
+		ConfigDefinition normalizedWindowYDefinition = new ConfigDefinition("Interface", "WindowPositionNormalizedY");
+		_windowPositionX = base.Config.Bind(normalizedWindowXDefinition, 0f, new ConfigDescription("Normalized main window horizontal position, clamped to -1..1."));
+		_windowPositionY = base.Config.Bind(normalizedWindowYDefinition, 0f, new ConfigDescription("Normalized main window vertical position, clamped to -1..1."));
 		_pointToolEnabled = base.Config.Bind("PointTool", "Enabled", defaultValue: false, "Enable the crosshair interaction tool.");
 		_pointToolMode = base.Config.Bind("PointTool", "Mode", "Smart", "Inspect, Repair, Teleport, Utility, Delete, or Smart.");
 		_pointToolRange = base.Config.Bind("PointTool", "Range", 100f, "Maximum crosshair interaction range in meters.");
@@ -838,19 +956,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_autoPickupEnabled = base.Config.Bind("AutoPickup", "Enabled", defaultValue: false, "Enable automatic pickup in a true singleplayer world.");
 		_infiniteStorageEnabled = base.Config.Bind("InfiniteStorage", "Enabled", defaultValue: false, "Enable the persistent infinite storage. Disabled by default.");
 		_infiniteStoragePickupPriority = base.Config.Bind("InfiniteStorage", "PickupPriority", defaultValue: false, "Store automatically picked-up items in infinite storage before trying the carried inventory.");
-		_autoPickupLegacyScanRadius = base.Config.Bind("AutoPickup", "ScanRadius", 40f, "Legacy scan radius; migrated to Range.");
-		_autoPickupLegacyRequestRange = base.Config.Bind("AutoPickup", "RequestRange", 40f, "Legacy request range; migrated to Range.");
-		_autoPickupRange = base.Config.Bind("AutoPickup", "Range", 40f, "Automatic pickup distance in meters, clamped to 1-1000.");
-		if (Mathf.Approximately(_autoPickupRange.Value, 40f))
-		{
-			float legacyRange = Mathf.Min(_autoPickupLegacyScanRadius.Value, _autoPickupLegacyRequestRange.Value);
-			if (!Mathf.Approximately(legacyRange, 40f))
-			{
-				_autoPickupRange.Value = Mathf.Clamp(legacyRange, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange);
-			}
-		}
-		_autoPickupLegacyScanRadius.Value = _autoPickupRange.Value;
-		_autoPickupLegacyRequestRange.Value = _autoPickupRange.Value;
+		ConfigDefinition rangeDefinition = new ConfigDefinition("AutoPickup", "Range");
+		_autoPickupRange = base.Config.Bind(rangeDefinition, 40f, new ConfigDescription("Automatic pickup distance in meters, clamped to 1-1000."));
 		_autoPickupFrequencyHz = base.Config.Bind("AutoPickup", "FrequencyHz", 10f, "Drop scan frequency, clamped to 1-20 Hz.");
 		_autoPickupRequestsPerTick = base.Config.Bind("AutoPickup", "RequestsPerTick", 4, "Maximum native pickup requests per scan, clamped to 1-16.");
 		_autoPickupDropBlockMinutes = base.Config.Bind("AutoPickup", "DropBlockMinutes", 1, "Temporarily block automatic pickup for an item ID after the player drops it, clamped to 1-1440 minutes.");
@@ -861,6 +968,56 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_autoPickupPauseWhenMenuOpen = base.Config.Bind("AutoPickup", "PauseWhenMenuOpen", defaultValue: true, "Pause new pickup scans while the cheat menu is open.");
 		_autoPickupPauseWhenDead = base.Config.Bind("AutoPickup", "PauseWhenDead", defaultValue: true, "Pause and clear pending pickup work while the player is dead.");
 		_autoPickupDiagnostics = base.Config.Bind("AutoPickup", "Diagnostics", "Failures", "Off, Failures, Summary, or Verbose.");
+		_autoPickupUseMinimapRange = base.Config.Bind("AutoPickup", "UseMinimapRange", defaultValue: false, "When explicitly enabled, automatic pickup range follows the minimap visible radius.");
+		_autoPickupUseMinimapRarityFilter = base.Config.Bind("AutoPickup", "UseMinimapRarityFilter", defaultValue: false, "When explicitly enabled, the minimap rarity mask also limits automatic pickup.");
+		_minimapSchemaVersion = base.Config.Bind("Minimap", "SchemaVersion", 0, "Internal minimap settings migration version.");
+		_minimapEnabled = base.Config.Bind("Minimap", "Enabled", defaultValue: false, "Enable the singleplayer minimap HUD.");
+		_minimapShape = base.Config.Bind("Minimap", "Shape", "Circle", "Circle or Square.");
+		_minimapAnchor = base.Config.Bind("Minimap", "Anchor", "TopLeft", "TopLeft, TopRight, BottomLeft, or BottomRight.");
+		_minimapOffsetX = base.Config.Bind("Minimap", "OffsetX", 20f, "Horizontal distance from the selected screen anchor.");
+		_minimapOffsetY = base.Config.Bind("Minimap", "OffsetY", 20f, "Vertical distance from the selected screen anchor.");
+		_minimapSize = base.Config.Bind("Minimap", "Size", 260f, "Minimap size in UI pixels, clamped to 160-520.");
+		_minimapVisibleRadius = base.Config.Bind("Minimap", "VisibleRadiusMeters", 100f, "World radius represented by the minimap, clamped to 20-500 meters.");
+		_minimapBackgroundMode = base.Config.Bind("Minimap", "BackgroundMode", "AutoNativeFirst", "AutoNativeFirst, NativeMapOnly, RealtimeSurface, RealtimeHeightSlice, or Disabled.");
+		_minimapBackgroundRenderHz = base.Config.Bind("Minimap", "BackgroundRenderHz", 5f, "Explicit minimap camera render frequency, clamped to 2-10 Hz.");
+		_minimapWorldScanHz = base.Config.Bind("Minimap", "WorldScanHz", 5f, "Radar scan frequency, clamped to 2-10 Hz.");
+		_minimapShowLoadedBuildings = base.Config.Bind("Minimap", "ShowLoadedBuildings", defaultValue: true, "Overlay client-loaded buildings in realtime camera backgrounds.");
+		_minimapOcclusionProbeHz = base.Config.Bind("Minimap", "OcclusionProbeHz", 5f, "Overhead occlusion probe frequency.");
+		_minimapOcclusionEnterThickness = base.Config.Bind("Minimap", "OcclusionEnterThickness", 2.5f, "Continuous overhead thickness required to enter height-slice mode.");
+		_minimapOcclusionExitThickness = base.Config.Bind("Minimap", "OcclusionExitThickness", 1.5f, "Thickness threshold used to leave height-slice mode.");
+		_minimapOcclusionEnterDelay = base.Config.Bind("Minimap", "OcclusionEnterDelaySeconds", 0.75f, "Occlusion enter hysteresis delay.");
+		_minimapOcclusionExitDelay = base.Config.Bind("Minimap", "OcclusionExitDelaySeconds", 0.25f, "Occlusion exit hysteresis delay.");
+		_minimapOcclusionMergeGap = base.Config.Bind("Minimap", "OcclusionMergeGap", 0.25f, "Maximum gap merged between adjacent solid intervals.");
+		_minimapFloorExclusionMaxThickness = base.Config.Bind("Minimap", "FloorExclusionMaxThickness", 1.25f, "Thin floors at or below this thickness do not count as cave roofs.");
+		_minimapShowCompass = base.Config.Bind("Minimap", "ShowCompass", defaultValue: true, "Show fixed north/east/south/west labels.");
+		_minimapShowCoordinates = base.Config.Bind("Minimap", "ShowCoordinates", defaultValue: true, "Show player XYZ below the clipped viewport.");
+		_minimapShowNativeMapMarkers = base.Config.Bind("Minimap", "ShowNativeMapMarkers", defaultValue: true, "Show local and same-group native map markers.");
+		_minimapShowTeleportMarkers = base.Config.Bind("Minimap", "ShowTeleportMarkers", defaultValue: true, "Show saved teleport points for the current map.");
+		_minimapShowZombies = base.Config.Bind("Minimap", "ShowZombies", defaultValue: true, "Show living zombies in the visible radius.");
+		_minimapShowAnimals = base.Config.Bind("Minimap", "ShowAnimals", defaultValue: true, "Show living animals in the visible radius.");
+		_minimapShowPlayers = base.Config.Bind("Minimap", "ShowPlayers", defaultValue: true, "Show other client-known players in the visible radius.");
+		_minimapShowItems = base.Config.Bind("Minimap", "ShowItems", defaultValue: false, "Show raw nearby ground items independently of automatic pickup.");
+		_minimapItemRarityMask = base.Config.Bind("Minimap", "ItemRarityMask", "All", "Enabled item rarities: Common, Uncommon, Rare, Epic, Legendary, Mythical, or All.");
+		_minimapItemMergePixels = base.Config.Bind("Minimap", "ItemMergePixels", 8f, "Pixel distance used to merge overlapping item stars.");
+		_minimapUndergroundSliceAbove = base.Config.Bind("Minimap", "UndergroundSliceAbove", 4f, "Height rendered above the player in height-slice mode.");
+		_minimapUndergroundSliceBelow = base.Config.Bind("Minimap", "UndergroundSliceBelow", 6f, "Depth rendered below the player in height-slice mode.");
+		_minimapSameFloorTolerance = base.Config.Bind("Minimap", "SameFloorTolerance", 6f, "Vertical distance treated as the current floor.");
+		_minimapShowOtherFloors = base.Config.Bind("Minimap", "ShowOtherFloors", defaultValue: true, "Show dimmed graphical height indicators for other floors.");
+		_minimapLayoutEditMode = base.Config.Bind("Minimap", "LayoutEditMode", defaultValue: false, "Allow dragging and resizing the minimap HUD.");
+		int minimapSchemaVersion = _minimapSchemaVersion.Value;
+		if (minimapSchemaVersion < 2)
+		{
+			_minimapShowOtherFloors.Value = true;
+		}
+		if (minimapSchemaVersion < 3)
+		{
+			if (_minimapOcclusionProbeHz.Value == 2f) _minimapOcclusionProbeHz.Value = 5f;
+			if (_minimapOcclusionExitDelay.Value == 1.5f) _minimapOcclusionExitDelay.Value = 0.25f;
+		}
+		if (minimapSchemaVersion < CurrentMinimapSchemaVersion)
+		{
+			_minimapSchemaVersion.Value = CurrentMinimapSchemaVersion;
+		}
 		_flightSpeed = base.Config.Bind("Movement", "FlightSpeed", 3f, "Horizontal flight speed multiplier.");
 		_flightVerticalSpeed = base.Config.Bind("Movement", "FlightVerticalSpeed", 2f, "Vertical flight speed multiplier.");
 		_flightMode = base.Config.Bind("Movement", "FlightMode", "WorldAxis", "WorldAxis or ViewDirection.");
@@ -873,12 +1030,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_workshopLocalizationSourceLanguage = base.Config.Bind("WorkshopLocalization", "SourceLanguage", "English", "Source language sent to the translation provider.");
 		_workshopLocalizationTargetLanguage = base.Config.Bind("WorkshopLocalization", "TargetLanguage", "zh-CN", "Target language used by the cache and translation provider.");
 		_workshopLocalizationEndpoint = base.Config.Bind("WorkshopLocalization", "Endpoint", string.Empty, "OpenAI-compatible Chat Completions endpoint or base URL.");
-		_workshopLocalizationApiKey = base.Config.Bind("WorkshopLocalization", "ApiKey", string.Empty, "Translation API key; it is never written to logs.");
+		_workshopLocalizationApiKey = base.Config.Bind("WorkshopLocalization", "ApiKey", string.Empty, "Translation API keys (up to two, separated by new lines); they are never written to logs.");
 		_workshopLocalizationSecretKey = base.Config.Bind("WorkshopLocalization", "SecretKey", string.Empty, "Cloud translation secret key; it is never written to logs.");
 		_workshopLocalizationRegion = base.Config.Bind("WorkshopLocalization", "Region", string.Empty, "Cloud provider region when required.");
 		_workshopLocalizationProjectId = base.Config.Bind("WorkshopLocalization", "ProjectId", string.Empty, "Cloud provider project ID when required.");
 		_workshopLocalizationModel = base.Config.Bind("WorkshopLocalization", "Model", string.Empty, "Translation model name.");
-		_workshopLocalizationBatchSize = base.Config.Bind("WorkshopLocalization", "BatchSize", 50, "Translation batch size, clamped to 1-50.");
+		_workshopLocalizationBatchSize = base.Config.Bind("WorkshopLocalization", "BatchSize", 50, "Translation batch size, clamped to 1-100.");
 		_workshopLocalizationTimeoutSeconds = base.Config.Bind("WorkshopLocalization", "TimeoutSeconds", 30, "Translation request timeout in seconds, clamped to 5-120.");
 		_workshopLocalizationMaxRetries = base.Config.Bind("WorkshopLocalization", "MaxRetries", 2, "Maximum retries for timeout, rate-limit, and server errors, clamped to 0-5.");
 		_workshopLocalizationSkipTargetLanguage = base.Config.Bind("WorkshopLocalization", "SkipLikelyTargetLanguageText", defaultValue: true, "Skip obvious target-language source text during automatic translation.");
@@ -927,7 +1084,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			SafeExit = _noclipSafeExit.Value
 		};
 		Movement.SetFlightMode(ParseFlightMode(_flightMode.Value, base.Logger));
-		_pointToolHud = new PointToolHud(base.Logger);
+		_uiRoot = PluginUiRoot.Create(base.Logger);
+		_pointToolHud = new PointToolHud(base.Logger, _uiRoot);
 		_creatureHealthBarHud = new CreatureHealthBarHud(base.Logger);
 		CreatureHealthBars = new CreatureHealthBarService(base.Logger, new CreatureHealthBarSettings
 		{
@@ -954,20 +1112,46 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			ShowHealth = _pointToolShowHealth.Value,
 			ShowHud = _pointToolShowHud.Value
 		};
-		AutoPickup = new AutoPickupFeature(base.Logger, GetAutoPickupSettings(), _autoPickupRulesPath.Value);
+		_nearbyItemIndex = new NearbyItemIndex();
+		AutoPickup = new AutoPickupFeature(base.Logger, GetAutoPickupSettings(), _autoPickupRulesPath.Value, _nearbyItemIndex);
+		Minimap = new MinimapFeature(base.Logger, _uiRoot, Teleports, _nearbyItemIndex, GetMinimapSettings(), HandleMinimapSettingsChanged);
 		InfiniteStorage = new InfiniteStorageRuntime(base.Logger) { Enabled = _infiniteStorageEnabled.Value };
 		AutoPickupRuleDocument autoPickupRules = AutoPickup.Rules;
 		_autoPickupFilterMode.Value = autoPickupRules.Mode.ToString();
-		_ui = new CheatMenuOverlayUi(this);
-		_runtimeHost = PluginRuntimeHost.Create(this);
+		_ui = new CheatMenuOverlayUi(this, _uiRoot);
+		TransferRuntimeOwnership();
+		_runtimeContext.InstallRuntimePatches();
 		Favorites.Load();
 		Teleports.Load();
-		Assets.onAssetsRefreshed = (AssetsRefreshed)Delegate.Combine(Assets.onAssetsRefreshed, new AssetsRefreshed(OnAssetsRefreshed));
-		InstallRuntimePatches();
+		_runtimeContext.SubscribeLifecycle();
 		base.Logger.LogInfo("Unturned Singleplayer Cheat Menu 1.9.0 已加载。快捷键：" + ShortcutLabel + "；严格限制：单人模式。");
 		base.Logger.LogInfo("Plugin UI language: " + PluginLocalization.CurrentLanguageName + "; configured=" + _language.Value + "; Unturned=" + Provider.language + ".");
 		Version version = typeof(BaseUnityPlugin).Assembly.GetName().Version;
 		base.Logger.LogInfo($"检测环境：Unturned {Provider.APP_VERSION}，Unity {Application.unityVersion}，BepInEx {version}。");
+	}
+
+	private void TransferRuntimeOwnership()
+	{
+		_runtimeContext?.OwnRuntime(new PluginRuntimeComposition(
+			_uiRoot,
+			_ui,
+			_vehicleIconRenderer,
+			_pointToolHud,
+			_creatureHealthBarHud,
+			_shortcutManager,
+			Catalog,
+			Icons,
+			TeleportMaps,
+			Actions,
+			Movement,
+			PointTool,
+			InventoryArrange,
+			_nearbyItemIndex,
+			AutoPickup,
+			Minimap,
+			InfiniteStorage,
+			CreatureHealthBars,
+			WorkshopLocalization));
 	}
 
 	private float ReadConfigFloat(string section, string key, float value, string description)
@@ -1014,91 +1198,6 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		}
 	}
 
-	private void Update()
-	{
-		RunUpdateCallback("Unity Update");
-	}
-
-	internal void RunUpdateCallback(string callbackSource)
-	{
-		if (_lastRuntimeUpdateFrame == Time.frameCount)
-		{
-			return;
-		}
-		_lastRuntimeUpdateFrame = Time.frameCount;
-		if (!_hasLoggedUpdateCallback)
-		{
-			_hasLoggedUpdateCallback = true;
-			base.Logger.LogInfo(callbackSource + " 回调已运行，快捷键轮询已启用。");
-		}
-		IconCache icons = Icons;
-		if (icons == null || !icons.PumpOne())
-		{
-			_vehicleIconRenderer?.PumpOne();
-		}
-		OverlayIconBinder.PumpPending();
-		WorkshopLocalization?.Pump();
-		if (WorkshopLocalization != null && WorkshopLocalization.SnapshotVersion != _lastWorkshopSnapshotVersion)
-		{
-			_lastWorkshopSnapshotVersion = WorkshopLocalization.SnapshotVersion;
-			_ui?.OnLocalizedAssetViewsRefreshed();
-		}
-		_shortcutManager?.ProcessUpdate(Time.frameCount, Time.realtimeSinceStartup, _ui?.IsCapturingShortcut ?? false);
-		if (_infiniteStorageOpen && _infiniteStorageRefreshFrame >= 0 && Time.frameCount >= _infiniteStorageRefreshFrame)
-		{
-			_infiniteStorageRefreshFrame = -1;
-			if (Catalog.IsDirty)
-			{
-				RefreshCatalog();
-			}
-		}
-		InventoryArrange?.OnPlayerInitialized();
-		InventoryArrange?.PumpQuickTransfer();
-		AutoPickup?.Pump(_menuOpen || _infiniteStorageOpen);
-		InfiniteStorage?.Pump();
-		if ((_menuOpen || _infiniteStorageOpen) && !SingleplayerGuard.IsReady)
-		{
-			SetMenuOpen(open: false);
-			SetInfiniteStorageOpen(open: false);
-		}
-		else if (_menuOpen || _infiniteStorageOpen)
-		{
-			MaintainMenuInputCapture();
-			_ui.Maintain();
-		}
-		if (!SingleplayerGuard.IsReady)
-		{
-			WorkshopLocalization?.CancelTranslation();
-			Movement?.Restore();
-			if (PointTool != null)
-			{
-				PointTool.Enabled = false;
-			}
-			_pointToolHud?.Hide();
-			CreatureHealthBars?.Pump();
-		}
-		else
-		{
-			Movement?.Pump();
-			PointTool?.Pump();
-			CreatureHealthBars?.Pump();
-			_pointToolHud?.SetMovement(Movement?.FlightEnabled ?? false, Movement?.NoclipEnabled ?? false, Movement?.FlightSpeed ?? 0f);
-		}
-		// The BepInEx plugin component can be destroyed after startup, while Harmony's
-		// Update postfix remains active. Render here as the reliable fallback path.
-		CreatureHealthBars?.RenderLate();
-		if (Time.unscaledTime >= _nextMaintenanceTime)
-		{
-			_nextMaintenanceTime = Time.unscaledTime + 0.2f;
-			Actions.MaintainEnabledCheats();
-		}
-	}
-
-	internal void RunLateUpdateCallback()
-	{
-		CreatureHealthBars?.RenderLate();
-	}
-
 	private void HandleToggleShortcut(string inputSource)
 	{
 		if (!SingleplayerGuard.IsReady)
@@ -1110,9 +1209,11 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		base.Logger.LogInfo("快捷键 " + ShortcutLabel + " 已通过" + inputSource + "触发：菜单" + (_menuOpen ? "已打开" : "已关闭") + "。");
 	}
 
+	private bool _isTornDown;
+
 	private void OnDestroy()
 	{
-		base.Logger.LogInfo("BepInEx plugin component was destroyed; runtime services remain active until application quit.");
+		base.Logger.LogInfo("[Runtime] BepInEx bootstrap component destroyed; static Update bridge and runtime context remain active until application quit.");
 	}
 
 	private void HandleInfiniteStorageShortcut(string inputSource)
@@ -1128,18 +1229,24 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void OnApplicationQuit()
 	{
-		try
+		Teardown("application quit");
+	}
+
+	private void Teardown(string reason)
+	{
+		if (_isTornDown)
 		{
-			CreatureHealthBars?.Dispose();
-			AutoPickup?.Dispose();
-			InfiniteStorage?.Dispose();
-			Assets.onAssetsRefreshed = (AssetsRefreshed)Delegate.Remove(Assets.onAssetsRefreshed, new AssetsRefreshed(OnAssetsRefreshed));
-			WorkshopLocalization?.Dispose();
-			_harmony?.UnpatchSelf();
+			return;
 		}
-		catch (Exception arg)
+		_isTornDown = true;
+		PluginRuntimeContext runtimeContext = _runtimeContext;
+		_runtimeContext = null;
+		runtimeContext?.Dispose(reason);
+		_ui = null;
+		_uiRoot = null;
+		if (ReferenceEquals(Instance, this))
 		{
-			base.Logger.LogWarning($"退出时清理 Workshop 翻译资源失败；进程仍将退出。\n{arg}");
+			Instance = null;
 		}
 	}
 
@@ -1151,6 +1258,16 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal void CloseInfiniteStorage()
 	{
 		SetInfiniteStorageOpen(open: false);
+	}
+
+	private void NotifyWorkshopLocalizationSettingsChanged(bool refreshLocalizedAssetViews = false)
+	{
+		WorkshopLocalization?.NotifySettingsChanged();
+		if (refreshLocalizedAssetViews)
+		{
+			_runtimeContext?.SynchronizeWorkshopVersions();
+			_ui?.OnLocalizedAssetViewsRefreshed();
+		}
 	}
 
 	internal void SetWorkshopLocalizationApiProtocol(string protocol)
@@ -1165,7 +1282,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			{
 				SetWorkshopLocalizationEndpoint(defaultEndpoint);
 			}
-			_ui?.OnLocalizedAssetViewsRefreshed();
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1175,6 +1292,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.Settings.Endpoint = endpoint?.Trim() ?? string.Empty;
 			PersistInterfaceState(_workshopLocalizationEndpoint, WorkshopLocalization.Settings.Endpoint);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1184,6 +1302,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.Settings.SecretKey = value ?? string.Empty;
 			PersistInterfaceState(_workshopLocalizationSecretKey, WorkshopLocalization.Settings.SecretKey);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1193,6 +1312,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.Settings.Region = value?.Trim() ?? string.Empty;
 			PersistInterfaceState(_workshopLocalizationRegion, WorkshopLocalization.Settings.Region);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1202,6 +1322,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.Settings.ProjectId = value?.Trim() ?? string.Empty;
 			PersistInterfaceState(_workshopLocalizationProjectId, WorkshopLocalization.Settings.ProjectId);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1211,6 +1332,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.Settings.ApiKey = apiKey ?? string.Empty;
 			PersistInterfaceState(_workshopLocalizationApiKey, WorkshopLocalization.Settings.ApiKey);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1220,6 +1342,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.Settings.Model = model?.Trim() ?? string.Empty;
 			PersistInterfaceState(_workshopLocalizationModel, WorkshopLocalization.Settings.Model);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1231,6 +1354,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			batchSize = ((!int.TryParse(value, out var result)) ? MachineTranslationSettings.NormalizeBatchSize(batchSize) : MachineTranslationSettings.NormalizeBatchSize(result));
 			WorkshopLocalization.Settings.BatchSize = batchSize;
 			PersistInterfaceState(_workshopLocalizationBatchSize, batchSize);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1240,7 +1364,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.Enabled = value;
 			PersistInterfaceState(_workshopLocalizationEnabled, value);
-			_ui?.OnLocalizedAssetViewsRefreshed();
+			NotifyWorkshopLocalizationSettingsChanged(refreshLocalizedAssetViews: true);
 		}
 	}
 
@@ -1250,7 +1374,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.ApplyToNativeUi = value;
 			PersistInterfaceState(_workshopLocalizationApplyToNativeUi, value);
-			_ui?.OnLocalizedAssetViewsRefreshed();
+			NotifyWorkshopLocalizationSettingsChanged(refreshLocalizedAssetViews: true);
 		}
 	}
 
@@ -1260,6 +1384,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.AutoScanOnAssetsRefreshed = value;
 			PersistInterfaceState(_workshopLocalizationAutoScan, value);
+			NotifyWorkshopLocalizationSettingsChanged();
 		}
 	}
 
@@ -1269,10 +1394,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			WorkshopLocalization.AutoTranslateMissing = value;
 			PersistInterfaceState(_workshopLocalizationAutoTranslate, value);
+			NotifyWorkshopLocalizationSettingsChanged();
 			if (value && WorkshopLocalization.ApiConfigured && !WorkshopLocalization.IsTranslationRunning)
 			{
 				WorkshopLocalization.ScanCurrentAssets();
-				_ui?.OnLocalizedAssetViewsRefreshed();
 			}
 		}
 	}
@@ -1345,19 +1470,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	{
 		float normalized = Mathf.Clamp(value, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange);
 		PersistInterfaceState(_autoPickupRange, normalized);
-		PersistInterfaceState(_autoPickupLegacyScanRadius, normalized);
-		PersistInterfaceState(_autoPickupLegacyRequestRange, normalized);
 		RefreshAutoPickupSettings();
-	}
-
-	internal void SetAutoPickupScanRadius(float value)
-	{
-		SetAutoPickupRange(value);
-	}
-
-	internal void SetAutoPickupRequestRange(float value)
-	{
-		SetAutoPickupRange(value);
 	}
 
 	internal void SetAutoPickupFrequency(float value)
@@ -1408,6 +1521,18 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		RefreshAutoPickupSettings();
 	}
 
+	internal void SetAutoPickupUseMinimapRange(bool value)
+	{
+		PersistInterfaceState(_autoPickupUseMinimapRange, value);
+		RefreshAutoPickupSettings();
+	}
+
+	internal void SetAutoPickupUseMinimapRarityFilter(bool value)
+	{
+		PersistInterfaceState(_autoPickupUseMinimapRarityFilter, value);
+		RefreshAutoPickupSettings();
+	}
+
 	internal AutoPickupRuleLoadResult SetAutoPickupRules(bool enabled, AutoPickupFilterMode mode, IEnumerable<ItemFilterRule> rules)
 	{
 		AutoPickupFilterMode normalizedMode = enabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly;
@@ -1435,6 +1560,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			MinimumQuality = _autoPickupMinimumQuality?.Value ?? AutoPickupSettings.MinQuality,
 			PauseWhenMenuOpen = _autoPickupPauseWhenMenuOpen?.Value ?? true,
 			PauseWhenDead = _autoPickupPauseWhenDead?.Value ?? true,
+			UseMinimapRange = _autoPickupUseMinimapRange?.Value ?? false,
+			UseMinimapRarityFilter = _autoPickupUseMinimapRarityFilter?.Value ?? false,
 			Diagnostics = diagnostics
 		}.Normalize();
 	}
@@ -1442,6 +1569,184 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private void RefreshAutoPickupSettings()
 	{
 		AutoPickup?.UpdateSettings(GetAutoPickupSettings());
+	}
+
+	internal MinimapSettings GetMinimapSettings()
+	{
+		try
+		{
+			return GetMinimapSettingsCore();
+		}
+		catch (Exception exception)
+		{
+			WarnInvalidMinimapConfiguration("[Minimap] configuration could not be read; safe defaults are active.\n" + exception);
+			return new MinimapSettings().Normalize();
+		}
+	}
+
+	private MinimapSettings GetMinimapSettingsCore()
+	{
+		string shapeValue = _minimapShape?.Value ?? "Circle";
+		string anchorValue = _minimapAnchor?.Value ?? "TopLeft";
+		string backgroundValue = _minimapBackgroundMode?.Value ?? "AutoNativeFirst";
+		string rarityValue = _minimapItemRarityMask?.Value ?? "All";
+		bool shapeValid = Enum.TryParse(shapeValue, true, out MinimapShape shape);
+		bool anchorValid = Enum.TryParse(anchorValue, true, out MinimapAnchor anchor);
+		bool backgroundValid = Enum.TryParse(backgroundValue, true, out MinimapBackgroundMode background);
+		bool rarityValid = Enum.TryParse(rarityValue, true, out ItemRarityMask rarityMask);
+		if (!shapeValid) shape = MinimapShape.Circle;
+		if (!anchorValid) anchor = MinimapAnchor.TopLeft;
+		if (!backgroundValid) background = MinimapBackgroundMode.AutoNativeFirst;
+		if (!rarityValid) rarityMask = ItemRarityMask.All;
+		MinimapSettings raw = new MinimapSettings
+		{
+			Enabled = _minimapEnabled?.Value ?? false,
+			Shape = shape,
+			Anchor = anchor,
+			OffsetX = _minimapOffsetX?.Value ?? 20f,
+			OffsetY = _minimapOffsetY?.Value ?? 20f,
+			Size = _minimapSize?.Value ?? 260f,
+			VisibleRadiusMeters = _minimapVisibleRadius?.Value ?? 100f,
+			BackgroundMode = background,
+			BackgroundRenderHz = _minimapBackgroundRenderHz?.Value ?? 5f,
+			WorldScanHz = _minimapWorldScanHz?.Value ?? 5f,
+			ShowLoadedBuildings = _minimapShowLoadedBuildings?.Value ?? true,
+			OcclusionProbeHz = _minimapOcclusionProbeHz?.Value ?? 5f,
+			OcclusionEnterThickness = _minimapOcclusionEnterThickness?.Value ?? 2.5f,
+			OcclusionExitThickness = _minimapOcclusionExitThickness?.Value ?? 1.5f,
+			OcclusionEnterDelaySeconds = _minimapOcclusionEnterDelay?.Value ?? 0.75f,
+			OcclusionExitDelaySeconds = _minimapOcclusionExitDelay?.Value ?? 0.25f,
+			OcclusionMergeGap = _minimapOcclusionMergeGap?.Value ?? 0.25f,
+			FloorExclusionMaxThickness = _minimapFloorExclusionMaxThickness?.Value ?? 1.25f,
+			ShowCompass = _minimapShowCompass?.Value ?? true,
+			ShowCoordinates = _minimapShowCoordinates?.Value ?? true,
+			ShowNativeMapMarkers = _minimapShowNativeMapMarkers?.Value ?? true,
+			ShowTeleportMarkers = _minimapShowTeleportMarkers?.Value ?? true,
+			ShowZombies = _minimapShowZombies?.Value ?? true,
+			ShowAnimals = _minimapShowAnimals?.Value ?? true,
+			ShowPlayers = _minimapShowPlayers?.Value ?? true,
+			ShowItems = _minimapShowItems?.Value ?? false,
+			ItemRarityMask = rarityMask,
+			ItemMergePixels = _minimapItemMergePixels?.Value ?? 8f,
+			UndergroundSliceAbove = _minimapUndergroundSliceAbove?.Value ?? 4f,
+			UndergroundSliceBelow = _minimapUndergroundSliceBelow?.Value ?? 6f,
+			SameFloorTolerance = _minimapSameFloorTolerance?.Value ?? 6f,
+			ShowOtherFloors = _minimapShowOtherFloors?.Value ?? true,
+			LayoutEditMode = _minimapLayoutEditMode?.Value ?? false
+		};
+		MinimapSettings normalized = raw.Clone().Normalize();
+		if (!shapeValid || !anchorValid || !backgroundValid || !rarityValid || MinimapSettingsChangedByNormalization(raw, normalized))
+		{
+			WarnInvalidMinimapConfiguration(
+				"[Minimap] invalid configuration value(s) were normalized; unsafe floor/exit/enter thresholds use safe defaults.");
+		}
+		return normalized;
+	}
+
+	internal void UpdateMinimapSettings(Action<MinimapSettings> change)
+	{
+		MinimapSettings settings = Minimap?.Settings ?? GetMinimapSettings();
+		change?.Invoke(settings);
+		settings.Normalize();
+		PersistMinimapSettings(settings);
+		Minimap?.ApplySettings(settings);
+		SynchronizeMinimapLayoutInput(settings.LayoutEditMode);
+	}
+
+	private void HandleMinimapSettingsChanged(MinimapSettings settings)
+	{
+		if (settings == null) return;
+		PersistMinimapSettings(settings.Normalize());
+		Minimap?.ApplySettings(settings);
+		SynchronizeMinimapLayoutInput(settings.LayoutEditMode);
+	}
+
+	private void SynchronizeMinimapLayoutInput(bool layoutEditMode)
+	{
+		if (layoutEditMode)
+		{
+			CaptureMenuInput();
+		}
+		else if (!_menuOpen && !_infiniteStorageOpen)
+		{
+			ReleaseMenuInput();
+		}
+	}
+
+	private void PersistMinimapSettings(MinimapSettings settings)
+	{
+		bool saveOnConfigSet = base.Config.SaveOnConfigSet;
+		try
+		{
+			base.Config.SaveOnConfigSet = false;
+			_minimapEnabled.Value = settings.Enabled;
+			_minimapShape.Value = settings.Shape.ToString();
+			_minimapAnchor.Value = settings.Anchor.ToString();
+			_minimapOffsetX.Value = settings.OffsetX;
+			_minimapOffsetY.Value = settings.OffsetY;
+			_minimapSize.Value = settings.Size;
+			_minimapVisibleRadius.Value = settings.VisibleRadiusMeters;
+			_minimapBackgroundMode.Value = settings.BackgroundMode.ToString();
+			_minimapBackgroundRenderHz.Value = settings.BackgroundRenderHz;
+			_minimapWorldScanHz.Value = settings.WorldScanHz;
+			_minimapShowLoadedBuildings.Value = settings.ShowLoadedBuildings;
+			_minimapOcclusionProbeHz.Value = settings.OcclusionProbeHz;
+			_minimapOcclusionEnterThickness.Value = settings.OcclusionEnterThickness;
+			_minimapOcclusionExitThickness.Value = settings.OcclusionExitThickness;
+			_minimapOcclusionEnterDelay.Value = settings.OcclusionEnterDelaySeconds;
+			_minimapOcclusionExitDelay.Value = settings.OcclusionExitDelaySeconds;
+			_minimapOcclusionMergeGap.Value = settings.OcclusionMergeGap;
+			_minimapFloorExclusionMaxThickness.Value = settings.FloorExclusionMaxThickness;
+			_minimapShowCompass.Value = settings.ShowCompass;
+			_minimapShowCoordinates.Value = settings.ShowCoordinates;
+			_minimapShowNativeMapMarkers.Value = settings.ShowNativeMapMarkers;
+			_minimapShowTeleportMarkers.Value = settings.ShowTeleportMarkers;
+			_minimapShowZombies.Value = settings.ShowZombies;
+			_minimapShowAnimals.Value = settings.ShowAnimals;
+			_minimapShowPlayers.Value = settings.ShowPlayers;
+			_minimapShowItems.Value = settings.ShowItems;
+			_minimapItemRarityMask.Value = settings.ItemRarityMask.ToString();
+			_minimapItemMergePixels.Value = settings.ItemMergePixels;
+			_minimapUndergroundSliceAbove.Value = settings.UndergroundSliceAbove;
+			_minimapUndergroundSliceBelow.Value = settings.UndergroundSliceBelow;
+			_minimapSameFloorTolerance.Value = settings.SameFloorTolerance;
+			_minimapShowOtherFloors.Value = settings.ShowOtherFloors;
+			_minimapLayoutEditMode.Value = settings.LayoutEditMode;
+			base.Config.Save();
+		}
+		catch (Exception exception)
+		{
+			base.Logger.LogWarning("[Minimap] settings are active for this session, but the config file could not be saved.\n" + exception);
+		}
+		finally
+		{
+			base.Config.SaveOnConfigSet = saveOnConfigSet;
+		}
+	}
+
+	private static bool MinimapSettingsChangedByNormalization(MinimapSettings raw, MinimapSettings normalized)
+	{
+		return raw.OffsetX != normalized.OffsetX || raw.OffsetY != normalized.OffsetY ||
+			raw.Size != normalized.Size || raw.VisibleRadiusMeters != normalized.VisibleRadiusMeters ||
+			raw.BackgroundRenderHz != normalized.BackgroundRenderHz || raw.WorldScanHz != normalized.WorldScanHz ||
+			raw.OcclusionProbeHz != normalized.OcclusionProbeHz ||
+			raw.OcclusionEnterThickness != normalized.OcclusionEnterThickness ||
+			raw.OcclusionExitThickness != normalized.OcclusionExitThickness ||
+			raw.OcclusionEnterDelaySeconds != normalized.OcclusionEnterDelaySeconds ||
+			raw.OcclusionExitDelaySeconds != normalized.OcclusionExitDelaySeconds ||
+			raw.OcclusionMergeGap != normalized.OcclusionMergeGap ||
+			raw.FloorExclusionMaxThickness != normalized.FloorExclusionMaxThickness ||
+			raw.ItemRarityMask != normalized.ItemRarityMask || raw.ItemMergePixels != normalized.ItemMergePixels ||
+			raw.UndergroundSliceAbove != normalized.UndergroundSliceAbove ||
+			raw.UndergroundSliceBelow != normalized.UndergroundSliceBelow ||
+			raw.SameFloorTolerance != normalized.SameFloorTolerance;
+	}
+
+	private void WarnInvalidMinimapConfiguration(string message)
+	{
+		if (_minimapConfigurationWarningLogged) return;
+		_minimapConfigurationWarningLogged = true;
+		base.Logger.LogWarning(message);
 	}
 
 	internal void SetPointToolMode(PointToolMode value)
@@ -1544,13 +1849,17 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 				WorkshopLocalization?.ScanCurrentAssets();
 			}
 		}
-		_lastWorkshopSnapshotVersion = WorkshopLocalization?.SnapshotVersion ?? _lastWorkshopSnapshotVersion;
+		_runtimeContext?.SynchronizeWorkshopVersions();
 		_ui.OnCatalogRefreshed();
 		base.Logger.LogInfo($"资产扫描完成：物品 {Catalog.Items.Count}（模组 {Catalog.WorkshopItemCount}），车辆 {Catalog.Vehicles.Count}（模组 {Catalog.WorkshopVehicleCount}）。");
 	}
 
-	private void SetMenuOpen(bool open)
+	internal void SetMenuOpen(bool open)
 	{
+		if (open && !_uiRoot.CanOpenWindow("the main menu"))
+		{
+			return;
+		}
 		if (open && _infiniteStorageOpen)
 		{
 			SetInfiniteStorageOpen(open: false);
@@ -1564,8 +1873,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			}
 			else
 			{
-				ReleaseMenuInput();
 				_ui.OnClosed();
+				if (!IsMinimapLayoutEditActive) ReleaseMenuInput();
 			}
 			if (open)
 			{
@@ -1576,8 +1885,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		}
 	}
 
-	private void SetInfiniteStorageOpen(bool open)
+	internal void SetInfiniteStorageOpen(bool open)
 	{
+		if (open && !_uiRoot.CanOpenWindow("infinite storage"))
+		{
+			return;
+		}
 		if (_infiniteStorageOpen == open || (open && !SingleplayerGuard.IsReady))
 		{
 			return;
@@ -1592,11 +1905,11 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			CaptureMenuInput();
 			PluginLocalization.Initialize(_language.Value, Provider.language);
 			_ui.OpenInfiniteStorage();
-			_infiniteStorageRefreshFrame = Catalog.IsDirty ? Time.frameCount + 1 : -1;
+			_runtimeContext?.ScheduleInfiniteStorageRefresh(Catalog.IsDirty);
 		}
 		else
 		{
-			_infiniteStorageRefreshFrame = -1;
+			_runtimeContext?.CancelInfiniteStorageRefresh();
 			_ui.CloseInfiniteStorage();
 			if (!_menuOpen)
 			{
@@ -1607,134 +1920,25 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void CaptureMenuInput()
 	{
-		if (!_hasCapturedUnityCursor)
-		{
-			_cursorWasVisible = Cursor.visible;
-			_cursorWasLocked = Cursor.lockState;
-			_hasCapturedUnityCursor = true;
-		}
-		SleekWindow window = PlayerUI.window;
-		if (window == null)
-		{
-			MaintainMenuInputCapture();
-			return;
-		}
-		_capturedWindow = window;
-		_windowWasEnabled = window.isEnabled;
-		_windowWasShowingCursor = window.showCursor;
-		MaintainMenuInputCapture();
-	}
-
-	private void MaintainMenuInputCapture()
-	{
-		if (_hasCapturedUnityCursor)
-		{
-			Cursor.lockState = CursorLockMode.None;
-			Cursor.visible = false;
-		}
-		SleekWindow window = PlayerUI.window;
-		if (window != null)
-		{
-			if (_capturedWindow != window)
-			{
-				ReleaseMenuInput();
-				_capturedWindow = window;
-				_windowWasEnabled = window.isEnabled;
-				_windowWasShowingCursor = window.showCursor;
-			}
-			window.isEnabled = true;
-			window.showCursor = true;
-		}
+		_inputCapture.Capture();
 	}
 
 	private void ReleaseMenuInput()
 	{
-		if (_capturedWindow != null)
-		{
-			_capturedWindow.isEnabled = _windowWasEnabled;
-			_capturedWindow.showCursor = _windowWasShowingCursor;
-		}
-		_capturedWindow = null;
-		if (_hasCapturedUnityCursor)
-		{
-			Cursor.lockState = _cursorWasLocked;
-			Cursor.visible = _cursorWasVisible;
-			_hasCapturedUnityCursor = false;
-		}
+		_inputCapture.Release();
 	}
 
-	private void OnAssetsRefreshed()
+	internal void HandleAssetsRefreshed()
 	{
 		Catalog.MarkDirty();
 		Icons.Clear();
-		if (_menuOpen)
+		if (_menuOpen || _infiniteStorageOpen)
 		{
 			RefreshCatalog();
 		}
 		else
 		{
 			WorkshopLocalization?.OnAssetsRefreshed();
-		}
-	}
-
-	private static void GameUpdatePostfix(MethodBase __originalMethod)
-	{
-		CheatMenuPlugin instance = Instance;
-		instance?.RunUpdateCallback("游戏更新 Harmony Postfix");
-		if (__originalMethod?.DeclaringType == typeof(PlayerUI) && (object)instance != null && (instance._menuOpen || instance._infiniteStorageOpen) && SingleplayerGuard.IsReady)
-		{
-			instance.MaintainMenuInputCapture();
-			instance._ui.Maintain();
-		}
-	}
-
-	private void InstallRuntimePatches()
-	{
-		_harmony = new Harmony("com.codex.unturned.singleplayer-cheat-menu");
-		MovementSimulationPatch.Install(_harmony, base.Logger);
-		InventoryArrangePatch.Install(_harmony, base.Logger, InventoryArrange);
-		PointToolInteractionPatch.Install(_harmony, base.Logger);
-		WorkshopLocalizationPatch.Install(_harmony, base.Logger);
-		InfiniteStorageCraftingPatch.Install(_harmony, base.Logger);
-		PatchUpdateLoop(typeof(Provider));
-		PatchUpdateLoop(typeof(MenuUI));
-		PatchUpdateLoop(typeof(PlayerUI));
-		try
-		{
-			MethodInfo methodInfo = (from methodInfo2 in AccessTools.GetDeclaredMethods(typeof(PlayerLife))
-				where methodInfo2.Name == "doDamage" && methodInfo2.ReturnType == typeof(void)
-				orderby methodInfo2.GetParameters().Length descending
-				select methodInfo2).FirstOrDefault();
-			if (methodInfo == null)
-			{
-				throw new MissingMethodException(typeof(PlayerLife).FullName, "doDamage");
-			}
-			MethodInfo method = AccessTools.Method(typeof(GodModePatch), "Prefix");
-			_harmony.Patch(methodInfo, new HarmonyMethod(method));
-			base.Logger.LogInfo($"无敌补丁已注册：{methodInfo.DeclaringType?.FullName}.{methodInfo.Name}({methodInfo.GetParameters().Length} 参数)。");
-		}
-		catch (Exception arg)
-		{
-			base.Logger.LogError($"无敌补丁注册失败；其他菜单功能仍可使用。\n{arg}");
-		}
-	}
-
-	private void PatchUpdateLoop(Type targetType)
-	{
-		try
-		{
-			MethodInfo methodInfo = AccessTools.DeclaredMethod(targetType, "Update", Type.EmptyTypes);
-			if (methodInfo == null)
-			{
-				throw new MissingMethodException(targetType.FullName, "Update");
-			}
-			MethodInfo method = AccessTools.Method(typeof(CheatMenuPlugin), "GameUpdatePostfix");
-			_harmony.Patch(methodInfo, null, new HarmonyMethod(method));
-			base.Logger.LogInfo("更新回调补丁已注册：" + targetType.FullName + ".Update。");
-		}
-		catch (Exception arg)
-		{
-			base.Logger.LogWarning($"无法挂接 {targetType.FullName}.Update；将继续尝试其他更新入口。\n{arg}");
 		}
 	}
 

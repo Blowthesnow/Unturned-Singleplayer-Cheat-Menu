@@ -4,7 +4,7 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal sealed class VehicleThumbnailRenderSettings
 {
-	internal const int CurrentCacheFormatVersion = 1;
+	internal const int CurrentCacheFormatVersion = 2;
 
 	internal const int DefaultWidth = 128;
 
@@ -27,7 +27,7 @@ internal sealed class VehicleThumbnailRenderSettings
 		Width = NormalizeWidth(width);
 		Height = Width * 3 / 4;
 		Framing = NormalizeFraming(framing);
-		CacheFormatVersion = 1;
+		CacheFormatVersion = CurrentCacheFormatVersion;
 	}
 
 	internal static VehicleThumbnailRenderSettings Normalize(int width, float framing)

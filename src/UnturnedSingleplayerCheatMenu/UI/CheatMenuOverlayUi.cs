@@ -13,12 +13,14 @@ using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Services;
+using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
+using InputField = UnityEngine.UI.InputField;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
 
-internal sealed class CheatMenuOverlayUi : IDisposable
+internal sealed partial class CheatMenuOverlayUi : IDisposable
 {
-	private enum MenuTab
+	internal enum MenuTab
 	{
 		Character,
 		Items,
@@ -29,13 +31,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		Other
 	}
 
-	private enum FavoriteKind
+	internal enum FavoriteKind
 	{
 		Items,
 		Vehicles
 	}
 
-	private enum TeleportView
+	internal enum TeleportView
 	{
 		Map,
 		Points
@@ -56,18 +58,23 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		public GameObject Check;
 	}
 
-	private enum ToolsTab
+	internal enum ToolsTab
 	{
 		Interaction,
 		Inventory,
 		AutoPickup,
 		Movement,
+		Minimap,
 		Translation
 	}
 
 	private const int OverlaySortingOrder = 29900;
 
-	private const int CardsPerOverlayPage = 15;
+	private const float PreferredWindowWidth = 1120f;
+	private const float PreferredWindowHeight = 790f;
+	private const float MinimumWindowWidth = 900f;
+	private const float MinimumWindowHeight = 620f;
+	private const float WindowMargin = 16f;
 
 	private const int TeleportsPerOverlayPage = 6;
 
@@ -137,41 +144,57 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		"#CB5A97", "#8659D4", "#D5D4CC", "#8C8D86", "#CDE5FA", "#F8ECD7", "#1C425A", "#4B3917"
 	};
 
-	private readonly CheatMenuPlugin _plugin;
+	private readonly PluginUiRoot _uiRoot;
+	private readonly UiStateStore _state;
+	private readonly ShellPresenter _shellPresenter;
+	private readonly CharacterPagePresenter _characterPresenter;
+	private readonly CatalogPagePresenter _catalogPresenter;
+	private readonly TeleportPagePresenter _teleportPresenter;
+	private readonly WorldPagePresenter _worldPresenter;
+	private readonly InfiniteStoragePagePresenter _infiniteStoragePresenter;
+	private readonly InteractionToolsPresenter _interactionPresenter;
+	private readonly InventoryToolsPresenter _inventoryPresenter;
+	private readonly AutoPickupToolsPresenter _autoPickupPresenter;
+	private readonly MovementToolsPresenter _movementPresenter;
+	private readonly MinimapToolsPresenter _minimapPresenter;
+	private readonly TranslationToolsPresenter _translationPresenter;
 
-	private readonly ItemFilterState _itemFilter = new ItemFilterState();
+	private ItemFilterState _itemFilter => _state.ItemFilter;
 
-	private readonly ItemFilterState _favoriteItemFilter = new ItemFilterState();
+	private ItemFilterState _favoriteItemFilter => _state.FavoriteItemFilter;
 
-	private readonly ItemFilterState _infiniteStorageFilter = new ItemFilterState();
+	private ItemFilterState _infiniteStorageFilter => _state.InfiniteStorageFilter;
 
-	private readonly List<ItemAsset> _itemResults = new List<ItemAsset>();
+	private IReadOnlyList<ItemAsset> _itemResults => _catalogPresenter.ItemResults;
 
-	private readonly List<VehicleAsset> _vehicleResults = new List<VehicleAsset>();
+	private IReadOnlyList<VehicleAsset> _vehicleResults => _catalogPresenter.VehicleResults;
 
-	private readonly List<ItemAsset> _favoriteItemResults = new List<ItemAsset>();
+	private IReadOnlyList<ItemAsset> _favoriteItemResults => _catalogPresenter.FavoriteItemResults;
 
-	private readonly List<VehicleAsset> _favoriteVehicleResults = new List<VehicleAsset>();
+	private IReadOnlyList<VehicleAsset> _favoriteVehicleResults => _catalogPresenter.FavoriteVehicleResults;
 
 	private readonly Dictionary<ushort, ItemAsset> _infiniteStorageAssetsById = new Dictionary<ushort, ItemAsset>();
 
-	private readonly List<GameObject> _deferredDestroy = new List<GameObject>();
+	private readonly DeferredUiDestroyQueue<GameObject> _deferredDestroy = new DeferredUiDestroyQueue<GameObject>();
 
 	private readonly Dictionary<MenuTab, Button> _tabButtons = new Dictionary<MenuTab, Button>();
+	private readonly Dictionary<ToolsTab, Button> _toolsTabButtons = new Dictionary<ToolsTab, Button>();
+	private CheatMenuToolsPageViewHost _toolsPageViewHost;
+	private GameObject _toolsPageHost;
+	private GameObject _toolsPageContentHost;
 
 	private readonly Dictionary<TeleportMarkerKind, Sprite> _teleportMarkerSprites = new Dictionary<TeleportMarkerKind, Sprite>();
 
 	private readonly Dictionary<TeleportMarkerKind, Texture2D> _teleportMarkerTextures = new Dictionary<TeleportMarkerKind, Texture2D>();
 
-	private readonly UiDebouncer _searchDebouncer = new UiDebouncer(0.15f);
-
 	private readonly UiDebouncer _timeApplyDebouncer = new UiDebouncer(0.15f);
-
-	private readonly UiDebouncer _autoPickupRuleSearchDebouncer = new UiDebouncer(0.15f);
 
 	private readonly UiDebouncer _autoPickupRangeDebouncer = new UiDebouncer(0.15f);
 
 	private readonly UiDebouncer _autoPickupFrequencyDebouncer = new UiDebouncer(0.15f);
+	private readonly UiDebouncer _minimapSettingsDebouncer = new UiDebouncer(0.15f);
+
+	private readonly List<UiSearchInputController> _searchInputs = new List<UiSearchInputController>();
 
 	private readonly AmmoCompatibilityIndex _ammoCompatibilityIndex = new AmmoCompatibilityIndex();
 
@@ -183,15 +206,39 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private GameObject _infiniteStorageContentHost;
 
+	private GameObject _infiniteStorageContentRow;
+
+	private GameObject _infiniteStorageCategoryHost;
+
+	private GameObject _infiniteStorageResultsHost;
+
+	private Text _infiniteStorageFilterButtonText;
+
+	private Text _infiniteStorageSummaryText;
+
 	private GameObject _hoverExplanationRoot;
 
 	private Text _hoverExplanationText;
 
-	private GameObject _ownedEventSystem;
-
 	private RectTransform _panel;
 
 	private GameObject _contentHost;
+	private CheatMenuPageViewHost _pageViewHost;
+
+	private GameObject _itemResultsHost;
+	private GameObject _itemGridHost;
+	private GameObject _itemSummaryHost;
+
+	private GameObject _vehicleResultsHost;
+	private GameObject _vehicleGridHost;
+	private Text _vehicleSummaryText;
+
+	private GameObject _favoriteResultsHost;
+	private GameObject _favoriteGridHost;
+	private GameObject _favoriteBodyHost;
+	private GameObject _favoriteSummaryHost;
+	private Button _favoriteItemsButton;
+	private Button _favoriteVehiclesButton;
 
 	private Text _mapAndShortcutText;
 
@@ -207,13 +254,15 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Slider _timeSlider;
 
-	private InputField _itemAmountInput;
+	private readonly List<InputField> _itemAmountInputs = new List<InputField>();
 
-	private InputField _vehicleAmountInput;
+	private readonly List<InputField> _vehicleAmountInputs = new List<InputField>();
 
 	private GameObject _confirmRoot;
 
 	private GameObject _aboutRoot;
+
+	private GameObject _fontPickerRoot;
 
 	private GameObject _shortcutRoot;
 
@@ -221,23 +270,23 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private RectTransform _shortcutScrollContent;
 
-	private float _shortcutScrollPosition = 1f;
+	private float _shortcutScrollPosition { get => _state.ShortcutScrollPosition; set => _state.ShortcutScrollPosition = value; }
 
 	private Text _shortcutCaptureText;
 
-	private readonly HashSet<KeyCode> _shortcutCaptureModifiers = new HashSet<KeyCode>();
+	private HashSet<KeyCode> _shortcutCaptureModifiers => _state.ShortcutCaptureModifiers;
 
-	private bool _shortcutCaptureActive;
+	private bool _shortcutCaptureActive { get => _state.ShortcutCaptureActive; set => _state.ShortcutCaptureActive = value; }
 
-	private string _shortcutCaptureActionId = "menu.toggle";
+	private string _shortcutCaptureActionId { get => _state.ShortcutCaptureActionId; set => _state.ShortcutCaptureActionId = value; }
 
 	private GameObject _itemFilterRoot;
 
-	private ItemFilterState _itemFilterDraft;
+	private ItemFilterState _itemFilterDraft { get => _state.ItemFilterDraft; set => _state.ItemFilterDraft = value; }
 
-	private bool _itemFilterForFavorites;
+	private bool _itemFilterForFavorites { get => _state.ItemFilterForFavorites; set => _state.ItemFilterForFavorites = value; }
 
-	private bool _itemFilterForInfiniteStorage;
+	private bool _itemFilterForInfiniteStorage { get => _state.ItemFilterForInfiniteStorage; set => _state.ItemFilterForInfiniteStorage = value; }
 
 	private GameObject _vehicleThumbnailSettingsRoot;
 
@@ -245,11 +294,19 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Text _vehicleThumbnailFramingText;
 
-	private int _vehicleThumbnailDraftWidth;
+	private int _vehicleThumbnailDraftWidth { get => _state.VehicleThumbnailDraftWidth; set => _state.VehicleThumbnailDraftWidth = value; }
 
-	private float _vehicleThumbnailDraftFraming;
+	private float _vehicleThumbnailDraftFraming { get => _state.VehicleThumbnailDraftFraming; set => _state.VehicleThumbnailDraftFraming = value; }
 
 	private Font _font;
+	private int _lastMainLayoutScreenWidth = -1;
+	private int _lastMainLayoutScreenHeight = -1;
+	private float _lastMainLayoutScale = -1f;
+	private float _lastMainLayoutRequestedScale = -1f;
+	private int _lastInfiniteLayoutScreenWidth = -1;
+	private int _lastInfiniteLayoutScreenHeight = -1;
+	private float _lastInfiniteLayoutRequestedScale = -1f;
+	private int _lastGridPageSize = -1;
 
 	private Texture2D _sliderGripTexture;
 
@@ -275,61 +332,61 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Sprite _favoriteOutlineSprite;
 
-	private MenuTab _activeTab;
+	private MenuTab _activeTab { get => _state.ActiveTab; set => _state.ActiveTab = value; }
 
-	private string _vehicleQuery = string.Empty;
+	private string _vehicleQuery { get => _state.VehicleQuery; set => _state.VehicleQuery = value; }
 
-	private string _vehicleCategory = "全部";
+	private string _vehicleCategory { get => _state.VehicleCategory; set => _state.VehicleCategory = value; }
 
-	private string _favoriteQuery = string.Empty;
+	private string _favoriteQuery { get => _state.FavoriteQuery; set => _state.FavoriteQuery = value; }
 
-	private string _favoriteVehicleCategory = "全部";
+	private string _favoriteVehicleCategory { get => _state.FavoriteVehicleCategory; set => _state.FavoriteVehicleCategory = value; }
 
-	private string _teleportName = string.Empty;
+	private string _teleportName { get => _state.TeleportName; set => _state.TeleportName = value; }
 
 	private string _lastHeaderMap = string.Empty;
 
 	private string _lastHeaderShortcut = string.Empty;
 
-	private string _healthTarget = "100";
+	private string _healthTarget { get => _state.HealthTarget; set => _state.HealthTarget = value; }
 
-	private string _foodTarget = "100";
+	private string _foodTarget { get => _state.FoodTarget; set => _state.FoodTarget = value; }
 
-	private string _waterTarget = "100";
+	private string _waterTarget { get => _state.WaterTarget; set => _state.WaterTarget = value; }
 
-	private string _virusTarget = "100";
+	private string _virusTarget { get => _state.VirusTarget; set => _state.VirusTarget = value; }
 
-	private string _staminaTarget = "100";
+	private string _staminaTarget { get => _state.StaminaTarget; set => _state.StaminaTarget = value; }
 
-	private string _oxygenTarget = "100";
+	private string _oxygenTarget { get => _state.OxygenTarget; set => _state.OxygenTarget = value; }
 
-	private string _experienceAmount = "1000";
+	private string _experienceAmount { get => _state.ExperienceAmount; set => _state.ExperienceAmount = value; }
 
-	private string _reputationAmount = "100";
+	private string _reputationAmount { get => _state.ReputationAmount; set => _state.ReputationAmount = value; }
 
-	private string _itemAmountText = "1";
+	private string _itemAmountText { get => _state.ItemAmountText; set => _state.ItemAmountText = value; }
 
-	private string _vehicleAmountText = "1";
+	private string _vehicleAmountText { get => _state.VehicleAmountText; set => _state.VehicleAmountText = value; }
 
-	private int _itemPage;
+	private int _itemPage { get => _state.ItemPage; set => _state.ItemPage = value; }
 
-	private int _infiniteStoragePage;
+	private int _infiniteStoragePage { get => _state.InfiniteStoragePage; set => _state.InfiniteStoragePage = value; }
 
-	private int _vehiclePage;
+	private int _vehiclePage { get => _state.VehiclePage; set => _state.VehiclePage = value; }
 
-	private int _favoritePage;
+	private int _favoritePage { get => _state.FavoritePage; set => _state.FavoritePage = value; }
 
-	private int _teleportPage;
+	private int _teleportPage { get => _state.TeleportPage; set => _state.TeleportPage = value; }
 
-	private FavoriteKind _favoriteKind;
+	private FavoriteKind _favoriteKind { get => _state.FavoriteKind; set => _state.FavoriteKind = value; }
 
-	private TeleportView _teleportView;
+	private TeleportView _teleportView { get => _state.TeleportView; set => _state.TeleportView = value; }
 
-	private TeleportMarkerKind _teleportMarkerKind;
+	private TeleportMarkerKind _teleportMarkerKind { get => _state.TeleportMarkerKind; set => _state.TeleportMarkerKind = value; }
 
-	private Color _teleportMarkerColor = new Color(0.96f, 0.77f, 0.26f, 1f);
+	private Color _teleportMarkerColor { get => _state.TeleportMarkerColor; set => _state.TeleportMarkerColor = value; }
 
-	private bool _teleportMarkerDrawerOpen;
+	private bool _teleportMarkerDrawerOpen { get => _state.TeleportMarkerDrawerOpen; set => _state.TeleportMarkerDrawerOpen = value; }
 
 	private GameObject _teleportMarkerDrawerRoot;
 
@@ -339,7 +396,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private GameObject _teleportColorPickerRoot;
 
-	private Color _teleportColorDraft;
+	private Color _teleportColorDraft { get => _state.TeleportColorDraft; set => _state.TeleportColorDraft = value; }
 
 	private Image _teleportColorPreview;
 
@@ -361,27 +418,30 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private readonly List<ColorSwatchControl> _teleportColorSwatches = new List<ColorSwatchControl>();
 
-	private byte _giveAmount = 1;
+	private byte _giveAmount { get => _state.GiveAmount; set => _state.GiveAmount = value; }
 
-	private int _spawnVehicleAmount = 1;
+	private int _spawnVehicleAmount { get => _state.SpawnVehicleAmount; set => _state.SpawnVehicleAmount = value; }
 
-	private float _statusUntil;
+	private float _statusUntil { get => _state.StatusUntil; set => _state.StatusUntil = value; }
 
-	private ToolsTab _activeToolsTab;
+	private ToolsTab _activeToolsTab { get => _state.ActiveToolsTab; set => _state.ActiveToolsTab = value; }
 
-	private string _autoPickupRuleSearch = string.Empty;
+	private string _autoPickupRuleSearch { get => _state.AutoPickupRuleSearch; set => _state.AutoPickupRuleSearch = value; }
 
-	private int _autoPickupPage;
+	private int _autoPickupPage { get => _state.AutoPickupPage; set => _state.AutoPickupPage = value; }
+	private GameObject _autoPickupContentHost;
 
-	private int _autoPickupBlacklistPickerPage;
+	private int _autoPickupBlacklistPickerPage { get => _state.AutoPickupBlacklistPickerPage; set => _state.AutoPickupBlacklistPickerPage = value; }
 
-	private string _autoPickupBlacklistPickerSearch = string.Empty;
+	private string _autoPickupBlacklistPickerSearch { get => _state.AutoPickupBlacklistPickerSearch; set => _state.AutoPickupBlacklistPickerSearch = value; }
 
 	private GameObject _autoPickupBlacklistPickerRoot;
 
 	private GameObject _autoPickupBlacklistPickerHost;
 
-	private ItemFilterRuleAction _autoPickupPickerAction = ItemFilterRuleAction.Deny;
+	private GameObject _autoPickupRuleResultsHost;
+
+	private ItemFilterRuleAction _autoPickupPickerAction { get => _state.AutoPickupPickerAction; set => _state.AutoPickupPickerAction = value; }
 
 	private static readonly PointToolMode[] PointToolModes = new PointToolMode[6]
 	{
@@ -393,7 +453,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		PointToolMode.Delete
 	};
 
-	private bool _pointToolModeDrawerOpen;
+	private bool _pointToolModeDrawerOpen { get => _state.PointToolModeDrawerOpen; set => _state.PointToolModeDrawerOpen = value; }
 
 	private GameObject _pointToolModeDrawerRoot;
 
@@ -401,7 +461,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Button _pointToolModeTriggerButton;
 
-	private bool _inventoryPresetDrawerOpen;
+	private bool _inventoryPresetDrawerOpen { get => _state.InventoryPresetDrawerOpen; set => _state.InventoryPresetDrawerOpen = value; }
 
 	private GameObject _inventoryPresetDrawerRoot;
 
@@ -409,7 +469,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Button _inventoryPresetTriggerButton;
 
-	private bool _inventoryScopeDrawerOpen;
+	private bool _inventoryScopeDrawerOpen { get => _state.InventoryScopeDrawerOpen; set => _state.InventoryScopeDrawerOpen = value; }
 
 	private GameObject _inventoryScopeDrawerRoot;
 
@@ -417,7 +477,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Button _inventoryScopeTriggerButton;
 
-	private bool _workshopProtocolDrawerOpen;
+	private bool _workshopProtocolDrawerOpen { get => _state.WorkshopProtocolDrawerOpen; set => _state.WorkshopProtocolDrawerOpen = value; }
 
 	private GameObject _workshopProtocolDrawerRoot;
 
@@ -431,11 +491,45 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Text _workshopLocalizationApiText;
 
-	internal bool IsCapturingShortcut => _shortcutCaptureActive;
+	private Text _workshopLocalizationProtocolButtonText;
 
-	public CheatMenuOverlayUi(CheatMenuPlugin plugin)
+	private GameObject _workshopLocalizationSettingsHost;
+
+	private ScrollRect _workshopLocalizationScrollRect;
+
+	private RectTransform _workshopLocalizationScrollContent;
+
+	private readonly List<string> _workshopLocalizationApiKeyDrafts = new List<string>();
+
+	internal bool IsCapturingShortcut => _shortcutCaptureActive;
+	internal bool IsCapturingTextInput
 	{
-		_plugin = plugin;
+		get
+		{
+			GameObject selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+			InputField input = selected != null ? selected.GetComponent<InputField>() : null;
+			return input != null && input.isFocused;
+		}
+	}
+	internal bool IsCapturingKeyboardInput => IsCapturingShortcut || IsCapturingTextInput;
+
+	public CheatMenuOverlayUi(CheatMenuPlugin plugin, PluginUiRoot uiRoot)
+	{
+		_uiRoot = uiRoot ?? throw new ArgumentNullException(nameof(uiRoot));
+		_state = new UiStateStore();
+		PluginUiFeatureAdapter features = new PluginUiFeatureAdapter(plugin);
+		_shellPresenter = new ShellPresenter(features);
+		_characterPresenter = new CharacterPagePresenter(plugin.Actions);
+		_catalogPresenter = new CatalogPagePresenter(features, _state);
+		_teleportPresenter = new TeleportPagePresenter(features);
+		_worldPresenter = new WorldPagePresenter(features);
+		_infiniteStoragePresenter = new InfiniteStoragePagePresenter(features);
+		_interactionPresenter = new InteractionToolsPresenter(features);
+		_inventoryPresenter = new InventoryToolsPresenter(features);
+		_autoPickupPresenter = new AutoPickupToolsPresenter(features);
+		_movementPresenter = new MovementToolsPresenter(features);
+		_minimapPresenter = new MinimapToolsPresenter(features);
+		_translationPresenter = new TranslationToolsPresenter(features);
 		_activeTab = ParseMenuTab(plugin.LastMainTab);
 		_teleportView = ParseTeleportView(plugin.LastTeleportView);
 	}
@@ -445,7 +539,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		BuildItemResults();
 		BuildVehicleResults();
 		BuildFavoriteResults();
-		_ammoCompatibilityIndex.Rebuild(_plugin.Catalog.Items);
+		_ammoCompatibilityIndex.Rebuild(_catalogPresenter.Items);
 		EnsureShell();
 		RefreshHeader();
 		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
@@ -453,16 +547,18 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			RefreshWorkshopLocalizationPageValues();
 		}
 		_root.SetActive(value: true);
+		RefreshWindowGeometry(restoreNormalizedPosition: true);
 		ShowTab(_activeTab);
-		SetStatus($"自动扫描完成：{_plugin.Catalog.Items.Count} 个物品、{_plugin.Catalog.Vehicles.Count} 辆载具。", 5f, StatusKind.Info);
+		SetStatus($"自动扫描完成：{_catalogPresenter.Items.Count} 个物品、{_catalogPresenter.Vehicles.Count} 辆载具。", 5f, StatusKind.Info);
 	}
 
 	internal void OpenInfiniteStorage()
 	{
-		_ammoCompatibilityIndex.Rebuild(_plugin.Catalog.Items);
+		_ammoCompatibilityIndex.Rebuild(_catalogPresenter.Items);
 		RebuildInfiniteStorageAssetIndex();
 		EnsureInfiniteStorageShell();
 		_infiniteStorageRoot.SetActive(value: true);
+		RefreshInfiniteStorageGeometry();
 		RebuildInfiniteStoragePage();
 	}
 
@@ -502,15 +598,15 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		BuildItemResults();
 		BuildVehicleResults();
 		BuildFavoriteResults();
-		_ammoCompatibilityIndex.Rebuild(_plugin.Catalog.Items);
+		_ammoCompatibilityIndex.Rebuild(_catalogPresenter.Items);
 		RebuildInfiniteStorageAssetIndex();
 		if (_root != null && _root.activeSelf && (_activeTab == MenuTab.Items || _activeTab == MenuTab.Vehicles || _activeTab == MenuTab.Favorites))
 		{
-			ShowTab(_activeTab);
+			RefreshActiveCatalogResultsRegion();
 		}
 		if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf)
 		{
-			RebuildInfiniteStoragePage();
+			RefreshInfiniteStorageContentRegions();
 		}
 	}
 
@@ -523,7 +619,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		{
 			if (_activeTab == MenuTab.Items || _activeTab == MenuTab.Vehicles || _activeTab == MenuTab.Favorites)
 			{
-				ShowTab(_activeTab);
+				RefreshActiveCatalogResultsRegion();
 			}
 			else if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
 			{
@@ -532,7 +628,15 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 		if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf)
 		{
-			RebuildInfiniteStoragePage();
+			RefreshInfiniteStorageContentRegions();
+		}
+	}
+
+	public void OnWorkshopLocalizationPresentationChanged()
+	{
+		if (_root != null && _root.activeSelf && _activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
+		{
+			RefreshWorkshopLocalizationPageValues();
 		}
 	}
 
@@ -540,49 +644,68 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		if (!(_root == null) && _root.activeSelf && (_activeTab == MenuTab.Vehicles || (_activeTab == MenuTab.Favorites && _favoriteKind == FavoriteKind.Vehicles)))
 		{
-			ShowTab(_activeTab);
+			RefreshActiveCatalogGridRegion();
 		}
 	}
 
 	public void Maintain()
 	{
-		FlushDeferredDestroy();
 		bool menuActive = _root != null && _root.activeSelf;
 		bool infiniteStorageActive = _infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf;
 		if (!menuActive && !infiniteStorageActive)
 		{
 			return;
 		}
-		_searchDebouncer.Tick();
 		_timeApplyDebouncer.Tick();
-		_autoPickupRuleSearchDebouncer.Tick();
 		_autoPickupRangeDebouncer.Tick();
 		_autoPickupFrequencyDebouncer.Tick();
+		_minimapSettingsDebouncer.Tick();
+		bool cancelConsumedByTextInput = false;
+		for (int i = _searchInputs.Count - 1; i >= 0; i--)
+		{
+			UiSearchInputController searchInput = _searchInputs[i];
+			if (!searchInput.IsAlive)
+			{
+				searchInput.Dispose();
+				_searchInputs.RemoveAt(i);
+				continue;
+			}
+			cancelConsumedByTextInput |= searchInput.Pump();
+		}
+		if (!cancelConsumedByTextInput && !_shortcutCaptureActive && !IsCapturingTextInput && Input.GetKeyDown(KeyCode.Escape))
+		{
+			if (!_uiRoot.HandleCancel())
+			{
+				if (infiniteStorageActive)
+				{
+					_shellPresenter.CloseInfiniteStorage();
+				}
+				else if (menuActive)
+				{
+					_shellPresenter.CloseMenu();
+				}
+			}
+		}
 		if (menuActive && _activeTab == MenuTab.Other)
 		{
 			RefreshOtherTime();
 		}
-		if (menuActive && _activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
-		{
-			RefreshWorkshopLocalizationPageValues();
-		}
-		Canvas component = menuActive ? _root.GetComponent<Canvas>() : null;
+		Canvas component = menuActive ? _uiRoot.Canvas : null;
 		if (component != null && component.sortingOrder != 29900)
 		{
 			component.sortingOrder = 29900;
 		}
-		if (menuActive && _panel != null)
+		if (menuActive && _panel != null &&
+			(_lastMainLayoutScreenWidth != Screen.width || _lastMainLayoutScreenHeight != Screen.height ||
+			Mathf.Abs(_lastMainLayoutRequestedScale - _shellPresenter.UiScale) > 0.0001f))
 		{
-			_panel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
+			RefreshWindowGeometry(restoreNormalizedPosition: true);
 		}
-		if (infiniteStorageActive && _infiniteStoragePanel != null)
+		if (infiniteStorageActive && _infiniteStoragePanel != null &&
+			(_lastInfiniteLayoutScreenWidth != Screen.width || _lastInfiniteLayoutScreenHeight != Screen.height ||
+			Mathf.Abs(_lastInfiniteLayoutRequestedScale - _shellPresenter.UiScale) > 0.0001f))
 		{
-			_infiniteStoragePanel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
-			Canvas storageCanvas = _infiniteStorageRoot.GetComponent<Canvas>();
-			if (storageCanvas != null && storageCanvas.sortingOrder != OverlaySortingOrder + 1)
-			{
-				storageCanvas.sortingOrder = OverlaySortingOrder + 1;
-			}
+			RefreshInfiniteStorageGeometry();
 		}
 		if (_teleportMarkerDrawerRoot != null)
 		{
@@ -595,14 +718,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		if (menuActive)
 		{
 			RefreshHeader();
-			if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
-			{
-				RefreshWorkshopLocalizationPageValues();
-			}
 		}
-		if (_activeTab == MenuTab.Teleports && _teleportMapSurface != null && Player.LocalPlayer != null)
+		if (_activeTab == MenuTab.Teleports && _teleportMapSurface != null && _teleportPresenter.TryGetLocalPlayerPosition(out Vector3 playerPosition))
 		{
-			_teleportMapSurface.RefreshPlayerMarker(Player.LocalPlayer.transform.position);
+			_teleportMapSurface.RefreshPlayerMarker(playerPosition);
 		}
 		MaintainPointToolModeDrawer();
 		MaintainInventoryPresetDrawer();
@@ -623,15 +742,107 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
+	internal void HandleSceneChanged()
+	{
+		if (_panel != null)
+		{
+			RefreshWindowGeometry(restoreNormalizedPosition: true);
+		}
+		if (_infiniteStoragePanel != null)
+		{
+			RefreshInfiniteStorageGeometry();
+		}
+	}
+
+	private void RefreshWindowGeometry(bool restoreNormalizedPosition)
+	{
+		if (_panel == null || _root == null)
+		{
+			return;
+		}
+		RectTransform bounds = _root.GetComponent<RectTransform>();
+		Vector2 boundsSize = bounds != null ? bounds.rect.size : new Vector2(Screen.width, Screen.height);
+		Vector2 minimumSize = new Vector2(MinimumWindowWidth, MinimumWindowHeight);
+		float scale = WindowGeometry.ResolveScale(_shellPresenter.UiScale, boundsSize, minimumSize, WindowMargin);
+		_panel.sizeDelta = WindowGeometry.ResolveSize(
+			boundsSize,
+			scale,
+			minimumSize,
+			new Vector2(PreferredWindowWidth, PreferredWindowHeight),
+			WindowMargin);
+		_panel.localScale = Vector3.one * scale;
+		Canvas.ForceUpdateCanvases();
+		_panel.anchoredPosition = restoreNormalizedPosition
+			? WindowGeometry.RestoreNormalized(_shellPresenter.NormalizedWindowPosition, boundsSize, _panel.rect.size, scale)
+			: WindowGeometry.Clamp(_panel.anchoredPosition, boundsSize, _panel.rect.size, scale);
+		_lastMainLayoutScreenWidth = Screen.width;
+		_lastMainLayoutScreenHeight = Screen.height;
+		_lastMainLayoutScale = scale;
+		_lastMainLayoutRequestedScale = _shellPresenter.UiScale;
+		int gridPageSize = GetResponsiveCardColumnCount() * GetResponsiveCardRowCount();
+		if (_lastGridPageSize > 0 && gridPageSize != _lastGridPageSize)
+		{
+			_lastGridPageSize = gridPageSize;
+			RefreshActiveCatalogGridRegion();
+		}
+		else
+		{
+			_lastGridPageSize = gridPageSize;
+		}
+	}
+
+	private void RefreshInfiniteStorageGeometry()
+	{
+		if (_infiniteStoragePanel == null || _infiniteStorageRoot == null)
+		{
+			return;
+		}
+		RectTransform bounds = _infiniteStorageRoot.GetComponent<RectTransform>();
+		Vector2 boundsSize = bounds != null ? bounds.rect.size : new Vector2(Screen.width, Screen.height);
+		Vector2 minimumSize = new Vector2(MinimumWindowWidth, MinimumWindowHeight);
+		float scale = WindowGeometry.ResolveScale(_shellPresenter.UiScale, boundsSize, minimumSize, WindowMargin);
+		_infiniteStoragePanel.sizeDelta = WindowGeometry.ResolveSize(
+			boundsSize,
+			scale,
+			minimumSize,
+			new Vector2(PreferredWindowWidth, PreferredWindowHeight),
+			WindowMargin);
+		_infiniteStoragePanel.localScale = Vector3.one * scale;
+		_lastInfiniteLayoutScreenWidth = Screen.width;
+		_lastInfiniteLayoutScreenHeight = Screen.height;
+		_lastInfiniteLayoutRequestedScale = _shellPresenter.UiScale;
+	}
+
+	private void CommitWindowPosition(Vector2 position)
+	{
+		if (_panel == null || _root == null)
+		{
+			return;
+		}
+		_panel.anchoredPosition = position;
+		RefreshWindowGeometry(restoreNormalizedPosition: false);
+		RectTransform bounds = _root.GetComponent<RectTransform>();
+		Vector2 boundsSize = bounds != null ? bounds.rect.size : new Vector2(Screen.width, Screen.height);
+		_shellPresenter.SetWindowPosition(WindowGeometry.Normalize(
+			_panel.anchoredPosition,
+			boundsSize,
+			_panel.rect.size,
+			_lastMainLayoutScale));
+	}
+
 	public void Dispose()
 	{
-		_searchDebouncer.Dispose();
 		_timeApplyDebouncer.Dispose();
-		_autoPickupRuleSearchDebouncer.Dispose();
 		_autoPickupRangeDebouncer.Dispose();
 		_autoPickupFrequencyDebouncer.Dispose();
-		FlushDeferredDestroy();
+		_minimapSettingsDebouncer.Dispose();
+		DisposeSearchInputs();
+		PumpDeferredDestroy();
 		HideHoverExplanation();
+		_pageViewHost?.Dispose();
+		_pageViewHost = null;
+		_toolsPageViewHost?.Dispose();
+		_toolsPageViewHost = null;
 		if (_root != null)
 		{
 			UnityEngine.Object.Destroy(_root);
@@ -639,14 +850,6 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		if (_infiniteStorageRoot != null)
 		{
 			UnityEngine.Object.Destroy(_infiniteStorageRoot);
-		}
-		if (_ownedEventSystem != null)
-		{
-			UnityEngine.Object.Destroy(_ownedEventSystem);
-		}
-		if (_font != null)
-		{
-			UnityEngine.Object.Destroy(_font);
 		}
 		DestroyGeneratedSprite(ref _sliderGripSprite, ref _sliderGripTexture);
 		DestroyGeneratedSprite(ref _closeGlyphSprite, ref _closeGlyphTexture);
@@ -677,6 +880,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		if (_aboutRoot != null)
 		{
 			UnityEngine.Object.Destroy(_aboutRoot);
+		}
+		if (_fontPickerRoot != null)
+		{
+			UnityEngine.Object.Destroy(_fontPickerRoot);
 		}
 		if (_shortcutRoot != null)
 		{
@@ -710,7 +917,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		_infiniteStorageRoot = null;
 		_infiniteStoragePanel = null;
 		_infiniteStorageContentHost = null;
-		_ownedEventSystem = null;
+		_infiniteStorageContentRow = null;
+		_infiniteStorageCategoryHost = null;
+		_infiniteStorageResultsHost = null;
+		_infiniteStorageFilterButtonText = null;
+		_infiniteStorageSummaryText = null;
 		_mapAndShortcutText = null;
 		_statusText = null;
 		_statusAccent = null;
@@ -718,10 +929,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		_timeCurrentText = null;
 		_timePreviewText = null;
 		_timeSlider = null;
-		_itemAmountInput = null;
-		_vehicleAmountInput = null;
+		_itemAmountInputs.Clear();
+		_vehicleAmountInputs.Clear();
 		_confirmRoot = null;
 		_aboutRoot = null;
+		_fontPickerRoot = null;
 		_shortcutRoot = null;
 		_shortcutScrollRect = null;
 		_shortcutScrollContent = null;
@@ -745,6 +957,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		_inventoryScopeTriggerButton = null;
 		_autoPickupBlacklistPickerRoot = null;
 		_autoPickupBlacklistPickerHost = null;
+		_autoPickupRuleResultsHost = null;
+		_workshopLocalizationStateText = null;
+		_workshopLocalizationSummaryText = null;
+		_workshopLocalizationApiText = null;
+		_workshopLocalizationProtocolButtonText = null;
+		_workshopLocalizationSettingsHost = null;
+		_workshopLocalizationScrollRect = null;
+		_workshopLocalizationScrollContent = null;
 		_teleportColorPreview = null;
 		_teleportColorHexPreview = null;
 		_teleportColorHexInput = null;
@@ -764,31 +984,23 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		if (!(_root != null))
 		{
-			_font = Font.CreateDynamicFontFromOSFont(new string[4] { "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Arial" }, 18);
-			_root = new GameObject("UnturnedSingleplayerCheatMenu.Overlay", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-			UnityEngine.Object.DontDestroyOnLoad(_root);
-			Canvas component = _root.GetComponent<Canvas>();
-			component.renderMode = RenderMode.ScreenSpaceOverlay;
-			component.overrideSorting = true;
-			component.sortingOrder = 29900;
-			CanvasScaler component2 = _root.GetComponent<CanvasScaler>();
-			component2.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-			component2.referenceResolution = new Vector2(1920f, 1080f);
-			component2.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-			component2.matchWidthOrHeight = 0.5f;
-			if (UnityEngine.Object.FindObjectOfType<EventSystem>() == null)
-			{
-				_ownedEventSystem = new GameObject("UnturnedSingleplayerCheatMenu.EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-				UnityEngine.Object.DontDestroyOnLoad(_ownedEventSystem);
-			}
+			_font = _shellPresenter.ResolveFont();
+			_root = new GameObject("MainMenuWindow", typeof(RectTransform));
+			_root.transform.SetParent(_uiRoot.WindowLayer, false);
+			RectTransform rootRect = _root.GetComponent<RectTransform>();
+			rootRect.anchorMin = Vector2.zero;
+			rootRect.anchorMax = Vector2.one;
+			rootRect.offsetMin = Vector2.zero;
+			rootRect.offsetMax = Vector2.zero;
 			GameObject gameObject = CreateObject("Panel", _root.transform, typeof(Image));
 			_panel = gameObject.GetComponent<RectTransform>();
 			RectTransform panel = _panel;
 			Vector2 anchorMin = (_panel.anchorMax = new Vector2(0.5f, 0.5f));
 			panel.anchorMin = anchorMin;
 			_panel.pivot = new Vector2(0.5f, 0.5f);
-			_panel.sizeDelta = new Vector2(1120f, 790f);
-			_panel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
+			_panel.sizeDelta = Vector2.zero;
+			_panel.anchoredPosition = Vector2.zero;
+			_panel.localScale = Vector3.one;
 			gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
 			VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
 			verticalLayoutGroup.padding = new RectOffset(18, 18, 14, 14);
@@ -799,7 +1011,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			verticalLayoutGroup.childForceExpandHeight = false;
 			BuildHeader(gameObject.transform);
 			BuildTabs(gameObject.transform);
-			ReplaceContentHost();
+			_pageViewHost = new CheatMenuPageViewHost(CreatePageView);
 			GameObject gameObject2 = CreateObject("Status", gameObject.transform, typeof(Image));
 			gameObject2.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
 			Outline outline = gameObject2.AddComponent<Outline>();
@@ -824,9 +1036,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			_statusText.horizontalOverflow = HorizontalWrapMode.Overflow;
 			_statusText.verticalOverflow = VerticalWrapMode.Truncate;
 			SetLayout(_statusText.gameObject, -1f, 24f, 1f, 0f);
-			CreateButton(gameObject2.transform, "__keyboard_glyph__", ShowShortcutDialog, 38f, 34f, CheatMenuStyle.Surface);
-			CreateButton(gameObject2.transform, "?", ShowAboutDialog, 38f, 34f, CheatMenuStyle.Surface, 18);
+			CreateButton(gameObject2.transform, "__keyboard_glyph__", ShowShortcutDialog, "查看并修改全局快捷键绑定。", 38f, 34f, CheatMenuStyle.Surface);
+			CreateButton(gameObject2.transform, "?", ShowAboutDialog, "查看插件版本、项目主页和支持链接。", 38f, 34f, CheatMenuStyle.Surface, 18);
 			ResetStatus();
+			RefreshWindowGeometry(restoreNormalizedPosition: true);
 		}
 	}
 
@@ -838,30 +1051,21 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 		if (_font == null)
 		{
-			_font = Font.CreateDynamicFontFromOSFont(new string[4] { "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Arial" }, 18);
+			_font = _shellPresenter.ResolveFont();
 		}
-		if (UnityEngine.Object.FindObjectOfType<EventSystem>() == null)
-		{
-			_ownedEventSystem = new GameObject("UnturnedSingleplayerCheatMenu.EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-			UnityEngine.Object.DontDestroyOnLoad(_ownedEventSystem);
-		}
-		_infiniteStorageRoot = new GameObject("UnturnedSingleplayerCheatMenu.InfiniteStorage", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-		UnityEngine.Object.DontDestroyOnLoad(_infiniteStorageRoot);
-		Canvas canvas = _infiniteStorageRoot.GetComponent<Canvas>();
-		canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-		canvas.overrideSorting = true;
-		canvas.sortingOrder = OverlaySortingOrder + 1;
-		CanvasScaler scaler = _infiniteStorageRoot.GetComponent<CanvasScaler>();
-		scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-		scaler.referenceResolution = new Vector2(1920f, 1080f);
-		scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-		scaler.matchWidthOrHeight = 0.5f;
+		_infiniteStorageRoot = new GameObject("InfiniteStorageWindow", typeof(RectTransform));
+		_infiniteStorageRoot.transform.SetParent(_uiRoot.WindowLayer, false);
+		RectTransform storageRect = _infiniteStorageRoot.GetComponent<RectTransform>();
+		storageRect.anchorMin = Vector2.zero;
+		storageRect.anchorMax = Vector2.one;
+		storageRect.offsetMin = Vector2.zero;
+		storageRect.offsetMax = Vector2.zero;
 		GameObject panel = CreateObject("InfiniteStoragePanel", _infiniteStorageRoot.transform, typeof(Image));
 		_infiniteStoragePanel = panel.GetComponent<RectTransform>();
 		_infiniteStoragePanel.anchorMin = _infiniteStoragePanel.anchorMax = new Vector2(0.5f, 0.5f);
 		_infiniteStoragePanel.pivot = new Vector2(0.5f, 0.5f);
-		_infiniteStoragePanel.sizeDelta = new Vector2(1120f, 790f);
-		_infiniteStoragePanel.localScale = Vector3.one * CalculateSafeScale(_plugin.UiScale);
+		_infiniteStoragePanel.sizeDelta = Vector2.zero;
+		_infiniteStoragePanel.localScale = Vector3.one;
 		panel.GetComponent<Image>().color = CheatMenuStyle.Panel;
 		VerticalLayoutGroup layout = panel.AddComponent<VerticalLayoutGroup>();
 		layout.padding = new RectOffset(18, 18, 14, 14);
@@ -873,12 +1077,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		GameObject header = CreateRow(panel.transform, 46f, 8f);
 		CreateText(header.transform, "无限储存", 22, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
 		CreateFlexibleSpacer(header.transform);
-		CreateWindowCloseButton(header.transform, _plugin.CloseInfiniteStorage);
+		CreateWindowCloseButton(header.transform, _shellPresenter.CloseInfiniteStorage, "关闭无限储存窗口。");
 		_infiniteStorageContentHost = CreateObject("InfiniteStorageContentHost", panel.transform, typeof(Image));
 		_infiniteStorageContentHost.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
 		SetLayout(_infiniteStorageContentHost, -1f, -1f, -1f, 1f);
 		AddVerticalLayout(_infiniteStorageContentHost, 9f, new RectOffset(12, 12, 10, 10)).childForceExpandHeight = false;
 		_infiniteStorageRoot.SetActive(value: false);
+		RefreshInfiniteStorageGeometry();
 	}
 
 	private void RebuildInfiniteStoragePage()
@@ -893,6 +1098,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		{
 			QueueForDestroy(_infiniteStorageContentHost);
 		}
+		_infiniteStorageContentRow = null;
+		_infiniteStorageCategoryHost = null;
+		_infiniteStorageResultsHost = null;
+		_infiniteStorageFilterButtonText = null;
+		_infiniteStorageSummaryText = null;
 		_infiniteStorageContentHost = CreateObject("InfiniteStorageContentHost", _infiniteStoragePanel, typeof(Image));
 		_infiniteStorageContentHost.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
 		SetLayout(_infiniteStorageContentHost, -1f, -1f, -1f, 1f);
@@ -924,28 +1134,36 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private void BuildHeader(Transform parent)
 	{
 		GameObject gameObject = CreateRow(parent, 46f, 10f);
-		SetLayout(CreateText(gameObject.transform, "单人作弊指令菜单", 25, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold).gameObject, (PluginLocalization.CurrentLanguage == PluginLanguage.English) ? 315f : 255f);
-		GameObject gameObject2 = CreateObject("SingleplayerBadge", gameObject.transform, typeof(Image));
+		GameObject dragArea = CreateRow(gameObject.transform, 46f, 10f);
+		SetLayout(dragArea, -1f, 46f, 1f);
+		Image dragSurface = dragArea.AddComponent<Image>();
+		dragSurface.color = new Color(0f, 0f, 0f, 0f);
+		dragSurface.raycastTarget = true;
+		WindowDragHandle dragHandle = dragArea.AddComponent<WindowDragHandle>();
+		dragHandle.Initialize(_panel, _root.GetComponent<RectTransform>(), CommitWindowPosition);
+		SetLayout(CreateText(dragArea.transform, "单人作弊指令菜单", 25, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold).gameObject, (PluginLocalization.CurrentLanguage == PluginLanguage.English) ? 315f : 255f);
+		GameObject gameObject2 = CreateObject("SingleplayerBadge", dragArea.transform, typeof(Image));
 		gameObject2.GetComponent<Image>().color = new Color(0.06f, 0.3f, 0.19f, 1f);
 		SetLayout(gameObject2, 165f, 28f);
 		Stretch(CreateText(gameObject2.transform, "仅限 SINGLEPLAYER", 12, new Color(0.55f, 1f, 0.73f, 1f), TextAnchor.MiddleCenter, FontStyle.Bold).rectTransform);
-		CreateFlexibleSpacer(gameObject.transform);
+		CreateFlexibleSpacer(dragArea.transform);
 		CreateButton(gameObject.transform, PluginLocalization.SwitchButtonLabel, delegate
 		{
-			bool persisted = _plugin.ToggleLanguageFromUi();
+			bool persisted = _shellPresenter.ToggleLanguage();
 			RebuildForLanguageChange(persisted);
-		}, 58f, 36f, CheatMenuStyle.Accent);
+		}, "切换界面语言并立即重建当前菜单。", 58f, 36f, CheatMenuStyle.Accent);
+		CreateButton(gameObject.transform, "字体", ShowFontPicker, "选择此菜单使用的界面字体。", 58f, 36f, CheatMenuStyle.Surface);
 		_mapAndShortcutText = CreateText(gameObject.transform, string.Empty, 13, CheatMenuStyle.Muted, TextAnchor.MiddleRight);
-		SetLayout(_mapAndShortcutText.gameObject, 250f);
+		SetLayout(_mapAndShortcutText.gameObject, 220f);
 		CreateWindowCloseButton(gameObject.transform, delegate
 		{
-			_plugin.CloseMenu();
-		});
+			_shellPresenter.CloseMenu();
+		}, "关闭作弊菜单。");
 	}
 
-	private Button CreateWindowCloseButton(Transform parent, System.Action action)
+	private Button CreateWindowCloseButton(Transform parent, System.Action action, string tooltip)
 	{
-		Button button = CreateButton(parent, "×", action, 44f, 36f, CheatMenuStyle.Danger, 23);
+		Button button = CreateButton(parent, "×", action, tooltip, 44f, 36f, CheatMenuStyle.Danger, 23);
 		OverlaySelectableVisual component = button.GetComponent<OverlaySelectableVisual>();
 		component?.SetOutlineVisible(visible: false);
 		if ((object)component != null)
@@ -959,16 +1177,26 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private void RebuildForLanguageChange(bool persisted)
 	{
 		GameObject root = _root;
+		_pageViewHost?.Dispose();
+		_pageViewHost = null;
+		_toolsPageViewHost?.Dispose();
+		_toolsPageViewHost = null;
 		_root = null;
 		_panel = null;
 		_contentHost = null;
+		_itemResultsHost = null;
+		_vehicleResultsHost = null;
+		_favoriteResultsHost = null;
 		_mapAndShortcutText = null;
 		_statusText = null;
 		_statusAccent = null;
 		_aboutRoot = null;
+		_fontPickerRoot = null;
 		_shortcutRoot = null;
 		_shortcutScrollRect = null;
 		_shortcutScrollContent = null;
+		_workshopLocalizationScrollRect = null;
+		_workshopLocalizationScrollContent = null;
 		_shortcutCaptureText = null;
 		_shortcutCaptureModifiers.Clear();
 		_shortcutCaptureActive = false;
@@ -994,8 +1222,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		if (!(_mapAndShortcutText == null))
 		{
-			string text = (string.IsNullOrWhiteSpace(Provider.map) ? PluginLocalization.Translate("未进入地图") : Provider.map);
-			string shortcutLabel = _plugin.ShortcutLabel;
+			string text = (string.IsNullOrWhiteSpace(_shellPresenter.CurrentMap) ? PluginLocalization.Translate("未进入地图") : _shellPresenter.CurrentMap);
+			string shortcutLabel = _shellPresenter.ShortcutLabel;
 			if (!string.Equals(_lastHeaderMap, text, StringComparison.Ordinal) || !string.Equals(_lastHeaderShortcut, shortcutLabel, StringComparison.Ordinal))
 			{
 				_lastHeaderMap = text;
@@ -1007,31 +1235,70 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void BuildTabs(Transform parent)
 	{
-		GameObject gameObject = CreateRow(parent, 43f, 7f);
-		AddTab(gameObject.transform, MenuTab.Character, "角色");
-		AddTab(gameObject.transform, MenuTab.Items, "物品");
-		AddTab(gameObject.transform, MenuTab.Vehicles, "载具");
-		AddTab(gameObject.transform, MenuTab.Favorites, "收藏");
-		AddTab(gameObject.transform, MenuTab.Teleports, "传送");
-		AddTab(gameObject.transform, MenuTab.Tools, "工具");
-		AddTab(gameObject.transform, MenuTab.Other, "其他");
+		GameObject viewport = CreateObject("MainTabScroll", parent, typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+		SetLayout(viewport, -1f, 43f, 1f, 0f);
+		viewport.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
+		RectTransform viewportRect = viewport.GetComponent<RectTransform>();
+		GameObject content = CreateObject("MainTabContent", viewport.transform);
+		RectTransform contentRect = content.GetComponent<RectTransform>();
+		contentRect.anchorMin = new Vector2(0f, 0f);
+		contentRect.anchorMax = new Vector2(0f, 1f);
+		contentRect.pivot = new Vector2(0f, 0.5f);
+		contentRect.offsetMin = Vector2.zero;
+		contentRect.offsetMax = Vector2.zero;
+		LayoutElement contentLayout = content.AddComponent<LayoutElement>();
+		contentLayout.minWidth = PreferredWindowWidth - 36f;
+		HorizontalLayoutGroup layout = content.AddComponent<HorizontalLayoutGroup>();
+		layout.spacing = 7f;
+		layout.childAlignment = TextAnchor.MiddleCenter;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = false;
+		layout.childForceExpandHeight = false;
+		ContentSizeFitter fitter = content.AddComponent<ContentSizeFitter>();
+		fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+		ScrollRect scroll = viewport.GetComponent<ScrollRect>();
+		scroll.viewport = viewportRect;
+		scroll.content = contentRect;
+		scroll.horizontal = true;
+		scroll.vertical = false;
+		scroll.movementType = ScrollRect.MovementType.Clamped;
+		scroll.scrollSensitivity = 32f;
+		AddTab(content.transform, MenuTab.Character, "角色");
+		AddTab(content.transform, MenuTab.Items, "物品");
+		AddTab(content.transform, MenuTab.Vehicles, "载具");
+		AddTab(content.transform, MenuTab.Favorites, "收藏");
+		AddTab(content.transform, MenuTab.Teleports, "传送");
+		AddTab(content.transform, MenuTab.Tools, "工具");
+		AddTab(content.transform, MenuTab.Other, "其他");
 	}
 
 	private void AddTab(Transform parent, MenuTab tab, string label)
 	{
 		Button button = CreateButton(parent, label, delegate
 		{
-			ShowTab(tab);
-		}, 0f, 40f, CheatMenuStyle.Surface, 15);
-		SetLayout(button.gameObject, -1f, -1f, 1f);
+			ShowTab(tab, invalidate: false);
+		}, string.Format(PluginLocalization.Translate("切换到“{0}”主页面。"), PluginLocalization.Translate(label)), 140f, 40f, CheatMenuStyle.Surface, 15);
+		SetLayout(button.gameObject, 140f, 40f, 0f, 0f);
 		_tabButtons[tab] = button;
 	}
 
-	private void ShowTab(MenuTab tab)
+	private void ShowTab(MenuTab tab, bool invalidate = true)
 	{
+		bool replacingView = invalidate || _activeTab != tab;
 		_activeTab = tab;
-		_plugin.SetLastMainTab(tab.ToString());
-		ReplaceContentHost();
+		_shellPresenter.SetLastMainTab(tab.ToString());
+		HideHoverExplanation();
+		HidePointToolModeDrawer();
+		HideInventoryPresetDrawer();
+		HideInventoryScopeDrawer();
+		HideWorkshopProtocolDrawer();
+		HideAutoPickupBlacklistPicker();
+		if (replacingView)
+		{
+			ResetCatalogPageViewReferences();
+		}
+		_contentHost = _pageViewHost.Activate(tab, invalidate);
 		foreach (KeyValuePair<MenuTab, Button> tabButton in _tabButtons)
 		{
 			Color color = ((tabButton.Key == tab) ? CheatMenuStyle.Accent : CheatMenuStyle.Surface);
@@ -1045,6 +1312,23 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 				tabButton.Value.GetComponent<Image>().color = color;
 			}
 		}
+	}
+
+	private void BuildPageView(MenuTab tab, GameObject host)
+	{
+		_contentHost = host;
+		BuildPage(tab);
+	}
+
+	private UiPageView<MenuTab> CreatePageView(MenuTab tab)
+	{
+		GameObject host = CreatePageHost(tab);
+		BuildPageView(tab, host);
+		return new UiPageView<MenuTab>(tab, host, QueueForDestroy);
+	}
+
+	private void BuildPage(MenuTab tab)
+	{
 		switch (tab)
 		{
 		case MenuTab.Character:
@@ -1071,1775 +1355,28 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
-	private void ReplaceContentHost()
+	private GameObject CreatePageHost(MenuTab tab)
 	{
-		HideHoverExplanation();
-		HidePointToolModeDrawer();
-		HideInventoryPresetDrawer();
-		HideInventoryScopeDrawer();
-		HideWorkshopProtocolDrawer();
-		HideAutoPickupBlacklistPicker();
-		if (_contentHost != null)
-		{
-			QueueForDestroy(_contentHost);
-		}
-		_contentHost = CreateObject("ContentHost", _panel, typeof(Image));
-		_contentHost.transform.SetSiblingIndex(2);
-		_contentHost.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
-		SetLayout(_contentHost, -1f, -1f, -1f, 1f);
+		GameObject host = CreateObject(tab + "PageView", _panel, typeof(Image));
+		host.transform.SetSiblingIndex(2);
+		host.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
+		SetLayout(host, -1f, -1f, -1f, 1f);
+		return host;
 	}
 
-	private void BuildCharacterTab()
+	private void DisposeSearchInputs()
 	{
-		Transform transform = _contentHost.transform;
-		AddVerticalLayout(_contentHost, 9f, new RectOffset(12, 12, 10, 10)).childForceExpandHeight = false;
-		Player localPlayer = Player.LocalPlayer;
-		PlayerLife playerLife = localPlayer?.life;
-		PlayerSkills playerSkills = localPlayer?.skills;
-		if (playerLife == null || playerSkills == null)
+		foreach (UiSearchInputController searchInput in _searchInputs)
 		{
-			CreateLabel(transform, "玩家状态尚未准备完成。", 17);
-			return;
+			searchInput.Dispose();
 		}
-		CreateSection(transform, "生存状态");
-		CreateSummaryPanel(transform, $"生命 {playerLife.health}/100    饱食 {playerLife.food}/100    水分 {playerLife.water}/100    免疫 {playerLife.virus}/100    体力 {playerLife.stamina}/100    氧气 {playerLife.oxygen}/100");
-		GameObject gameObject = CreateRow(transform, 42f, 8f);
-		CreateToggleAction(gameObject.transform, "无敌模式", _plugin.Actions.GodModeEnabled, delegate(bool value)
-		{
-			_plugin.Actions.SetGodMode(value);
-			SetStatus(value ? "无敌模式已开启。" : "无敌模式已关闭。");
-		});
-		CreateToggleAction(gameObject.transform, "无限生存状态", _plugin.Actions.InfiniteNeedsEnabled, delegate(bool value)
-		{
-			_plugin.Actions.SetInfiniteNeeds(value);
-			SetStatus(value ? "无限生存状态已开启。" : "无限生存状态已关闭。");
-		});
-		CreateLabel(transform, "设置指定数值（0–100；生命最低 1）", 12, CheatMenuStyle.Muted);
-		GameObject gameObject2 = CreateRow(transform, 36f, 6f);
-		CreateLabeledInput(gameObject2.transform, "生命", _healthTarget, delegate(string value)
-		{
-			_healthTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "饱食", _foodTarget, delegate(string value)
-		{
-			_foodTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "水分", _waterTarget, delegate(string value)
-		{
-			_waterTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "免疫", _virusTarget, delegate(string value)
-		{
-			_virusTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "体力", _staminaTarget, delegate(string value)
-		{
-			_staminaTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "氧气", _oxygenTarget, delegate(string value)
-		{
-			_oxygenTarget = value;
-		});
-		CreateButton(gameObject2.transform, "应用", delegate
-		{
-			bool flag = _plugin.Actions.SetLifeStats(ParseClamped(_healthTarget, 1, 100, 100), ParseClamped(_foodTarget, 0, 100, 100), ParseClamped(_waterTarget, 0, 100, 100), ParseClamped(_virusTarget, 0, 100, 100), ParseClamped(_staminaTarget, 0, 100, 100), ParseClamped(_oxygenTarget, 0, 100, 100));
-			SetStatus(flag ? "角色生存数值已设置。" : "设置失败。", 3f, flag ? StatusKind.Success : StatusKind.Error);
-		}, 76f, 34f, CheatMenuStyle.Accent);
-		GameObject gameObject3 = CreateRow(transform, 42f, 8f);
-		CreateAction(gameObject3.transform, "全部恢复", delegate
-		{
-			SetStatus(_plugin.Actions.RestoreEverything() ? "角色状态已全部恢复。" : "恢复失败。");
-		});
-		CreateAction(gameObject3.transform, "补满生存状态", delegate
-		{
-			SetStatus(_plugin.Actions.RefillNeeds() ? "生存状态已补满。" : "操作失败。");
-		});
-		CreateAction(gameObject3.transform, "治疗流血/骨折", delegate
-		{
-			SetStatus(_plugin.Actions.CureInjuries() ? "伤势已治疗。" : "操作失败。");
-		});
-		CreateSection(transform, "经验、声望与技能");
-		CreateLabel(transform, $"经验 {playerSkills.experience:N0}    声望 {playerSkills.reputation:N0}", 14);
-		GameObject gameObject4 = CreateRow(transform, 38f, 8f);
-		CreateLabeledInput(gameObject4.transform, "经验", _experienceAmount, delegate(string value)
-		{
-			_experienceAmount = value;
-		}, 150f);
-		CreateButton(gameObject4.transform, "增加经验", delegate
-		{
-			uint num = (uint)ParseClamped(_experienceAmount, 1, 100000000, 1000);
-			SetStatus(_plugin.Actions.AddExperience(num) ? $"已增加 {num:N0} 经验。" : "增加经验失败。");
-		}, 110f, 34f);
-		CreateLabeledInput(gameObject4.transform, "声望", _reputationAmount, delegate(string value)
-		{
-			_reputationAmount = value;
-		}, 150f);
-		CreateButton(gameObject4.transform, "变更声望", delegate
-		{
-			int num = ParseClamped(_reputationAmount, -1000000, 1000000, 100);
-			SetStatus(_plugin.Actions.AddReputation(num) ? $"已变更 {num:N0} 声望。" : "变更声望失败。");
-		}, 110f, 34f);
-		CreateAction(gameObject4.transform, "全部技能满级", delegate
-		{
-			int num = _plugin.Actions.MaxAllSkills();
-			SetStatus($"技能已处理，实际变更 {num} 项。");
-		});
+		_searchInputs.Clear();
 	}
 
-	private void BuildItemsTab()
-	{
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
-		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 7f);
-		CreateLabel(gameObject.transform, "搜索", 13, CheatMenuStyle.Text, 48f);
-		CreateInput(gameObject.transform, _itemFilter.SearchQuery, delegate(string value)
-		{
-			_itemFilter.SearchQuery = value;
-			_searchDebouncer.Schedule(delegate
-			{
-				BuildItemResults();
-				if (_activeTab == MenuTab.Items)
-				{
-					ShowTab(MenuTab.Items);
-				}
-			});
-		}, 280f);
-		CreateLabel(gameObject.transform, "数量", 13, CheatMenuStyle.Text, 48f);
-		CreateButton(gameObject.transform, "−", delegate
-		{
-			_giveAmount = (byte)Math.Max(1, ParseClamped(_itemAmountText, 1, 255, _giveAmount) - 1);
-			_itemAmountText = _giveAmount.ToString();
-			UpdateItemAmountInput();
-		}, 36f, 34f);
-		_itemAmountInput = CreateInput(gameObject.transform, _itemAmountText, delegate(string value)
-		{
-			_itemAmountText = value;
-			if (int.TryParse(value, out var result))
-			{
-				_giveAmount = (byte)Mathf.Clamp(result, 1, 255);
-			}
-		}, 62f);
-		CreateButton(gameObject.transform, "+", delegate
-		{
-			_giveAmount = (byte)Math.Min(255, ParseClamped(_itemAmountText, 1, 255, _giveAmount) + 1);
-			_itemAmountText = _giveAmount.ToString();
-			UpdateItemAmountInput();
-		}, 36f, 34f);
-		CreateButton(gameObject.transform, (_itemFilter.ActiveFilterCount == 0) ? "筛选" : $"筛选 {_itemFilter.ActiveFilterCount}", delegate
-		{
-			ShowItemFilterPanel(forFavorites: false);
-		}, 92f, 34f);
-		CreateFlexibleSpacer(gameObject.transform);
-		CreateButton(gameObject.transform, "重新扫描", delegate
-		{
-			_plugin.RefreshCatalog();
-			SetStatus("已重新扫描当前加载的原版与模组资产。", 4f);
-		}, 105f, 34f);
-		CreateItemFilterSummary(_contentHost.transform, _itemFilter, _itemResults.Count, _plugin.Catalog.Items.Count);
-		GameObject gameObject2 = CreateRow(_contentHost.transform, 0f, 10f);
-		SetLayout(gameObject2, -1f, -1f, -1f, 1f);
-		BuildItemCategorySidebar(gameObject2.transform, "物品分类", _itemFilter, delegate(ItemPrimaryCategory category)
-		{
-			_itemFilter.Category = category;
-			ItemFilterService.NormalizeForCategory(_itemFilter);
-			BuildItemResults();
-			ShowTab(MenuTab.Items);
-		});
-		BuildItemGrid(gameObject2.transform);
-	}
 
-	private void BuildVehiclesTab()
-	{
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
-		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 7f);
-		CreateLabel(gameObject.transform, "搜索", 13, CheatMenuStyle.Text, 48f);
-		CreateInput(gameObject.transform, _vehicleQuery, delegate(string value)
-		{
-			_vehicleQuery = value;
-			_searchDebouncer.Schedule(delegate
-			{
-				BuildVehicleResults();
-				if (_activeTab == MenuTab.Vehicles)
-				{
-					ShowTab(MenuTab.Vehicles);
-				}
-			});
-		}, 280f);
-		CreateLabel(gameObject.transform, "数量", 13, CheatMenuStyle.Text, 48f);
-		CreateButton(gameObject.transform, "−", delegate
-		{
-			_spawnVehicleAmount = Math.Max(1, ParseClamped(_vehicleAmountText, 1, 20, _spawnVehicleAmount) - 1);
-			_vehicleAmountText = _spawnVehicleAmount.ToString();
-			UpdateVehicleAmountInput();
-		}, 36f, 34f);
-		_vehicleAmountInput = CreateInput(gameObject.transform, _vehicleAmountText, delegate(string value)
-		{
-			_vehicleAmountText = value;
-			if (int.TryParse(value, out var result))
-			{
-				_spawnVehicleAmount = Mathf.Clamp(result, 1, 20);
-			}
-		}, 62f);
-		CreateButton(gameObject.transform, "+", delegate
-		{
-			_spawnVehicleAmount = Math.Min(20, ParseClamped(_vehicleAmountText, 1, 20, _spawnVehicleAmount) + 1);
-			_vehicleAmountText = _spawnVehicleAmount.ToString();
-			UpdateVehicleAmountInput();
-		}, 36f, 34f);
-		CreateButton(gameObject.transform, "⚙ 渲染设置", ShowVehicleThumbnailSettings, 116f, 34f);
-		CreateFlexibleSpacer(gameObject.transform);
-		CreateButton(gameObject.transform, "重新扫描", delegate
-		{
-			_plugin.RefreshCatalog();
-			SetStatus("已重新扫描当前加载的原版与模组资产。", 4f);
-		}, 105f, 34f);
-		CreateLabel(_contentHost.transform, $"显示 {_vehicleResults.Count} / {_plugin.Catalog.Vehicles.Count}；模组车辆 {_plugin.Catalog.WorkshopVehicleCount}。每次生成 1–20 辆。", 12, CheatMenuStyle.Muted);
-		GameObject gameObject2 = CreateRow(_contentHost.transform, 0f, 10f);
-		SetLayout(gameObject2, -1f, -1f, -1f, 1f);
-		BuildCategorySidebar(gameObject2.transform, "车辆分类", VehicleCategories, _vehicleCategory, delegate(string category)
-		{
-			_vehicleCategory = category;
-			BuildVehicleResults();
-			ShowTab(MenuTab.Vehicles);
-		});
-		BuildVehicleGrid(gameObject2.transform);
-	}
 
-	private void BuildFavoritesTab()
-	{
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
-		int num = _plugin.Catalog.Items.Count(_plugin.Favorites.IsItemFavorite);
-		int num2 = _plugin.Catalog.Vehicles.Count(_plugin.Favorites.IsVehicleFavorite);
-		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 8f);
-		CreateButton(gameObject.transform, $"物品收藏  {num}", delegate
-		{
-			_favoriteKind = FavoriteKind.Items;
-			_favoritePage = 0;
-			BuildFavoriteResults();
-			ShowTab(MenuTab.Favorites);
-		}, 0f, 36f, (_favoriteKind == FavoriteKind.Items) ? CheatMenuStyle.Favorite : CheatMenuStyle.SurfaceHover, 14);
-		CreateButton(gameObject.transform, $"车辆收藏  {num2}", delegate
-		{
-			_favoriteKind = FavoriteKind.Vehicles;
-			_favoritePage = 0;
-			BuildFavoriteResults();
-			ShowTab(MenuTab.Favorites);
-		}, 0f, 36f, (_favoriteKind == FavoriteKind.Vehicles) ? CheatMenuStyle.Favorite : CheatMenuStyle.SurfaceHover, 14);
-		foreach (Transform item in gameObject.transform)
-		{
-			SetLayout(item.gameObject, -1f, -1f, 1f);
-		}
-		GameObject gameObject2 = CreateRow(_contentHost.transform, 38f, 7f);
-		CreateLabel(gameObject2.transform, "搜索", 13, CheatMenuStyle.Text, 48f);
-		string value = ((_favoriteKind == FavoriteKind.Items) ? _favoriteItemFilter.SearchQuery : _favoriteQuery);
-		CreateInput(gameObject2.transform, value, delegate(string text)
-		{
-			if (_favoriteKind == FavoriteKind.Items)
-			{
-				_favoriteItemFilter.SearchQuery = text;
-			}
-			else
-			{
-				_favoriteQuery = text;
-			}
-			_searchDebouncer.Schedule(delegate
-			{
-				BuildFavoriteResults();
-				if (_activeTab == MenuTab.Favorites)
-				{
-					ShowTab(MenuTab.Favorites);
-				}
-			});
-		}, 280f);
-		CreateLabel(gameObject2.transform, "数量", 13, CheatMenuStyle.Text, 48f);
-		if (_favoriteKind == FavoriteKind.Items)
-		{
-			CreateButton(gameObject2.transform, "−", delegate
-			{
-				_giveAmount = (byte)Math.Max(1, ParseClamped(_itemAmountText, 1, 255, _giveAmount) - 1);
-				_itemAmountText = _giveAmount.ToString();
-				UpdateItemAmountInput();
-			}, 36f, 34f);
-			_itemAmountInput = CreateInput(gameObject2.transform, _itemAmountText, delegate(string text)
-			{
-				_itemAmountText = text;
-				if (int.TryParse(text, out var result))
-				{
-					_giveAmount = (byte)Mathf.Clamp(result, 1, 255);
-				}
-			}, 62f);
-			CreateButton(gameObject2.transform, "+", delegate
-			{
-				_giveAmount = (byte)Math.Min(255, ParseClamped(_itemAmountText, 1, 255, _giveAmount) + 1);
-				_itemAmountText = _giveAmount.ToString();
-				UpdateItemAmountInput();
-			}, 36f, 34f);
-			CreateButton(gameObject2.transform, (_favoriteItemFilter.ActiveFilterCount == 0) ? "筛选" : $"筛选 {_favoriteItemFilter.ActiveFilterCount}", delegate
-			{
-				ShowItemFilterPanel(forFavorites: true);
-			}, 92f, 34f);
-		}
-		else
-		{
-			CreateButton(gameObject2.transform, "−", delegate
-			{
-				_spawnVehicleAmount = Math.Max(1, ParseClamped(_vehicleAmountText, 1, 20, _spawnVehicleAmount) - 1);
-				_vehicleAmountText = _spawnVehicleAmount.ToString();
-				UpdateVehicleAmountInput();
-			}, 36f, 34f);
-			_vehicleAmountInput = CreateInput(gameObject2.transform, _vehicleAmountText, delegate(string text)
-			{
-				_vehicleAmountText = text;
-				if (int.TryParse(text, out var result))
-				{
-					_spawnVehicleAmount = Mathf.Clamp(result, 1, 20);
-				}
-			}, 62f);
-			CreateButton(gameObject2.transform, "+", delegate
-			{
-				_spawnVehicleAmount = Math.Min(20, ParseClamped(_vehicleAmountText, 1, 20, _spawnVehicleAmount) + 1);
-				_vehicleAmountText = _spawnVehicleAmount.ToString();
-				UpdateVehicleAmountInput();
-			}, 36f, 34f);
-		}
-		CreateFlexibleSpacer(gameObject2.transform);
-		CreateButton(gameObject2.transform, "重新扫描", delegate
-		{
-			_plugin.RefreshCatalog();
-			SetStatus("已重新扫描当前加载的原版与模组资产。", 4f);
-		}, 105f, 34f);
-		if (_favoriteKind == FavoriteKind.Items)
-		{
-			CreateItemFilterSummary(_contentHost.transform, _favoriteItemFilter, _favoriteItemResults.Count, num);
-		}
-		else
-		{
-			CreateLabel(_contentHost.transform, $"显示 {_favoriteVehicleResults.Count} 辆已加载收藏车辆。", 12, CheatMenuStyle.Muted);
-		}
-		GameObject gameObject3 = CreateRow(_contentHost.transform, 0f, 10f);
-		SetLayout(gameObject3, -1f, -1f, -1f, 1f);
-		if (_favoriteKind == FavoriteKind.Items)
-		{
-			BuildItemCategorySidebar(gameObject3.transform, "收藏物品分类", _favoriteItemFilter, delegate(ItemPrimaryCategory category)
-			{
-				_favoriteItemFilter.Category = category;
-				ItemFilterService.NormalizeForCategory(_favoriteItemFilter);
-				BuildFavoriteResults();
-				ShowTab(MenuTab.Favorites);
-			}, _plugin.Favorites.IsItemFavorite);
-		}
-		else
-		{
-			BuildCategorySidebar(gameObject3.transform, "收藏车辆分类", VehicleCategories, _favoriteVehicleCategory, delegate(string category)
-			{
-				_favoriteVehicleCategory = category;
-				BuildFavoriteResults();
-				ShowTab(MenuTab.Favorites);
-			});
-		}
-		BuildFavoriteGrid(gameObject3.transform);
-	}
 
-	private void BuildCategorySidebar(Transform parent, string title, IEnumerable<string> categories, string selected, Action<string> select)
-	{
-		GameObject gameObject = CreateObject("Categories", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Surface;
-		AddVerticalLayout(gameObject, 5f, new RectOffset(7, 7, 7, 7));
-		SetLayout(gameObject, 165f, -1f, 0f);
-		CreateLabel(gameObject.transform, title, 16, CheatMenuStyle.Text);
-		foreach (string category in categories)
-		{
-			string captured = category;
-			CreateButton(gameObject.transform, category, delegate
-			{
-				select(captured);
-			}, 0f, 34f, (category == selected) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover);
-		}
-	}
 
-	private void BuildItemCategorySidebar(Transform parent, string title, ItemFilterState filter, Action<ItemPrimaryCategory> select, Func<ItemAsset, bool> includeItem = null)
-	{
-		GameObject gameObject = CreateObject("Categories", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Surface;
-		AddVerticalLayout(gameObject, 5f, new RectOffset(7, 7, 7, 7));
-		SetLayout(gameObject, 165f, -1f, 0f);
-		CreateLabel(gameObject.transform, title, 16, CheatMenuStyle.Text);
-		foreach (ItemPrimaryCategory category in ItemFilterService.Categories)
-		{
-			ItemPrimaryCategory captured = category;
-			ItemFilterState categoryFilter = filter.Clone();
-			categoryFilter.Category = category;
-			ItemFilterService.NormalizeForCategory(categoryFilter);
-			int num = _plugin.Catalog.Items.Count((ItemAsset asset) => (includeItem == null || includeItem(asset)) && ItemFilterService.Matches(asset, categoryFilter));
-			string label = $"{PluginLocalization.Translate(ItemFilterService.GetPrimaryCategoryLabel(category))}  {num:N0}";
-			CreateButton(gameObject.transform, label, delegate
-			{
-				select(captured);
-			}, 0f, 34f, (category == filter.Category) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12);
-		}
-	}
-
-	private void CreateItemFilterSummary(Transform parent, ItemFilterState filter, int resultCount, int sourceCount)
-	{
-		CreateLabel(parent, $"显示 {resultCount:N0} / {sourceCount:N0}；搜索支持名称、ID、GUID 和来源。", 12, CheatMenuStyle.Muted);
-		if (filter.ActiveFilterCount != 0)
-		{
-			GameObject gameObject = CreateRow(parent, 32f, 6f);
-			AddItemFilterChip(gameObject.transform, filter.ItemType.HasValue ? ItemFilterService.GetItemTypeLabel(filter.ItemType.Value) : null, delegate
-			{
-				filter.ItemType = null;
-				ItemFilterService.NormalizeForCategory(filter);
-				ApplyItemFilterFromChip();
-			});
-			AddItemFilterChip(gameObject.transform, (filter.Origin != ItemOriginFilter.All) ? ItemFilterService.GetOriginLabel(filter.Origin) : null, delegate
-			{
-				filter.Origin = ItemOriginFilter.All;
-				ApplyItemFilterFromChip();
-			});
-			AddItemFilterChip(gameObject.transform, filter.Rarity.HasValue ? ItemFilterService.GetRarityLabel(filter.Rarity.Value) : null, delegate
-			{
-				filter.Rarity = null;
-				ApplyItemFilterFromChip();
-			});
-			AddItemFilterChip(gameObject.transform, filter.Slot.HasValue ? ItemFilterService.GetSlotLabel(filter.Slot.Value) : null, delegate
-			{
-				filter.Slot = null;
-				ApplyItemFilterFromChip();
-			});
-			AddItemFilterChip(gameObject.transform, filter.GunAction.HasValue ? ItemFilterService.GetGunActionLabel(filter.GunAction.Value) : null, delegate
-			{
-				filter.GunAction = null;
-				ApplyItemFilterFromChip();
-			});
-			AddItemFilterChip(gameObject.transform, (filter.FireModes != GunFireModeFilter.None) ? ItemFilterService.GetFireModeLabel(filter.FireModes) : null, delegate
-			{
-				filter.FireModes = GunFireModeFilter.None;
-				ApplyItemFilterFromChip();
-			});
-			CreateFlexibleSpacer(gameObject.transform);
-			CreateButton(gameObject.transform, "清除筛选", delegate
-			{
-				filter.ResetAdvanced();
-				ApplyItemFilterFromChip();
-			}, 100f, 30f, CheatMenuStyle.SurfaceHover, 12);
-		}
-	}
-
-	private void AddItemFilterChip(Transform parent, string label, System.Action remove)
-	{
-		if (!string.IsNullOrEmpty(label))
-		{
-			string[] array = label.Split(new string[1] { " / " }, StringSplitOptions.None);
-			for (int i = 0; i < array.Length; i++)
-			{
-				array[i] = PluginLocalization.Translate(array[i]);
-			}
-			string text = string.Join(" / ", array) + " ×";
-			CreateButton(parent, text, remove, Mathf.Clamp(48f + (float)text.Length * 11f, 92f, 280f), 30f, CheatMenuStyle.SurfaceHover, 11);
-		}
-	}
-
-	private void ApplyItemFilterFromChip()
-	{
-		BuildItemResults();
-		BuildFavoriteResults();
-		ShowTab(_activeTab);
-	}
-
-	private void ShowItemFilterPanel(bool forFavorites)
-	{
-		HideItemFilterPanel();
-		_itemFilterForInfiniteStorage = false;
-		_itemFilterForFavorites = forFavorites;
-		_itemFilterDraft = (_itemFilterForInfiniteStorage ? _infiniteStorageFilter : (forFavorites ? _favoriteItemFilter : _itemFilter)).Clone();
-		BuildItemFilterPanel();
-	}
-
-	private void ShowInfiniteStorageFilterPanel()
-	{
-		HideItemFilterPanel();
-		_itemFilterForInfiniteStorage = true;
-		_itemFilterDraft = _infiniteStorageFilter.Clone();
-		BuildItemFilterPanel();
-	}
-
-	private void BuildItemFilterPanel()
-	{
-		if (_itemFilterDraft == null)
-		{
-			return;
-		}
-		GameObject activeRoot = GetActiveOverlayRoot();
-		if (activeRoot == null)
-		{
-			return;
-		}
-		_itemFilterRoot = CreateObject("ItemFilterOverlay", activeRoot.transform, typeof(Image));
-		Stretch(_itemFilterRoot.GetComponent<RectTransform>());
-		_itemFilterRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
-		GameObject gameObject = CreateObject("ItemFilterDialog", _itemFilterRoot.transform, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		Outline outline = gameObject.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.InputBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		RectTransform component = gameObject.GetComponent<RectTransform>();
-		Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
-		component.anchorMin = anchorMin;
-		component.pivot = new Vector2(0.5f, 0.5f);
-		component.sizeDelta = new Vector2(860f, 610f);
-		VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(24, 24, 18, 18);
-		verticalLayoutGroup.spacing = 8f;
-		verticalLayoutGroup.childControlWidth = true;
-		verticalLayoutGroup.childControlHeight = true;
-		verticalLayoutGroup.childForceExpandWidth = true;
-		verticalLayoutGroup.childForceExpandHeight = false;
-		GameObject gameObject2 = CreateRow(gameObject.transform, 42f, 8f);
-		CreateText(gameObject2.transform, "筛选", 20, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-		CreateFlexibleSpacer(gameObject2.transform);
-		CreateButton(gameObject2.transform, "×", HideItemFilterPanel, 42f, 38f, CheatMenuStyle.Surface, 22);
-		CreateLabel(gameObject.transform, "当前分类：" + PluginLocalization.Translate(ItemFilterService.GetPrimaryCategoryLabel(_itemFilterDraft.Category)), 12, CheatMenuStyle.Muted);
-		IReadOnlyList<EItemType> itemTypes = ItemFilterService.GetItemTypes(_itemFilterDraft.Category);
-		if (itemTypes.Count > 0)
-		{
-			List<string> list = new List<string> { "全部" };
-			foreach (EItemType item in itemTypes)
-			{
-				list.Add(ItemFilterService.GetItemTypeLabel(item));
-			}
-			CreateFilterOptionGrid(gameObject.transform, "物品类型", list, 6, delegate(int index)
-			{
-				_itemFilterDraft.ItemType = ((index == 0) ? ((EItemType?)null) : new EItemType?(itemTypes[index - 1]));
-				ItemFilterService.NormalizeForCategory(_itemFilterDraft);
-				RebuildItemFilterPanel();
-			}, (int index) => (index != 0) ? (_itemFilterDraft.ItemType == itemTypes[index - 1]) : (!_itemFilterDraft.ItemType.HasValue));
-		}
-		CreateFilterOptionGrid(gameObject.transform, "来源", new List<string>
-		{
-			"全部来源",
-			ItemFilterService.GetOriginLabel(ItemOriginFilter.Official),
-			ItemFilterService.GetOriginLabel(ItemOriginFilter.Workshop),
-			ItemFilterService.GetOriginLabel(ItemOriginFilter.MapOrOther)
-		}, 4, delegate(int index)
-		{
-			_itemFilterDraft.Origin = ((index != 0) ? ItemOriginFilters[index - 1] : ItemOriginFilter.All);
-			RebuildItemFilterPanel();
-		}, (int index) => (index != 0) ? (_itemFilterDraft.Origin == ItemOriginFilters[index - 1]) : (_itemFilterDraft.Origin == ItemOriginFilter.All));
-		List<string> list2 = new List<string> { "全部" };
-		EItemRarity[] itemRarities = ItemRarities;
-		foreach (EItemRarity rarity in itemRarities)
-		{
-			list2.Add(ItemFilterService.GetRarityLabel(rarity));
-		}
-		CreateFilterOptionGrid(gameObject.transform, "稀有度", list2, 7, delegate(int index)
-		{
-			_itemFilterDraft.Rarity = ((index == 0) ? ((EItemRarity?)null) : new EItemRarity?(ItemRarities[index - 1]));
-			RebuildItemFilterPanel();
-		}, (int index) => (index != 0) ? (_itemFilterDraft.Rarity == ItemRarities[index - 1]) : (!_itemFilterDraft.Rarity.HasValue));
-		List<string> list3 = new List<string> { "全部" };
-		ESlotType[] itemSlots = ItemSlots;
-		foreach (ESlotType slot in itemSlots)
-		{
-			list3.Add(ItemFilterService.GetSlotLabel(slot));
-		}
-		CreateFilterOptionGrid(gameObject.transform, "装备槽位", list3, 5, delegate(int index)
-		{
-			_itemFilterDraft.Slot = ((index == 0) ? ((ESlotType?)null) : new ESlotType?(ItemSlots[index - 1]));
-			RebuildItemFilterPanel();
-		}, (int index) => (index != 0) ? (_itemFilterDraft.Slot == ItemSlots[index - 1]) : (!_itemFilterDraft.Slot.HasValue));
-		if (_itemFilterDraft.ItemType == EItemType.GUN)
-		{
-			List<string> list4 = new List<string> { "全部" };
-			EAction[] gunActions = GunActions;
-			foreach (EAction action in gunActions)
-			{
-				list4.Add(ItemFilterService.GetGunActionLabel(action));
-			}
-			CreateFilterOptionGrid(gameObject.transform, "射击机制", list4, 5, delegate(int index)
-			{
-				_itemFilterDraft.GunAction = ((index == 0) ? ((EAction?)null) : new EAction?(GunActions[index - 1]));
-				RebuildItemFilterPanel();
-			}, (int index) => (index != 0) ? (_itemFilterDraft.GunAction == GunActions[index - 1]) : (!_itemFilterDraft.GunAction.HasValue));
-			List<string> labels = new List<string> { "全部", "半自动", "全自动", "点射" };
-			CreateFilterOptionGrid(gameObject.transform, "射击模式（可多选）", labels, 4, delegate(int index)
-			{
-				if (index == 0)
-				{
-					_itemFilterDraft.FireModes = GunFireModeFilter.None;
-				}
-				else
-				{
-					GunFireModeFilter gunFireModeFilter = GunFireModes[index - 1];
-					_itemFilterDraft.FireModes = (_itemFilterDraft.FireModes.HasFlag(gunFireModeFilter) ? (_itemFilterDraft.FireModes & ~gunFireModeFilter) : (_itemFilterDraft.FireModes | gunFireModeFilter));
-				}
-				RebuildItemFilterPanel();
-			}, (int index) => (index != 0) ? _itemFilterDraft.FireModes.HasFlag(GunFireModes[index - 1]) : (_itemFilterDraft.FireModes == GunFireModeFilter.None));
-		}
-		CreateFlexibleSpacer(gameObject.transform);
-		GameObject gameObject3 = CreateRow(gameObject.transform, 40f, 8f);
-		CreateFlexibleSpacer(gameObject3.transform);
-		CreateButton(gameObject3.transform, "重置", delegate
-		{
-			_itemFilterDraft.ResetAdvanced();
-			RebuildItemFilterPanel();
-		}, 90f);
-		CreateButton(gameObject3.transform, "取消", HideItemFilterPanel, 90f);
-		CreateButton(gameObject3.transform, "应用", ApplyItemFilterPanel, 90f, 36f, CheatMenuStyle.Accent);
-	}
-
-	private void CreateFilterOptionGrid(Transform parent, string title, IReadOnlyList<string> labels, int columns, Action<int> select, Func<int, bool> selected)
-	{
-		CreateLabel(parent, title, 13, CheatMenuStyle.Text);
-		GameObject gameObject = CreateObject("FilterOptions", parent);
-		GridLayoutGroup gridLayoutGroup = gameObject.AddComponent<GridLayoutGroup>();
-		int num = Math.Max(1, columns);
-		float num2 = Mathf.Min(112f, (812f - 4f * (float)(num - 1)) / (float)num);
-		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		gridLayoutGroup.constraintCount = num;
-		gridLayoutGroup.cellSize = new Vector2(num2, 32f);
-		gridLayoutGroup.spacing = new Vector2(4f, 5f);
-		gridLayoutGroup.childAlignment = TextAnchor.UpperLeft;
-		int num3 = Mathf.CeilToInt((float)labels.Count / (float)num);
-		SetLayout(gameObject, -1f, (float)num3 * 37f - 5f);
-		for (int i = 0; i < labels.Count; i++)
-		{
-			int captured = i;
-			CreateButton(gameObject.transform, labels[i], delegate
-			{
-				select(captured);
-			}, num2, 32f, selected(i) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 11);
-		}
-	}
-
-	private void RebuildItemFilterPanel()
-	{
-		if (!(_itemFilterRoot == null))
-		{
-			_ = _itemFilterForFavorites;
-			GameObject itemFilterRoot = _itemFilterRoot;
-			_itemFilterRoot = null;
-			QueueForDestroy(itemFilterRoot);
-			BuildItemFilterPanel();
-		}
-	}
-
-	private void ApplyItemFilterPanel()
-	{
-		ItemFilterState obj = _itemFilterForInfiniteStorage ? _infiniteStorageFilter : (_itemFilterForFavorites ? _favoriteItemFilter : _itemFilter);
-		obj.CopyFrom(_itemFilterDraft);
-		ItemFilterService.NormalizeForCategory(obj);
-		HideItemFilterPanel();
-		_itemFilterForInfiniteStorage = false;
-		BuildItemResults();
-		BuildFavoriteResults();
-		if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf)
-		{
-			_infiniteStoragePage = 0;
-			RebuildInfiniteStoragePage();
-		}
-		else
-		{
-			ShowTab(_activeTab);
-		}
-	}
-
-	private void HideItemFilterPanel()
-	{
-		if (!(_itemFilterRoot == null))
-		{
-			QueueForDestroy(_itemFilterRoot);
-			_itemFilterRoot = null;
-			_itemFilterDraft = null;
-		}
-	}
-
-	private void BuildItemGrid(Transform parent)
-	{
-		GameObject gameObject = CreateObject("ItemGridColumn", parent);
-		AddVerticalLayout(gameObject, 7f, new RectOffset(0, 0, 0, 0));
-		SetLayout(gameObject, -1f, -1f, 1f, 1f);
-		int num = Math.Max(1, Mathf.CeilToInt((float)_itemResults.Count / 15f));
-		_itemPage = Mathf.Clamp(_itemPage, 0, num - 1);
-		Action<int> changePage = delegate(int value)
-		{
-			_itemPage = value;
-			ShowTab(MenuTab.Items);
-		};
-		BuildPagination(gameObject.transform, _itemPage, num, changePage);
-		AddPageScrollHandler(gameObject, _itemPage, num, changePage);
-		if (_itemResults.Count == 0)
-		{
-			CreateEmptyState(gameObject.transform, string.IsNullOrWhiteSpace(_itemFilter.SearchQuery) ? "当前分类没有可用物品。" : "没有匹配的物品。", string.IsNullOrWhiteSpace(_itemFilter.SearchQuery) ? "请选择其他分类，或重新扫描当前加载的资产。" : "请清空搜索或尝试其他关键词。");
-			return;
-		}
-		GameObject gameObject2 = CreateObject("ItemGrid", gameObject.transform);
-		SetLayout(gameObject2, -1f, 500f, -1f, 1f);
-		GridLayoutGroup gridLayoutGroup = gameObject2.AddComponent<GridLayoutGroup>();
-		gridLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		gridLayoutGroup.spacing = new Vector2(8f, 8f);
-		gridLayoutGroup.cellSize = new Vector2(155f, 158f);
-		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		gridLayoutGroup.constraintCount = 5;
-		int num2 = _itemPage * 15;
-		int num3 = Math.Min(num2 + 15, _itemResults.Count);
-		for (int num4 = num2; num4 < num3; num4++)
-		{
-			CreateItemCard(gameObject2.transform, _itemResults[num4]);
-		}
-	}
-
-	private void BuildVehicleGrid(Transform parent)
-	{
-		GameObject gameObject = CreateObject("VehicleGridColumn", parent);
-		AddVerticalLayout(gameObject, 7f, new RectOffset(0, 0, 0, 0));
-		SetLayout(gameObject, -1f, -1f, 1f, 1f);
-		int num = Math.Max(1, Mathf.CeilToInt((float)_vehicleResults.Count / 15f));
-		_vehiclePage = Mathf.Clamp(_vehiclePage, 0, num - 1);
-		Action<int> changePage = delegate(int value)
-		{
-			_vehiclePage = value;
-			ShowTab(MenuTab.Vehicles);
-		};
-		BuildPagination(gameObject.transform, _vehiclePage, num, changePage);
-		AddPageScrollHandler(gameObject, _vehiclePage, num, changePage);
-		if (_vehicleResults.Count == 0)
-		{
-			CreateEmptyState(gameObject.transform, string.IsNullOrWhiteSpace(_vehicleQuery) ? "当前分类没有可用车辆。" : "没有匹配的车辆。", string.IsNullOrWhiteSpace(_vehicleQuery) ? "请选择其他分类，或重新扫描当前加载的资产。" : "请清空搜索或尝试其他关键词。");
-			return;
-		}
-		GameObject gameObject2 = CreateObject("VehicleGrid", gameObject.transform);
-		SetLayout(gameObject2, -1f, 500f, -1f, 1f);
-		GridLayoutGroup gridLayoutGroup = gameObject2.AddComponent<GridLayoutGroup>();
-		gridLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		gridLayoutGroup.spacing = new Vector2(8f, 8f);
-		gridLayoutGroup.cellSize = new Vector2(155f, 158f);
-		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		gridLayoutGroup.constraintCount = 5;
-		int num2 = _vehiclePage * 15;
-		int num3 = Math.Min(num2 + 15, _vehicleResults.Count);
-		for (int num4 = num2; num4 < num3; num4++)
-		{
-			CreateVehicleCard(gameObject2.transform, _vehicleResults[num4]);
-		}
-	}
-
-	private void BuildFavoriteGrid(Transform parent)
-	{
-		int num = ((_favoriteKind == FavoriteKind.Items) ? _favoriteItemResults.Count : _favoriteVehicleResults.Count);
-		GameObject gameObject = CreateObject("FavoriteGridColumn", parent);
-		AddVerticalLayout(gameObject, 7f, new RectOffset(0, 0, 0, 0));
-		SetLayout(gameObject, -1f, -1f, 1f, 1f);
-		int num2 = Math.Max(1, Mathf.CeilToInt((float)num / 15f));
-		_favoritePage = Mathf.Clamp(_favoritePage, 0, num2 - 1);
-		Action<int> changePage = delegate(int value)
-		{
-			_favoritePage = value;
-			ShowTab(MenuTab.Favorites);
-		};
-		BuildPagination(gameObject.transform, _favoritePage, num2, changePage);
-		AddPageScrollHandler(gameObject, _favoritePage, num2, changePage);
-		if (num == 0)
-		{
-			CreateEmptyState(gameObject.transform, (_favoriteKind == FavoriteKind.Items) ? "当前分类没有已加载的收藏物品。" : "当前分类没有已加载的收藏车辆。", (_favoriteKind == FavoriteKind.Items) ? "请在物品卡片右上角点击 ☆ 收藏。" : "请在车辆卡片右上角点击 ☆ 收藏。");
-			return;
-		}
-		GameObject gameObject2 = CreateObject("FavoriteGrid", gameObject.transform);
-		SetLayout(gameObject2, -1f, 500f, -1f, 1f);
-		GridLayoutGroup gridLayoutGroup = gameObject2.AddComponent<GridLayoutGroup>();
-		gridLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		gridLayoutGroup.spacing = new Vector2(8f, 8f);
-		gridLayoutGroup.cellSize = new Vector2(155f, 158f);
-		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		gridLayoutGroup.constraintCount = 5;
-		int num3 = _favoritePage * 15;
-		int num4 = Math.Min(num3 + 15, num);
-		if (_favoriteKind == FavoriteKind.Items)
-		{
-			for (int num5 = num3; num5 < num4; num5++)
-			{
-				CreateItemCard(gameObject2.transform, _favoriteItemResults[num5]);
-			}
-		}
-		else
-		{
-			for (int num6 = num3; num6 < num4; num6++)
-			{
-				CreateVehicleCard(gameObject2.transform, _favoriteVehicleResults[num6]);
-			}
-		}
-	}
-
-	private void CreateItemCard(Transform parent, ItemAsset asset)
-	{
-		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
-		string displayName = ((workshopLocalization != null && workshopLocalization.TryGetTranslation(asset, WorkshopTextField.ItemName, out var translation) && !string.IsNullOrWhiteSpace(translation)) ? translation : asset.FriendlyName);
-		string tooltip = AssetHoverDetailsBuilder.BuildItem(asset, displayName, asset.itemDescription, _ammoCompatibilityIndex, _plugin.Catalog.Items);
-		Button button = CreateButton(parent, string.Empty, delegate
-		{
-			_giveAmount = (byte)ParseClamped(_itemAmountText, 1, 255, _giveAmount);
-			_itemAmountText = _giveAmount.ToString();
-			bool flag = _plugin.Actions.GiveItem(asset, _giveAmount);
-			SetStatus(flag ? $"已给予 {_giveAmount} × {displayName}。" : ("无法给予 " + displayName + "。"), 4f, flag ? StatusKind.Success : StatusKind.Error);
-		}, 155f, 158f, CheatMenuStyle.Surface, tooltip: tooltip, delayTooltip: true);
-		AddCardContents(button.transform, displayName, $"ID {asset.id}  ·  {AssetCatalog.GetOriginLabel(asset)}", () => _plugin.Icons.GetItemIcon(asset), isVehicle: false);
-		AddFavoriteButton(button.transform, _plugin.Favorites.IsItemFavorite(asset), delegate
-		{
-			ToggleItemFavorite(asset);
-		});
-	}
-
-	private void CreateVehicleCard(Transform parent, VehicleAsset asset)
-	{
-		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
-		string displayName = ((workshopLocalization != null && workshopLocalization.TryGetTranslation(asset, WorkshopTextField.VehicleName, out var translation) && !string.IsNullOrWhiteSpace(translation)) ? translation : asset.FriendlyName);
-		string tooltip = AssetHoverDetailsBuilder.BuildVehicle(asset, displayName);
-		Button button = CreateButton(parent, string.Empty, delegate
-		{
-			_spawnVehicleAmount = ParseClamped(_vehicleAmountText, 1, 20, _spawnVehicleAmount);
-			_vehicleAmountText = _spawnVehicleAmount.ToString();
-			int num = _plugin.Actions.SpawnVehicles(asset, _spawnVehicleAmount);
-			SetStatus((num > 0) ? $"已在玩家前方生成 {num} × {displayName}。" : ("无法生成 " + displayName + "。"), 4f, (num > 0) ? StatusKind.Success : StatusKind.Error);
-		}, 155f, 158f, CheatMenuStyle.Surface, tooltip: tooltip, delayTooltip: true);
-		string text = ((asset.id == 0) ? "GUID" : $"ID {asset.id}");
-		AddCardContents(button.transform, displayName, text + "  ·  " + AssetCatalog.GetOriginLabel(asset), () => _plugin.Icons.GetVehicleIcon(asset), isVehicle: true);
-		AddFavoriteButton(button.transform, _plugin.Favorites.IsVehicleFavorite(asset), delegate
-		{
-			ToggleVehicleFavorite(asset);
-		});
-	}
-
-	private void AddFavoriteButton(Transform parent, bool isFavorite, System.Action toggle)
-	{
-		Button button = CreateButton(parent, isFavorite ? "★" : "☆", toggle, 0f, 0f, isFavorite ? CheatMenuStyle.Favorite : CheatMenuStyle.SurfaceHover, 18);
-		RectTransform component = button.GetComponent<RectTransform>();
-		Vector2 anchorMin = (component.anchorMax = new Vector2(1f, 1f));
-		component.anchorMin = anchorMin;
-		component.pivot = new Vector2(1f, 1f);
-		component.anchoredPosition = new Vector2(-5f, -5f);
-		component.sizeDelta = new Vector2(32f, 28f);
-		button.transform.SetAsLastSibling();
-	}
-
-	private void ToggleItemFavorite(ItemAsset asset)
-	{
-		bool flag = !_plugin.Favorites.IsItemFavorite(asset);
-		if (!_plugin.Favorites.TrySetItemFavorite(asset, flag))
-		{
-			SetStatus("无法保存 " + asset.FriendlyName + " 的收藏状态。", 5f, StatusKind.Error);
-			return;
-		}
-		MenuTab activeTab = _activeTab;
-		BuildFavoriteResults();
-		ShowTab(activeTab);
-		SetStatus(flag ? ("已收藏物品：" + asset.FriendlyName + "。") : ("已取消收藏物品：" + asset.FriendlyName + "。"), 4f);
-	}
-
-	private void ToggleVehicleFavorite(VehicleAsset asset)
-	{
-		bool flag = !_plugin.Favorites.IsVehicleFavorite(asset);
-		if (!_plugin.Favorites.TrySetVehicleFavorite(asset, flag))
-		{
-			SetStatus("无法保存 " + asset.FriendlyName + " 的收藏状态。", 5f, StatusKind.Error);
-			return;
-		}
-		MenuTab activeTab = _activeTab;
-		BuildFavoriteResults();
-		ShowTab(activeTab);
-		SetStatus(flag ? ("已收藏车辆：" + asset.FriendlyName + "。") : ("已取消收藏车辆：" + asset.FriendlyName + "。"), 4f);
-	}
-
-	private void AddCardContents(Transform parent, string name, string meta, Func<Texture2D> iconLoader, bool isVehicle)
-	{
-		GameObject gameObject = CreateObject("Icon", parent, typeof(RawImage), typeof(OverlayIconBinder));
-		RectTransform component = gameObject.GetComponent<RectTransform>();
-		component.anchorMin = new Vector2(0.12f, 0.4f);
-		component.anchorMax = new Vector2(0.88f, 0.95f);
-		Vector2 offsetMin = (component.offsetMax = Vector2.zero);
-		component.offsetMin = offsetMin;
-		RawImage component2 = gameObject.GetComponent<RawImage>();
-		component2.color = Color.white;
-		component2.raycastTarget = false;
-		Text text = CreateText(gameObject.transform, "加载预览…", 11, CheatMenuStyle.Muted, TextAnchor.MiddleCenter);
-		Stretch(text.rectTransform);
-		gameObject.GetComponent<OverlayIconBinder>().Initialize(component2, text, iconLoader, isVehicle);
-		Text text2 = CreateText(parent, name, 12, CheatMenuStyle.Text, TextAnchor.MiddleCenter, FontStyle.Bold, localize: false);
-		text2.rectTransform.anchorMin = new Vector2(0.04f, 0.13f);
-		text2.rectTransform.anchorMax = new Vector2(0.96f, 0.4f);
-		RectTransform rectTransform = text2.rectTransform;
-		offsetMin = (text2.rectTransform.offsetMax = Vector2.zero);
-		rectTransform.offsetMin = offsetMin;
-		Text text3 = CreateText(parent, meta, 10, CheatMenuStyle.Muted, TextAnchor.MiddleCenter);
-		text3.rectTransform.anchorMin = new Vector2(0.04f, 0.01f);
-		text3.rectTransform.anchorMax = new Vector2(0.96f, 0.14f);
-		RectTransform rectTransform2 = text3.rectTransform;
-		offsetMin = (text3.rectTransform.offsetMax = Vector2.zero);
-		rectTransform2.offsetMin = offsetMin;
-	}
-
-	private void AddPageScrollHandler(GameObject target, int page, int pageCount, Action<int> changePage)
-	{
-		Image image = target.GetComponent<Image>() ?? target.AddComponent<Image>();
-		image.color = Color.clear;
-		PageScrollHandler handler = target.AddComponent<PageScrollHandler>();
-		handler.Initialize(page, pageCount,
-			delegate
-			{
-				if (page > 0) { HideHoverExplanation(); changePage(page - 1); }
-			},
-			delegate
-			{
-				if (page < pageCount - 1) { HideHoverExplanation(); changePage(page + 1); }
-			});
-	}
-
-	private void BuildPagination(Transform parent, int page, int pageCount, Action<int> changePage)
-	{
-		GameObject gameObject = CreateRow(parent, 34f, 8f);
-		CreateButton(gameObject.transform, "‹ 上一页", delegate
-		{
-			changePage(page - 1);
-		}, 100f, 32f).interactable = page > 0;
-		CreateFlexibleSpacer(gameObject.transform);
-		CreateLabel(gameObject.transform, $"第 {page + 1} / {pageCount} 页", 12, CheatMenuStyle.Muted, 110f, TextAnchor.MiddleCenter);
-		CreateFlexibleSpacer(gameObject.transform);
-		CreateButton(gameObject.transform, "下一页 ›", delegate
-		{
-			changePage(page + 1);
-		}, 100f, 32f).interactable = page < pageCount - 1;
-	}
-
-	private void BuildTeleportsTab()
-	{
-		Transform transform = _contentHost.transform;
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(12, 12, 10, 10));
-		GameObject gameObject = CreateRow(transform, 38f, 8f);
-		CreateButton(gameObject.transform, "地图", delegate
-		{
-			SwitchTeleportView(TeleportView.Map);
-		}, 0f, 36f, (_teleportView == TeleportView.Map) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 14);
-		CreateButton(gameObject.transform, "传送点", delegate
-		{
-			SwitchTeleportView(TeleportView.Points);
-		}, 0f, 36f, (_teleportView == TeleportView.Points) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 14);
-		foreach (Transform item in gameObject.transform)
-		{
-			SetLayout(item.gameObject, -1f, -1f, 1f);
-		}
-		if (_teleportView == TeleportView.Map)
-		{
-			BuildTeleportMapView(transform);
-		}
-		else
-		{
-			BuildTeleportPointsView(transform);
-		}
-	}
-
-	private void BuildTeleportMapView(Transform content)
-	{
-		CreateSection(content, "当前地图 GPS");
-		TeleportMapSnapshot teleportMapSnapshot = _plugin.TeleportMaps.ScanCurrentMap();
-		string text = (teleportMapSnapshot.IsGps ? PluginLocalization.Translate("GPS/卫星图") : (teleportMapSnapshot.IsChart ? PluginLocalization.Translate("地形图") : PluginLocalization.Translate("地图预览")));
-		GameObject gameObject = CreateRow(content, 34f, 8f);
-		CreateLabel(gameObject.transform, teleportMapSnapshot.IsAvailable ? $"{text} · {teleportMapSnapshot.MapName} · {teleportMapSnapshot.Texture.width}×{teleportMapSnapshot.Texture.height}" : teleportMapSnapshot.Error, 12, teleportMapSnapshot.IsAvailable ? CheatMenuStyle.Muted : CheatMenuStyle.Warning);
-		CreateFlexibleSpacer(gameObject.transform);
-		CreateButton(gameObject.transform, "扫描地图", delegate
-		{
-			ShowTab(MenuTab.Teleports);
-			SetStatus((_teleportMapSurface != null) ? ("已重新扫描地图：" + Provider.map + "。支持 Map.png / Chart.png。") : "当前地图没有可用的 Map.png / Chart.png。", 5f, (_teleportMapSurface != null) ? StatusKind.Success : StatusKind.Warning);
-		}, 105f, 32f);
-		if (!teleportMapSnapshot.IsAvailable)
-		{
-			CreateEmptyState(content, "当前地图没有可用 GPS 图层。", "请确认地图目录中存在 Map.png 或 Chart.png。");
-			return;
-		}
-		string currentMap = Provider.map ?? string.Empty;
-		TeleportPoint[] teleportPoints = _plugin.Teleports.Points.Where((TeleportPoint point) => string.Equals(point.Map, currentMap, StringComparison.OrdinalIgnoreCase)).ToArray();
-		GameObject gameObject2 = CreateObject("TeleportMapSurface", content, typeof(Image));
-		SetLayout(gameObject2, -1f, 480f, -1f, 1f);
-		Outline outline = gameObject2.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.TeleportBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		_teleportMapSurface = gameObject2.AddComponent<TeleportMapSurface>();
-		_teleportMapSurface.Initialize(teleportMapSnapshot.Texture, delegate(Vector3 worldPosition)
-		{
-			bool flag = _plugin.Actions.TeleportToMapPosition(worldPosition);
-			SetStatus(flag ? $"已传送到地图坐标 X {worldPosition.x:F1} · Z {worldPosition.z:F1}。" : "地图传送失败：未找到安全落点、目标超出地图边界或玩家正在载具中。", 5f, flag ? StatusKind.Success : StatusKind.Error);
-		}, teleportPoints, delegate(TeleportPoint point)
-		{
-			bool flag = _plugin.Actions.Teleport(point);
-			SetStatus(flag ? ("已传送到 " + point.Name + "。") : "传送失败：目标位置有障碍物且无法放置在障碍物顶部，或玩家正在载具中。", 5f, flag ? StatusKind.Success : StatusKind.Error);
-		});
-		GameObject gameObject3 = CreateRow(content, 34f, 8f);
-		CreateFlexibleSpacer(gameObject3.transform);
-		CreateButton(gameObject3.transform, "−", delegate
-		{
-			_teleportMapSurface?.ZoomOut();
-		}, 42f, 32f);
-		CreateButton(gameObject3.transform, "＋", delegate
-		{
-			_teleportMapSurface?.ZoomIn();
-		}, 42f, 32f);
-		CreateButton(gameObject3.transform, "居中", delegate
-		{
-			if (Player.LocalPlayer != null)
-			{
-				_teleportMapSurface?.CenterOnWorld(Player.LocalPlayer.transform.position);
-			}
-		}, 70f, 32f);
-		CreateLabel(gameObject3.transform, "左键拖动 · 滚轮缩放 · 悬停标记查看信息 · 右键标记快速传送", 11, CheatMenuStyle.Muted, 0f, TextAnchor.MiddleRight);
-	}
-
-	private void BuildTeleportPointsView(Transform content)
-	{
-		Player localPlayer = Player.LocalPlayer;
-		if (localPlayer == null)
-		{
-			CreateEmptyState(content, "玩家状态尚未准备完成。", "进入地图后即可保存和使用传送点。");
-			return;
-		}
-		Vector3 position = localPlayer.transform.position;
-		CreateSection(content, "保存当前位置");
-		CreateLabel(content, $"地图 {Provider.map}    X {position.x:F1}    Y {position.y:F1}    Z {position.z:F1}", 12, CheatMenuStyle.Muted);
-		GameObject gameObject = CreateRow(content, 38f, 8f);
-		CreateInput(gameObject.transform, _teleportName, delegate(string value)
-		{
-			_teleportName = value;
-		}, 0f, 1f);
-		Button markerPickerButton = null;
-		markerPickerButton = CreateMarkerPickerButton(gameObject.transform, _teleportMarkerKind, delegate
-		{
-			ToggleTeleportMarkerDrawer(markerPickerButton);
-		}, 108f, compact: true);
-		CreateColorPickerButton(gameObject.transform);
-		CreateButton(gameObject.transform, "保存位置", delegate
-		{
-			TeleportPoint teleportPoint = _plugin.Teleports.AddCurrent(_teleportName, _teleportMarkerKind, ColorUtility.ToHtmlStringRGB(_teleportMarkerColor).Insert(0, "#"));
-			if (teleportPoint != null)
-			{
-				_teleportName = string.Empty;
-				SetStatus("已保存传送点：" + teleportPoint.Name + "。", 4f);
-				ShowTab(MenuTab.Teleports);
-			}
-		}, 120f, 35f);
-		string currentMap = Provider.map ?? string.Empty;
-		TeleportPoint[] array = _plugin.Teleports.Points.Where((TeleportPoint teleportPoint) => string.Equals(teleportPoint.Map, currentMap, StringComparison.OrdinalIgnoreCase)).ToArray();
-		CreateSection(content, $"当前地图传送点（{array.Length}）");
-		int num = Math.Max(1, Mathf.CeilToInt((float)array.Length / 6f));
-		_teleportPage = Mathf.Clamp(_teleportPage, 0, num - 1);
-		BuildPagination(content, _teleportPage, num, delegate(int value)
-		{
-			_teleportPage = value;
-			ShowTab(MenuTab.Teleports);
-		});
-		if (array.Length == 0)
-		{
-			CreateEmptyState(content, "当前地图还没有保存的传送点。", "请先输入名称并保存当前位置；不同地图的传送点会自动隔离。");
-			return;
-		}
-		int num2 = _teleportPage * 6;
-		int num3 = Math.Min(num2 + 6, array.Length);
-		for (int num4 = num2; num4 < num3; num4++)
-		{
-			TeleportPoint point = array[num4];
-			GameObject gameObject2 = CreateRow(content, 62f, 8f);
-			gameObject2.AddComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-			Outline outline = gameObject2.AddComponent<Outline>();
-			outline.effectColor = CheatMenuStyle.TeleportBorder;
-			outline.effectDistance = Vector2.one;
-			outline.useGraphicAlpha = false;
-			HorizontalLayoutGroup component = gameObject2.GetComponent<HorizontalLayoutGroup>();
-			component.padding = new RectOffset(13, 11, 7, 7);
-			component.spacing = 10f;
-			CreateTeleportMarkerImage(gameObject2.transform, point.MarkerKind, 28f, compact: false, ParseMarkerColor(point.MarkerColorHex));
-			SetLayout(CreateText(gameObject2.transform, $"{point.Name}\n{point.Map}  ·  ({point.X:F1}, {point.Y:F1}, {point.Z:F1})", 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false).gameObject, -1f, -1f, 1f);
-			CreateButton(gameObject2.transform, "传送", delegate
-			{
-				bool flag = _plugin.Actions.Teleport(point);
-				SetStatus(flag ? ("已传送到 " + point.Name + "。") : "传送失败：目标被阻挡、地图不同或玩家正在载具中。", 5f, flag ? StatusKind.Success : StatusKind.Error);
-			}, 105f, 38f);
-			CreateButton(gameObject2.transform, "×", delegate
-			{
-				ShowTeleportDeleteConfirmation(point);
-			}, 44f, 38f, CheatMenuStyle.Danger, 20);
-		}
-	}
-
-	private void SwitchTeleportView(TeleportView view)
-	{
-		_teleportView = view;
-		_plugin.SetLastTeleportView(view.ToString());
-		ShowTab(MenuTab.Teleports);
-		SetStatus((view == TeleportView.Map) ? "已切换到地图视图。" : "已切换到传送点视图。", 3f, StatusKind.Info);
-	}
-
-	private void ToggleTeleportMarkerDrawer(Button trigger)
-	{
-		if (_teleportMarkerDrawerOpen)
-		{
-			HideTeleportMarkerDrawer();
-			return;
-		}
-		_teleportMarkerDrawerOpen = true;
-		_teleportMarkerTriggerButton = trigger;
-		BuildTeleportMarkerDrawer();
-	}
-
-	private void BuildTeleportMarkerDrawer()
-	{
-		if (_teleportMarkerTriggerButton == null || _root == null)
-		{
-			return;
-		}
-		if (_teleportMarkerDrawerRoot != null)
-		{
-			QueueForDestroy(_teleportMarkerDrawerRoot);
-		}
-		_teleportMarkerDrawerRoot = null;
-		_teleportMarkerDrawerPopup = null;
-		_teleportMarkerDrawerOpen = true;
-		_teleportMarkerDrawerRoot = CreateObject("TeleportMarkerDrawer", _root.transform, typeof(Image));
-		_teleportMarkerDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		Outline outline = _teleportMarkerDrawerRoot.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.InputBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		_teleportMarkerDrawerPopup = _teleportMarkerDrawerRoot.GetComponent<RectTransform>();
-		RectTransform teleportMarkerDrawerPopup = _teleportMarkerDrawerPopup;
-		Vector2 anchorMin = (_teleportMarkerDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
-		teleportMarkerDrawerPopup.anchorMin = anchorMin;
-		_teleportMarkerDrawerPopup.pivot = new Vector2(0f, 1f);
-		_teleportMarkerDrawerPopup.sizeDelta = new Vector2(108f, 184f);
-		VerticalLayoutGroup verticalLayoutGroup = _teleportMarkerDrawerRoot.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		verticalLayoutGroup.spacing = 4f;
-		verticalLayoutGroup.childControlWidth = true;
-		verticalLayoutGroup.childControlHeight = true;
-		verticalLayoutGroup.childForceExpandWidth = true;
-		verticalLayoutGroup.childForceExpandHeight = false;
-		TeleportMarkerKind[] markerKinds = MarkerKinds;
-		foreach (TeleportMarkerKind teleportMarkerKind in markerKinds)
-		{
-			TeleportMarkerKind capturedMarkerKind = teleportMarkerKind;
-			SetLayout(CreateMarkerPickerButton(_teleportMarkerDrawerRoot.transform, capturedMarkerKind, delegate
-			{
-				_teleportMarkerKind = capturedMarkerKind;
-				HideTeleportMarkerDrawer();
-				ShowTab(MenuTab.Teleports);
-			}, 0f, compact: true, 1f).gameObject, -1f, 42f, 1f);
-		}
-		Canvas.ForceUpdateCanvases();
-		LayoutRebuilder.ForceRebuildLayoutImmediate(_teleportMarkerDrawerPopup);
-		PositionTeleportMarkerDrawer();
-	}
-
-	private void PositionTeleportMarkerDrawer()
-	{
-		if (!(_teleportMarkerTriggerButton == null) && !(_teleportMarkerDrawerPopup == null) && !(_root == null))
-		{
-			RectTransform component = _teleportMarkerTriggerButton.GetComponent<RectTransform>();
-			RectTransform component2 = _root.GetComponent<RectTransform>();
-			Vector3[] array = new Vector3[4];
-			component.GetWorldCorners(array);
-			Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(null, array[0]);
-			Vector2 screenPoint2 = RectTransformUtility.WorldToScreenPoint(null, array[1]);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint, null, out var localPoint);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint2, null, out var localPoint2);
-			Vector2 sizeDelta = _teleportMarkerDrawerPopup.sizeDelta;
-			sizeDelta.x = component.rect.width;
-			_teleportMarkerDrawerPopup.sizeDelta = sizeDelta;
-			RectTransform teleportMarkerDrawerPopup = _teleportMarkerDrawerPopup;
-			Vector2 anchorMin = (_teleportMarkerDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
-			teleportMarkerDrawerPopup.anchorMin = anchorMin;
-			bool flag = localPoint.y - component2.rect.yMin < _teleportMarkerDrawerPopup.rect.height + 8f;
-			_teleportMarkerDrawerPopup.pivot = (flag ? new Vector2(0f, 0f) : new Vector2(0f, 1f));
-			_teleportMarkerDrawerPopup.anchoredPosition = (flag ? localPoint2 : localPoint);
-		}
-	}
-
-	private void HideTeleportMarkerDrawer()
-	{
-		_teleportMarkerDrawerOpen = false;
-		if (_teleportMarkerDrawerRoot != null)
-		{
-			QueueForDestroy(_teleportMarkerDrawerRoot);
-		}
-		_teleportMarkerDrawerRoot = null;
-		_teleportMarkerDrawerPopup = null;
-		_teleportMarkerTriggerButton = null;
-	}
-
-	private static MenuTab ParseMenuTab(string value)
-	{
-		if (!Enum.TryParse<MenuTab>(value, ignoreCase: true, out var result) || !Enum.IsDefined(typeof(MenuTab), result))
-		{
-			return MenuTab.Character;
-		}
-		return result;
-	}
-
-	private static TeleportView ParseTeleportView(string value)
-	{
-		if (!Enum.TryParse<TeleportView>(value, ignoreCase: true, out var result) || !Enum.IsDefined(typeof(TeleportView), result))
-		{
-			return TeleportView.Map;
-		}
-		return result;
-	}
-
-	private void ShowTeleportDeleteConfirmation(TeleportPoint point)
-	{
-		HideConfirmDialog();
-		_confirmRoot = CreateObject("ConfirmOverlay", _root.transform, typeof(Image));
-		Stretch(_confirmRoot.GetComponent<RectTransform>());
-		_confirmRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.62f);
-		GameObject gameObject = CreateObject("ConfirmDialog", _confirmRoot.transform, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		RectTransform component = gameObject.GetComponent<RectTransform>();
-		Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
-		component.anchorMin = anchorMin;
-		component.pivot = new Vector2(0.5f, 0.5f);
-		component.sizeDelta = new Vector2(470f, 190f);
-		VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(22, 22, 18, 18);
-		verticalLayoutGroup.spacing = 10f;
-		verticalLayoutGroup.childControlWidth = true;
-		verticalLayoutGroup.childControlHeight = true;
-		verticalLayoutGroup.childForceExpandWidth = true;
-		verticalLayoutGroup.childForceExpandHeight = false;
-		CreateText(gameObject.transform, "确认删除传送点？", 17, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-		CreateText(gameObject.transform, "“" + point.Name + "”将从当前保存列表中删除。", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
-		GameObject gameObject2 = CreateRow(gameObject.transform, 38f, 8f);
-		CreateFlexibleSpacer(gameObject2.transform);
-		Button button = CreateButton(gameObject2.transform, "取消", HideConfirmDialog, 100f, 34f, CheatMenuStyle.Surface);
-		CreateButton(gameObject2.transform, "删除", delegate
-		{
-			HideConfirmDialog();
-			if (_plugin.Teleports.Remove(point.Id))
-			{
-				SetStatus("已删除传送点：" + point.Name + "。", 4f);
-				ShowTab(MenuTab.Teleports);
-			}
-		}, 100f, 34f, CheatMenuStyle.Danger);
-		if (EventSystem.current != null)
-		{
-			EventSystem.current.SetSelectedGameObject(button.gameObject);
-		}
-	}
-
-	private void HideConfirmDialog()
-	{
-		if (!(_confirmRoot == null))
-		{
-			QueueForDestroy(_confirmRoot);
-			_confirmRoot = null;
-		}
-	}
-
-	private void ShowAboutDialog()
-	{
-		HideAboutDialog();
-		HideShortcutDialog();
-		if (!(_root == null))
-		{
-			_aboutRoot = CreateObject("AboutOverlay", _root.transform, typeof(Image));
-			Stretch(_aboutRoot.GetComponent<RectTransform>());
-			_aboutRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.64f);
-			GameObject gameObject = CreateObject("AboutDialog", _aboutRoot.transform, typeof(Image));
-			gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
-			Outline outline = gameObject.AddComponent<Outline>();
-			outline.effectColor = CheatMenuStyle.InputBorder;
-			outline.effectDistance = Vector2.one;
-			outline.useGraphicAlpha = false;
-			RectTransform component = gameObject.GetComponent<RectTransform>();
-			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
-			component.anchorMin = anchorMin;
-			component.pivot = new Vector2(0.5f, 0.5f);
-			component.sizeDelta = new Vector2(760f, 390f);
-			VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-			verticalLayoutGroup.padding = new RectOffset(26, 26, 20, 20);
-			verticalLayoutGroup.spacing = 9f;
-			verticalLayoutGroup.childControlWidth = true;
-			verticalLayoutGroup.childControlHeight = true;
-			verticalLayoutGroup.childForceExpandWidth = true;
-			verticalLayoutGroup.childForceExpandHeight = false;
-			GameObject gameObject2 = CreateRow(gameObject.transform, 40f, 8f);
-			CreateText(gameObject2.transform, "关于此插件", 17, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-			CreateFlexibleSpacer(gameObject2.transform);
-			Button button = CreateWindowCloseButton(gameObject2.transform, HideAboutDialog);
-			CreateText(gameObject.transform, "Unturned Singleplayer Cheat Menu v1.9.0", 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
-			CreateText(gameObject.transform, "作者：Blowthesnow", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft);
-			SetLayout(CreateText(gameObject.transform, "此插件完全免费。如果你在其他地方购买了此插件，请立刻申请退款。", 13, CheatMenuStyle.Warning, TextAnchor.MiddleLeft).gameObject, -1f, 46f);
-			CreateText(gameObject.transform, "项目地址", 12, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Bold);
-			CreateButton(gameObject.transform, "https://github.com/Blowthesnow/Unturned-Singleplayer-Cheat-Menu", delegate
-			{
-				Application.OpenURL("https://github.com/Blowthesnow/Unturned-Singleplayer-Cheat-Menu");
-			}, 0f, 36f, CheatMenuStyle.Surface, 11);
-			CreateText(gameObject.transform, "爱发电赞助地址", 12, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Bold);
-			CreateButton(gameObject.transform, "https://afdian.com/a/Blowthesnow", delegate
-			{
-				Application.OpenURL("https://afdian.com/a/Blowthesnow");
-			}, 0f, 36f, CheatMenuStyle.Surface, 11);
-			if (EventSystem.current != null)
-			{
-				EventSystem.current.SetSelectedGameObject(button.gameObject);
-			}
-		}
-	}
-
-	private void HideAboutDialog()
-	{
-		if (!(_aboutRoot == null))
-		{
-			QueueForDestroy(_aboutRoot);
-			_aboutRoot = null;
-		}
-	}
-
-	private void ShowShortcutDialog()
-	{
-		HideShortcutDialog();
-		HideAboutDialog();
-		if (!(_root == null))
-		{
-			_shortcutRoot = CreateObject("ShortcutOverlay", _root.transform, typeof(Image));
-			Stretch(_shortcutRoot.GetComponent<RectTransform>());
-			_shortcutRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.64f);
-			GameObject gameObject = CreateObject("ShortcutDialog", _shortcutRoot.transform, typeof(Image));
-			gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
-			Outline outline = gameObject.AddComponent<Outline>();
-			outline.effectColor = CheatMenuStyle.InputBorder;
-			outline.effectDistance = Vector2.one;
-			outline.useGraphicAlpha = false;
-			RectTransform component = gameObject.GetComponent<RectTransform>();
-			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
-			component.anchorMin = anchorMin;
-			component.pivot = new Vector2(0.5f, 0.5f);
-			component.sizeDelta = new Vector2(930f, 780f);
-			VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-			verticalLayoutGroup.padding = new RectOffset(24, 24, 18, 18);
-			verticalLayoutGroup.spacing = 10f;
-			verticalLayoutGroup.childControlWidth = true;
-			verticalLayoutGroup.childControlHeight = true;
-			verticalLayoutGroup.childForceExpandWidth = true;
-			verticalLayoutGroup.childForceExpandHeight = false;
-			GameObject gameObject2 = CreateRow(gameObject.transform, 40f, 8f);
-			CreateText(gameObject2.transform, "设置全局快捷键", 17, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-			CreateFlexibleSpacer(gameObject2.transform);
-			Button button = CreateWindowCloseButton(gameObject2.transform, HideShortcutDialog);
-			GameObject gameObject3 = CreateObject("ShortcutBody", gameObject.transform);
-			SetLayout(gameObject3, -1f, -1f, 1f, 1f);
-			GameObject gameObject4 = CreateObject("ShortcutNavigation", gameObject3.transform, typeof(Image));
-			gameObject4.GetComponent<Image>().color = CheatMenuStyle.Surface;
-			AddVerticalLayout(gameObject4, 6f, new RectOffset(8, 8, 8, 8));
-			RectTransform component2 = gameObject4.GetComponent<RectTransform>();
-			component2.anchorMin = new Vector2(0f, 0f);
-			component2.anchorMax = new Vector2(0f, 1f);
-			component2.offsetMin = Vector2.zero;
-			component2.offsetMax = new Vector2(142f, 0f);
-			GameObject gameObject5 = CreateObject("ShortcutContentPanel", gameObject3.transform, typeof(Image));
-			gameObject5.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-			RectTransform component3 = gameObject5.GetComponent<RectTransform>();
-			component3.anchorMin = new Vector2(0f, 0f);
-			component3.anchorMax = new Vector2(1f, 1f);
-			component3.offsetMin = new Vector2(152f, 0f);
-			component3.offsetMax = Vector2.zero;
-			_shortcutScrollContent = CreateShortcutScroll(gameObject5.transform);
-			_shortcutScrollRect = _shortcutScrollContent.GetComponentInParent<ScrollRect>();
-			_shortcutScrollRect.scrollSensitivity = 48f;
-			AddShortcutScrollbar(_shortcutScrollRect);
-			AddShortcutScrollLayout(_shortcutScrollContent.gameObject, 10f, new RectOffset(12, 18, 10, 10));
-			RectTransform pluginHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "插件窗口");
-			CreateShortcutNavigationButton(gameObject4.transform, "插件窗口", pluginHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, "menu.toggle");
-			BuildShortcutActionRow(_shortcutScrollContent, "infinite-storage.toggle");
-			CreateShortcutSectionSpacing(_shortcutScrollContent);
-			RectTransform inventoryHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "背包整理");
-			CreateShortcutNavigationButton(gameObject4.transform, "背包整理", inventoryHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, "inventory.arrange.current");
-			BuildShortcutActionRow(_shortcutScrollContent, "inventory.arrange.all-carried");
-			CreateShortcutSectionSpacing(_shortcutScrollContent);
-			RectTransform characterHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "角色");
-			CreateShortcutNavigationButton(gameObject4.transform, "角色", characterHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleGodMode);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleInfiniteNeeds);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.RestoreEverything);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.RefillNeeds);
-			CreateShortcutSectionSpacing(_shortcutScrollContent);
-			RectTransform movementHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "移动");
-			CreateShortcutNavigationButton(gameObject4.transform, "移动", movementHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleFlight);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleNoclip);
-			CreateShortcutSectionSpacing(_shortcutScrollContent);
-			RectTransform pointToolHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "准星");
-			CreateShortcutNavigationButton(gameObject4.transform, "准星", pointToolHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.TogglePointToolEnabled);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.NextPointToolMode);
-			CreateShortcutSectionSpacing(_shortcutScrollContent);
-			RectTransform healthBarsHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "生物生命条");
-			CreateShortcutNavigationButton(gameObject4.transform, "生物生命条", healthBarsHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleCreatureHealthBars);
-			CreateShortcutSectionSpacing(_shortcutScrollContent);
-			RectTransform automationHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "自动化");
-			CreateShortcutNavigationButton(gameObject4.transform, "自动化", automationHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleAutoPickup);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleInfiniteStorageEnabled);
-			CreateShortcutSectionSpacing(_shortcutScrollContent);
-			RectTransform worldHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "世界");
-			CreateShortcutNavigationButton(gameObject4.transform, "世界", worldHeader);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleFreezeTime);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.SetDay);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.SetNight);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ToggleFullMoon);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.ClearWeather);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.DisableWeather);
-			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.CallAirdrop);
-			_shortcutCaptureText = CreateText(gameObject.transform, "点击某一行的设置后按下键盘键、鼠标中键或鼠标侧键；Escape 取消。", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft);
-			SetLayout(_shortcutCaptureText.gameObject, -1f, 42f);
-			GameObject gameObject6 = CreateRow(gameObject.transform, 38f, 8f);
-			CreateFlexibleSpacer(gameObject6.transform);
-			CreateButton(gameObject6.transform, "关闭", HideShortcutDialog, 104f, 34f, CheatMenuStyle.Surface);
-			Canvas.ForceUpdateCanvases();
-			LayoutRebuilder.ForceRebuildLayoutImmediate(component);
-			LayoutRebuilder.ForceRebuildLayoutImmediate(gameObject3.GetComponent<RectTransform>());
-			LayoutRebuilder.ForceRebuildLayoutImmediate(component3);
-			RebuildShortcutScrollLayout();
-			_shortcutScrollRect.verticalNormalizedPosition = Mathf.Clamp01(_shortcutScrollPosition);
-			if (EventSystem.current != null)
-			{
-				EventSystem.current.SetSelectedGameObject(button.gameObject);
-			}
-		}
-	}
-
-	private RectTransform CreateShortcutSectionHeader(Transform parent, string title)
-	{
-		CreateShortcutDivider(parent);
-		RectTransform rectTransform = CreateText(parent, title, 13, CheatMenuStyle.Muted, TextAnchor.MiddleCenter, FontStyle.Bold).rectTransform;
-		CreateShortcutDivider(parent);
-		return rectTransform;
-	}
-
-	private void CreateShortcutNavigationButton(Transform parent, string title, RectTransform sectionHeader)
-	{
-		CreateButton(parent, title, delegate
-		{
-			ScrollShortcutSectionIntoView(sectionHeader);
-		}, 0f, 34f, CheatMenuStyle.SurfaceHover);
-	}
-
-	private void ScrollShortcutSectionIntoView(RectTransform sectionHeader)
-	{
-		if (_shortcutScrollRect == null || _shortcutScrollContent == null || sectionHeader == null)
-		{
-			return;
-		}
-		RebuildShortcutScrollLayout();
-		RectTransform viewport = _shortcutScrollRect.viewport;
-		if (viewport == null)
-		{
-			return;
-		}
-		float scrollableHeight = _shortcutScrollContent.rect.height - viewport.rect.height;
-		if (scrollableHeight <= 0.01f)
-		{
-			_shortcutScrollRect.verticalNormalizedPosition = 1f;
-			return;
-		}
-		Vector3 worldPoint = sectionHeader.TransformPoint(new Vector3(sectionHeader.rect.center.x, sectionHeader.rect.yMax, 0f));
-		float sectionOffset = 0f - _shortcutScrollContent.InverseTransformPoint(worldPoint).y;
-		_shortcutScrollRect.verticalNormalizedPosition = 1f - Mathf.Clamp01(sectionOffset / scrollableHeight);
-	}
-
-	private void RebuildShortcutScrollLayout()
-	{
-		if (_shortcutScrollContent == null)
-		{
-			return;
-		}
-		Canvas.ForceUpdateCanvases();
-		LayoutRebuilder.ForceRebuildLayoutImmediate(_shortcutScrollContent);
-		float preferredHeight = Mathf.Max(1f, LayoutUtility.GetPreferredHeight(_shortcutScrollContent));
-		_shortcutScrollContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, preferredHeight);
-		_shortcutScrollContent.anchoredPosition = new Vector2(_shortcutScrollContent.anchoredPosition.x, 0f);
-		LayoutRebuilder.ForceRebuildLayoutImmediate(_shortcutScrollContent);
-		Canvas.ForceUpdateCanvases();
-	}
-
-	private static VerticalLayoutGroup AddShortcutScrollLayout(GameObject target, float spacing, RectOffset padding)
-	{
-		VerticalLayoutGroup layout = target.AddComponent<VerticalLayoutGroup>();
-		layout.padding = padding;
-		layout.spacing = spacing;
-		layout.childAlignment = TextAnchor.UpperLeft;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = true;
-		layout.childForceExpandHeight = false;
-		return layout;
-	}
-
-	private static RectTransform CreateShortcutScroll(Transform parent)
-	{
-		GameObject scrollObject = CreateObject("ShortcutScroll", parent, typeof(Image), typeof(ScrollRect));
-		Stretch(scrollObject.GetComponent<RectTransform>());
-		scrollObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
-		SetLayout(scrollObject, -1f, -1f, 1f, 1f);
-		LayoutElement layoutElement = scrollObject.GetComponent<LayoutElement>();
-		layoutElement.minWidth = 1f;
-		layoutElement.minHeight = 1f;
-
-		GameObject viewportObject = CreateObject("Viewport", scrollObject.transform, typeof(RectMask2D));
-		RectTransform viewport = viewportObject.GetComponent<RectTransform>();
-		Stretch(viewport);
-
-		RectTransform content = CreateObject("ShortcutContent", viewport, typeof(RectTransform)).GetComponent<RectTransform>();
-		content.anchorMin = new Vector2(0f, 1f);
-		content.anchorMax = new Vector2(1f, 1f);
-		content.pivot = new Vector2(0.5f, 1f);
-		content.offsetMin = Vector2.zero;
-		content.offsetMax = Vector2.zero;
-
-		ScrollRect scrollRect = scrollObject.GetComponent<ScrollRect>();
-		scrollRect.viewport = viewport;
-		scrollRect.content = content;
-		scrollRect.horizontal = false;
-		scrollRect.vertical = true;
-		scrollRect.movementType = ScrollRect.MovementType.Clamped;
-		scrollRect.scrollSensitivity = 48f;
-		return content;
-	}
-
-	private static void AddShortcutScrollbar(ScrollRect scrollRect)
-	{
-		if (scrollRect == null || scrollRect.viewport == null)
-		{
-			return;
-		}
-		scrollRect.viewport.offsetMax = new Vector2(-18f, 0f);
-		GameObject scrollbarObject = CreateObject("ShortcutScrollbar", scrollRect.transform, typeof(Image), typeof(Scrollbar));
-		RectTransform scrollbarRect = scrollbarObject.GetComponent<RectTransform>();
-		scrollbarRect.anchorMin = new Vector2(1f, 0f);
-		scrollbarRect.anchorMax = new Vector2(1f, 1f);
-		scrollbarRect.pivot = new Vector2(1f, 0.5f);
-		scrollbarRect.offsetMin = new Vector2(-14f, 4f);
-		scrollbarRect.offsetMax = new Vector2(-2f, -4f);
-		scrollbarObject.GetComponent<Image>().color = CheatMenuStyle.InputBorder;
-		GameObject slidingArea = CreateObject("SlidingArea", scrollbarRect);
-		RectTransform slidingRect = slidingArea.GetComponent<RectTransform>();
-		Stretch(slidingRect);
-		slidingRect.offsetMin = new Vector2(2f, 2f);
-		slidingRect.offsetMax = new Vector2(-2f, -2f);
-		GameObject handleObject = CreateObject("Handle", slidingRect, typeof(Image));
-		RectTransform handleRect = handleObject.GetComponent<RectTransform>();
-		Stretch(handleRect);
-		Image handleImage = handleObject.GetComponent<Image>();
-		handleImage.color = CheatMenuStyle.Accent;
-		Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
-		scrollbar.handleRect = handleRect;
-		scrollbar.targetGraphic = handleImage;
-		scrollbar.direction = Scrollbar.Direction.BottomToTop;
-		scrollRect.verticalScrollbar = scrollbar;
-		scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
-		scrollRect.verticalScrollbarSpacing = 4f;
-	}
-
-	private static void CreateShortcutDivider(Transform parent)
-	{
-		GameObject gameObject = CreateObject("ShortcutDivider", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.InputBorder;
-		SetLayout(gameObject, -1f, 1f, 1f);
-	}
-
-	private static void CreateShortcutSectionSpacing(Transform parent)
-	{
-		SetLayout(CreateObject("ShortcutSectionSpacing", parent), -1f, 24f, 1f);
-	}
-
-	private void BuildShortcutActionRow(Transform parent, string actionId)
-	{
-		GameObject gameObject = CreateRow(parent, 40f, 8f);
-		Text actionText = CreateText(gameObject.transform, _plugin.GetShortcutDisplayName(actionId), 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft);
-		actionText.horizontalOverflow = HorizontalWrapMode.Overflow;
-		SetLayout(actionText.gameObject, 240f);
-		Text shortcutText = CreateText(gameObject.transform, _plugin.GetShortcutLabel(actionId), 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
-		shortcutText.horizontalOverflow = HorizontalWrapMode.Overflow;
-		SetLayout(shortcutText.gameObject, 160f, 40f);
-		CreateButton(gameObject.transform, "设置", delegate
-		{
-			BeginShortcutCapture(actionId);
-		}, 82f, 34f, CheatMenuStyle.Accent);
-		CreateButton(gameObject.transform, "清除", delegate
-		{
-			ApplyShortcut(new KeyboardShortcut(KeyCode.None), actionId);
-		}, 82f, 34f, CheatMenuStyle.Surface);
-		CreateButton(gameObject.transform, "默认", delegate
-		{
-			ApplyShortcut(_plugin.GetShortcutDefault(actionId), actionId);
-		}, 82f, 34f, CheatMenuStyle.Surface);
-	}
-
-	private void HideShortcutDialog()
-	{
-		_shortcutCaptureActive = false;
-		_shortcutCaptureModifiers.Clear();
-		if (_shortcutScrollRect != null)
-		{
-			_shortcutScrollPosition = _shortcutScrollRect.verticalNormalizedPosition;
-		}
-		_shortcutScrollRect = null;
-		_shortcutScrollContent = null;
-		_shortcutCaptureText = null;
-		if (!(_shortcutRoot == null))
-		{
-			QueueForDestroy(_shortcutRoot);
-			_shortcutRoot = null;
-		}
-	}
-
-	private void BeginShortcutCapture(string actionId)
-	{
-		_shortcutCaptureModifiers.Clear();
-		_shortcutCaptureActionId = actionId;
-		_shortcutCaptureActive = true;
-		if (_shortcutCaptureText != null)
-		{
-			_shortcutCaptureText.text = PluginLocalization.Translate("按键监听中，请按下键盘键、鼠标中键或鼠标侧键；鼠标左键和右键不可用，已按住的 Ctrl / Alt / Shift / Win 会作为组合键。");
-		}
-	}
-
-	private void CaptureShortcutInput()
-	{
-		if (Input.GetKeyDown(KeyCode.Escape))
-		{
-			HideShortcutDialog();
-			return;
-		}
-		KeyCode[] modifierKeys = ShortcutInputPolicy.ModifierKeys;
-		foreach (KeyCode key in modifierKeys)
-		{
-			if (Input.GetKey(key))
-			{
-				_shortcutCaptureModifiers.Add(ShortcutInputPolicy.NormalizeModifier(key));
-			}
-		}
-		modifierKeys = ShortcutInputPolicy.KeyboardMainKeys;
-		foreach (KeyCode keyCode in modifierKeys)
-		{
-			if (Input.GetKeyDown(keyCode))
-			{
-				ApplyShortcut(new KeyboardShortcut(keyCode, _shortcutCaptureModifiers.ToArray()), _shortcutCaptureActionId);
-				return;
-			}
-		}
-		modifierKeys = ShortcutInputPolicy.MouseKeys;
-		foreach (KeyCode keyCode2 in modifierKeys)
-		{
-			int mouseButtonIndex = ShortcutInputPolicy.GetMouseButtonIndex(keyCode2);
-			if (mouseButtonIndex >= 0 && Input.GetMouseButtonDown(mouseButtonIndex))
-			{
-				ApplyShortcut(new KeyboardShortcut(keyCode2, _shortcutCaptureModifiers.ToArray()), _shortcutCaptureActionId);
-				break;
-			}
-		}
-	}
-
-	private void ApplyShortcut(KeyboardShortcut shortcut, string actionId)
-	{
-		bool flag = _plugin.SetShortcut(actionId, shortcut);
-		_shortcutCaptureActive = false;
-		_shortcutCaptureModifiers.Clear();
-		ShowShortcutDialog();
-		RefreshHeader();
-		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
-		{
-			RefreshWorkshopLocalizationPageValues();
-		}
-		SetStatus(flag ? "全局快捷键已更新。" : "全局快捷键已更新，但配置文件保存失败。", 5f, flag ? StatusKind.Success : StatusKind.Warning);
-	}
-
-	private void BuildOtherTab()
-	{
-		Transform transform = _contentHost.transform;
-		AddVerticalLayout(_contentHost, 9f, new RectOffset(12, 12, 10, 10));
-		uint cycle = Math.Max(1u, LightingManager.cycle);
-		float num = (float)LightingManager.time / (float)cycle;
-		CreateSection(transform, "时间");
-		_timeCurrentText = CreateLabel(transform, $"当前时间：{LightingManager.time:N0} / {cycle:N0}（{num:P0}）", 14);
-		GameObject gameObject = CreateRow(transform, 38f, 10f);
-		_timeSlider = CreateTimeSlider(gameObject.transform, num, delegate(float value)
-		{
-			UpdateTimePreview(value, cycle);
-			int percent = Mathf.Clamp(Mathf.RoundToInt(value * 100f), 0, 99);
-			_timeApplyDebouncer.Schedule(delegate
-			{
-				ApplyTimePercent(percent, cycle);
-			});
-		});
-		SetLayout(_timeSlider.gameObject, 0f, -1f, 1f);
-		CreateAction(gameObject.transform, "设为白天", delegate
-		{
-			_timeApplyDebouncer.Cancel();
-			_plugin.Actions.SetDay();
-			SetStatus("已切换到白天。");
-		});
-		CreateAction(gameObject.transform, "设为夜晚", delegate
-		{
-			_timeApplyDebouncer.Cancel();
-			_plugin.Actions.SetNight();
-			SetStatus("已切换到夜晚。");
-		});
-		_timePreviewText = CreateLabel(transform, $"预览：{Mathf.RoundToInt(num * 100f)}%", 12, CheatMenuStyle.Muted);
-		GameObject gameObject2 = CreateRow(transform, 42f, 8f);
-		CreateToggleAction(gameObject2.transform, "冻结时间", _plugin.Actions.FreezeTimeEnabled, delegate(bool value)
-		{
-			_plugin.Actions.SetFreezeTime(value);
-			SetStatus(value ? "时间已冻结。" : "时间已恢复流动。");
-		});
-		CreateToggleAction(gameObject2.transform, "强制满月", LightingManager.isFullMoon, delegate(bool value)
-		{
-			_plugin.Actions.SetFullMoon(value);
-			SetStatus(value ? "已开启满月。" : "已关闭满月。");
-		});
-		CreateSection(transform, "世界事件");
-		GameObject gameObject3 = CreateRow(transform, 42f, 8f);
-		CreateAction(gameObject3.transform, "立即呼叫空投", delegate
-		{
-			bool flag = _plugin.Actions.CallAirdrop();
-			SetStatus(flag ? "空投已呼叫。" : "此地图没有可用的空投节点或货物表。", 5f, flag ? StatusKind.Success : StatusKind.Warning);
-		});
-		CreateAction(gameObject3.transform, "下雨", delegate
-		{
-			bool flag = _plugin.Actions.StartRain();
-			SetStatus(flag ? "已触发雨天。" : "当前地图没有默认雨天资产。", 3f, flag ? StatusKind.Success : StatusKind.Warning);
-		});
-		CreateAction(gameObject3.transform, "暴雪", delegate
-		{
-			bool flag = _plugin.Actions.StartSnow();
-			SetStatus(flag ? "已触发暴雪。" : "当前地图没有默认雪天资产。", 3f, flag ? StatusKind.Success : StatusKind.Warning);
-		});
-		GameObject gameObject4 = CreateRow(transform, 42f, 8f);
-		CreateAction(gameObject4.transform, "清除当前天气", delegate
-		{
-			_plugin.Actions.ClearWeather();
-			SetStatus("当前天气已清除，后续仍可自然调度。");
-		});
-		CreateAction(gameObject4.transform, "关闭天气调度", delegate
-		{
-			_plugin.Actions.DisableWeather();
-			SetStatus("当前天气和自然天气调度已关闭。", 3f, StatusKind.Warning);
-		});
-		CreateSection(transform, "扫描信息");
-		CreateLabel(transform, $"物品：{_plugin.Catalog.Items.Count}（模组 {_plugin.Catalog.WorkshopItemCount}）    车辆：{_plugin.Catalog.Vehicles.Count}（模组 {_plugin.Catalog.WorkshopVehicleCount}）", 14);
-		CreateLabel(transform, "只显示 Unturned 当前已成功加载的原版、地图随附和 Workshop 资产。", 12, CheatMenuStyle.Muted);
-		GameObject gameObject5 = CreateRow(transform, 40f, 8f);
-		CreateButton(gameObject5.transform, "重新扫描模组资产", delegate
-		{
-			_plugin.RefreshCatalog();
-			SetStatus("资产目录已重新扫描。", 4f, StatusKind.Info);
-		}, 180f, 36f, CheatMenuStyle.SurfaceRaised);
-	}
 
 	private void CreateToggleAction(Transform parent, string label, bool current, Action<bool> change, string tooltip = null)
 	{
@@ -2891,14 +1428,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		SetLayout(gameObject, -1f, 40f, 1f);
 	}
 
-	private void CreateAction(Transform parent, string label, System.Action action)
+	private void CreateAction(Transform parent, string label, System.Action action, string tooltip)
 	{
-		SetLayout(CreateButton(parent, label, action, 0f, 40f).gameObject, -1f, -1f, 1f);
+		SetLayout(CreateButton(parent, label, action, tooltip, 0f, 40f).gameObject, -1f, -1f, 1f);
 	}
 
-	private void CreatePrimaryAction(Transform parent, string label, System.Action action)
+	private void CreatePrimaryAction(Transform parent, string label, System.Action action, string tooltip)
 	{
-		SetLayout(CreateButton(parent, label, action, 0f, 40f, CheatMenuStyle.Accent).gameObject, -1f, -1f, 1f);
+		SetLayout(CreateButton(parent, label, action, tooltip, 0f, 40f, CheatMenuStyle.Accent).gameObject, -1f, -1f, 1f);
 	}
 
 	private void CreateSection(Transform parent, string text)
@@ -2978,11 +1515,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		Text text2 = CreateText(gameObject.transform, "输入…", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Italic);
 		SetOffsets(text2.rectTransform, 9f, 9f, 2f, 2f);
 		component2.placeholder = text2;
-		if (commitOnEndEdit)
+		if (changed != null && commitOnEndEdit)
 		{
 			component2.onEndEdit.AddListener(changed.Invoke);
 		}
-		else
+		else if (changed != null)
 		{
 			component2.onValueChanged.AddListener(changed.Invoke);
 		}
@@ -3002,6 +1539,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		overlaySelectableVisual.SetHoverExplanation(hoverExplanation, ShowHoverExplanation, HideHoverExplanation);
 		SetLayout(gameObject, (width > 0f) ? width : (-1f), 34f, flexibleWidth);
 		return component2;
+	}
+
+	private InputField CreateSearchInput(Transform parent, string value, Action<string> changed, float width = 0f, float flexibleWidth = 0f, string hoverExplanation = null)
+	{
+		InputField input = CreateInput(parent, value, null, width, flexibleWidth, password: false, commitOnEndEdit: false, hoverExplanation: hoverExplanation);
+		_searchInputs.Add(new UiSearchInputController(input, changed));
+		return input;
 	}
 
 	private Slider CreateTimeSlider(Transform parent, float normalized, Action<float> changed)
@@ -3058,11 +1602,12 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void RefreshOtherTime()
 	{
-		uint num = Math.Max(1u, LightingManager.cycle);
-		float num2 = Mathf.Clamp01((float)LightingManager.time / (float)num);
+		WorldPageSnapshot snapshot = _worldPresenter.CaptureSnapshot();
+		uint num = snapshot.Cycle;
+		float num2 = Mathf.Clamp01(snapshot.NormalizedTime);
 		if (_timeCurrentText != null)
 		{
-			_timeCurrentText.text = $"当前时间：{LightingManager.time:N0} / {num:N0}（{num2:P0}）";
+			_timeCurrentText.text = PluginLocalization.Translate($"当前时间：{snapshot.Time:N0} / {num:N0}（{num2:P0}）");
 		}
 		if (!(_timeSlider != null) || !Input.GetMouseButton(0) || !(EventSystem.current != null) || !(EventSystem.current.currentSelectedGameObject == _timeSlider.gameObject))
 		{
@@ -3078,14 +1623,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		if (_timePreviewText != null)
 		{
-			_timePreviewText.text = $"预览：{Mathf.RoundToInt(Mathf.Clamp01(normalized) * 100f)}%";
+			_timePreviewText.text = PluginLocalization.Translate($"预览：{Mathf.RoundToInt(Mathf.Clamp01(normalized) * 100f)}%");
 		}
 	}
 
 	private void ApplyTimePercent(int percent, uint cycle)
 	{
 		percent = Mathf.Clamp(percent, 0, 99);
-		_plugin.Actions.SetTime((uint)((float)cycle * ((float)percent / 100f)));
+		_worldPresenter.SetTime((uint)((float)cycle * ((float)percent / 100f)));
 		if (_timeSlider != null)
 		{
 			_timeSlider.SetValueWithoutNotify((float)percent / 100f);
@@ -3096,25 +1641,60 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private void UpdateItemAmountInput()
 	{
-		if (_itemAmountInput != null)
+		for (int i = _itemAmountInputs.Count - 1; i >= 0; i--)
 		{
-			_itemAmountInput.SetTextWithoutNotify(_itemAmountText);
+			InputField input = _itemAmountInputs[i];
+			if (input == null)
+			{
+				_itemAmountInputs.RemoveAt(i);
+			}
+			else
+			{
+				input.SetTextWithoutNotify(_itemAmountText);
+			}
 		}
 	}
 
 	private void UpdateVehicleAmountInput()
 	{
-		if (_vehicleAmountInput != null)
+		for (int i = _vehicleAmountInputs.Count - 1; i >= 0; i--)
 		{
-			_vehicleAmountInput.SetTextWithoutNotify(_vehicleAmountText);
+			InputField input = _vehicleAmountInputs[i];
+			if (input == null)
+			{
+				_vehicleAmountInputs.RemoveAt(i);
+			}
+			else
+			{
+				input.SetTextWithoutNotify(_vehicleAmountText);
+			}
 		}
+	}
+
+	private InputField RegisterItemAmountInput(InputField input)
+	{
+		if (input != null)
+		{
+			_itemAmountInputs.Add(input);
+		}
+		return input;
+	}
+
+	private InputField RegisterVehicleAmountInput(InputField input)
+	{
+		if (input != null)
+		{
+			_vehicleAmountInputs.Add(input);
+		}
+		return input;
 	}
 
 	private Button CreateMarkerPickerButton(Transform parent, TeleportMarkerKind markerKind, System.Action action, float width, bool compact, float flexibleWidth = 0f)
 	{
 		Color value = ((_teleportMarkerKind == markerKind) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover);
 		float num = (compact ? 34f : 54f);
-		Button button = CreateButton(parent, string.Empty, action, width, num, value, 11);
+		string tooltip = string.Format(PluginLocalization.Translate("选择“{0}”传送标记样式。"), PluginLocalization.Translate(MarkerLabel(markerKind)));
+		Button button = CreateButton(parent, string.Empty, action, tooltip, width, num, value, 11);
 		SetLayout(button.gameObject, (width > 0f) ? width : (-1f), num, flexibleWidth);
 		Text componentInChildren = button.GetComponentInChildren<Text>(includeInactive: true);
 		if (componentInChildren != null)
@@ -3143,7 +1723,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 
 	private Button CreateColorPickerButton(Transform parent)
 	{
-		Button button = CreateButton(parent, string.Empty, ShowTeleportColorPicker, 82f, 34f, CheatMenuStyle.SurfaceHover, 11);
+		Button button = CreateButton(parent, string.Empty, ShowTeleportColorPicker, "打开传送标记颜色选择器。", 82f, 34f, CheatMenuStyle.SurfaceHover, 11);
 		Text componentInChildren = button.GetComponentInChildren<Text>(includeInactive: true);
 		if (componentInChildren != null)
 		{
@@ -3174,10 +1754,11 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private void ShowVehicleThumbnailSettings()
 	{
 		HideVehicleThumbnailSettings();
-		VehicleThumbnailRenderSettings vehicleThumbnailSettings = _plugin.VehicleThumbnailSettings;
+		VehicleThumbnailRenderSettings vehicleThumbnailSettings = _catalogPresenter.VehicleThumbnailSettings;
 		_vehicleThumbnailDraftWidth = vehicleThumbnailSettings?.Width ?? 128;
 		_vehicleThumbnailDraftFraming = vehicleThumbnailSettings?.Framing ?? 1f;
-		_vehicleThumbnailSettingsRoot = CreateObject("VehicleThumbnailSettingsOverlay", _root.transform, typeof(Image));
+		_vehicleThumbnailSettingsRoot = CreateObject("VehicleThumbnailSettingsOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_uiRoot.RegisterModal(_vehicleThumbnailSettingsRoot, HideVehicleThumbnailSettings);
 		Stretch(_vehicleThumbnailSettingsRoot.GetComponent<RectTransform>());
 		_vehicleThumbnailSettingsRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
 		GameObject gameObject = CreateObject("VehicleThumbnailSettingsDialog", _vehicleThumbnailSettingsRoot.transform, typeof(Image));
@@ -3201,13 +1782,19 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		GameObject gameObject2 = CreateRow(gameObject.transform, 44f, 10f);
 		CreateText(gameObject2.transform, "载具渲染设置", 20, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
 		CreateFlexibleSpacer(gameObject2.transform);
-		CreateButton(gameObject2.transform, "×", HideVehicleThumbnailSettings, 44f, 42f, CheatMenuStyle.Surface, 23);
+		CreateButton(gameObject2.transform, "×", HideVehicleThumbnailSettings, "关闭载具缩略图设置且不保存本次更改。", 44f, 42f, CheatMenuStyle.Surface, 23);
 		CreateLabel(gameObject.transform, "缩略图尺寸只影响车辆卡片，不会修改游戏全局画质。已生成的缩略图会进入缓存，重复打开不会重复实例化车辆。", 12, CheatMenuStyle.Muted);
 		CreateLabel(gameObject.transform, "尺寸", 15, CheatMenuStyle.Text);
 		GameObject gameObject3 = CreateRow(gameObject.transform, 38f, 8f);
 		List<Button> resolutionButtons = new List<Button>();
 		int[] resolutions = new int[3] { 128, 192, 256 };
 		string[] array = new string[3] { "128 × 96（低开销）", "192 × 144（平衡）", "256 × 192（更清晰）" };
+		string[] resolutionTooltips = new string[3]
+		{
+			"选择 128 × 96 缩略图：生成最快、缓存占用最低。",
+			"选择 192 × 144 缩略图：在清晰度与生成开销之间平衡。",
+			"选择 256 × 192 缩略图：更清晰，但首次生成更慢。"
+		};
 		for (int i = 0; i < resolutions.Length; i++)
 		{
 			int capturedResolution = resolutions[i];
@@ -3219,7 +1806,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 					bool flag = resolutions[j] == _vehicleThumbnailDraftWidth;
 					resolutionButtons[j].targetGraphic.color = (flag ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover);
 				}
-			}, 0f, 34f, (capturedResolution == _vehicleThumbnailDraftWidth) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12);
+			}, resolutionTooltips[i], 0f, 34f, (capturedResolution == _vehicleThumbnailDraftWidth) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12);
 			SetLayout(button.gameObject, -1f, -1f, 1f);
 			resolutionButtons.Add(button);
 		}
@@ -3236,13 +1823,13 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		CreateLabel(gameObject.transform, "取景倍率 0.5：主体更大、留白更少，可能接近裁切边界；1.0：默认平衡值；1.5：留白更多、主体更小，裁切风险更低。", 12, CheatMenuStyle.Muted);
 		GameObject gameObject5 = CreateRow(gameObject.transform, 42f, 8f);
 		CreateFlexibleSpacer(gameObject5.transform);
-		CreateButton(gameObject5.transform, "取消", HideVehicleThumbnailSettings, 96f);
+		CreateButton(gameObject5.transform, "取消", HideVehicleThumbnailSettings, "放弃本次缩略图尺寸和取景倍率更改。", 96f);
 		CreateButton(gameObject5.transform, "应用", delegate
 		{
-			bool flag = _plugin.ApplyVehicleThumbnailSettings(_vehicleThumbnailDraftWidth, _vehicleThumbnailDraftFraming);
+			bool flag = _catalogPresenter.ApplyVehicleThumbnailSettings(_vehicleThumbnailDraftWidth, _vehicleThumbnailDraftFraming);
 			HideVehicleThumbnailSettings();
 			SetStatus(flag ? "车辆缩略图设置已应用并保存。" : "车辆缩略图设置已应用，但配置文件保存失败。", 5f, flag ? StatusKind.Success : StatusKind.Warning);
-		}, 96f, 36f, CheatMenuStyle.Accent);
+		}, "保存缩略图尺寸和取景倍率；后续车辆卡片使用新设置。", 96f, 36f, CheatMenuStyle.Accent);
 	}
 
 	private void UpdateVehicleThumbnailFramingText()
@@ -3268,7 +1855,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		HideTeleportColorPicker();
 		_teleportColorDraft = _teleportMarkerColor;
-		_teleportColorPickerRoot = CreateObject("TeleportColorPickerOverlay", _root.transform, typeof(Image));
+		_teleportColorPickerRoot = CreateObject("TeleportColorPickerOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_uiRoot.RegisterModal(_teleportColorPickerRoot, HideTeleportColorPicker);
 		Stretch(_teleportColorPickerRoot.GetComponent<RectTransform>());
 		_teleportColorPickerRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
 		GameObject gameObject = CreateObject("TeleportColorPickerDialog", _teleportColorPickerRoot.transform, typeof(Image));
@@ -3300,7 +1888,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		outline2.useGraphicAlpha = false;
 		CreateText(gameObject2.transform, "选择颜色", 20, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
 		CreateFlexibleSpacer(gameObject2.transform);
-		CreateButton(gameObject2.transform, "×", HideTeleportColorPicker, 44f, 42f, CheatMenuStyle.Surface, 23);
+		CreateButton(gameObject2.transform, "×", HideTeleportColorPicker, "关闭颜色选择器并放弃本次颜色更改。", 44f, 42f, CheatMenuStyle.Surface, 23);
 		GameObject gameObject4 = CreateRow(gameObject.transform, 0f, 26f);
 		SetLayout(gameObject4, -1f, -1f, -1f, 1f);
 		GameObject gameObject5 = CreateObject("PreviewColumn", gameObject4.transform, typeof(Image));
@@ -3359,32 +1947,32 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		CreateLabel(gameObject10.transform, "红", 13, CheatMenuStyle.Text, 32f);
 		_teleportColorRedSlider = CreateColorChannelSlider(gameObject10.transform, _teleportColorDraft.r * 255f, new Color(0.75f, 0.24f, 0.24f, 1f), delegate(int value)
 		{
-			_teleportColorDraft.r = (float)value / 255f;
+			_state.TeleportColorDraft.r = (float)value / 255f;
 			UpdateTeleportColorPickerControls();
 		}, out _teleportColorRedValue);
 		GameObject gameObject11 = CreateRow(gameObject9.transform, 36f, 8f);
 		CreateLabel(gameObject11.transform, "绿", 13, CheatMenuStyle.Text, 32f);
 		_teleportColorGreenSlider = CreateColorChannelSlider(gameObject11.transform, _teleportColorDraft.g * 255f, new Color(0.25f, 0.68f, 0.3f, 1f), delegate(int value)
 		{
-			_teleportColorDraft.g = (float)value / 255f;
+			_state.TeleportColorDraft.g = (float)value / 255f;
 			UpdateTeleportColorPickerControls();
 		}, out _teleportColorGreenValue);
 		GameObject gameObject12 = CreateRow(gameObject9.transform, 36f, 8f);
 		CreateLabel(gameObject12.transform, "蓝", 13, CheatMenuStyle.Text, 32f);
 		_teleportColorBlueSlider = CreateColorChannelSlider(gameObject12.transform, _teleportColorDraft.b * 255f, new Color(0.22f, 0.5f, 0.78f, 1f), delegate(int value)
 		{
-			_teleportColorDraft.b = (float)value / 255f;
+			_state.TeleportColorDraft.b = (float)value / 255f;
 			UpdateTeleportColorPickerControls();
 		}, out _teleportColorBlueValue);
 		GameObject gameObject13 = CreateRow(gameObject.transform, 48f, 10f);
 		CreateFlexibleSpacer(gameObject13.transform);
-		CreateButton(gameObject13.transform, "取消", HideTeleportColorPicker, 110f, 38f, CheatMenuStyle.Surface);
+		CreateButton(gameObject13.transform, "取消", HideTeleportColorPicker, "放弃本次传送标记颜色更改。", 110f, 38f, CheatMenuStyle.Surface);
 		CreateButton(gameObject13.transform, "确定", delegate
 		{
 			_teleportMarkerColor = _teleportColorDraft;
 			HideTeleportColorPicker();
 			ShowTab(MenuTab.Teleports);
-		}, 110f, 38f, CheatMenuStyle.Accent);
+		}, "将当前预览颜色用于传送标记。", 110f, 38f, CheatMenuStyle.Accent);
 		UpdateTeleportColorPickerControls();
 		if (EventSystem.current != null && _teleportColorHexInput != null)
 		{
@@ -3482,7 +2070,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		{
 			_teleportColorDraft = color;
 			UpdateTeleportColorPickerControls();
-		}, 48f, 42f, CheatMenuStyle.SurfaceHover, 10);
+		}, "将此预设颜色载入当前传送标记颜色预览。", 48f, 42f, CheatMenuStyle.SurfaceHover, 10);
 		Text componentInChildren = button.GetComponentInChildren<Text>(includeInactive: true);
 		if (componentInChildren != null)
 		{
@@ -3658,7 +2246,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		{
 			return;
 		}
-		if (_hoverExplanationRoot != null && _hoverExplanationRoot.transform.parent != activeRoot.transform)
+		if (_hoverExplanationRoot != null && _hoverExplanationRoot.transform.parent != _uiRoot.TooltipLayer)
 		{
 			QueueForDestroy(_hoverExplanationRoot);
 			_hoverExplanationRoot = null;
@@ -3666,7 +2254,8 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 		if (!(_hoverExplanationRoot != null))
 		{
-			_hoverExplanationRoot = CreateObject("OverlayHoverExplanation", activeRoot.transform, typeof(Image));
+			_hoverExplanationRoot = CreateObject("OverlayHoverExplanation", _uiRoot.TooltipLayer, typeof(Image));
+			_uiRoot.AttachTooltip(_hoverExplanationRoot);
 			RectTransform component = _hoverExplanationRoot.GetComponent<RectTransform>();
 			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 			component.anchorMin = anchorMin;
@@ -3674,7 +2263,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			Image component2 = _hoverExplanationRoot.GetComponent<Image>();
 			component2.color = Color.clear;
 			component2.raycastTarget = false;
-			Canvas component3 = activeRoot.GetComponent<Canvas>();
+		Canvas component3 = _uiRoot.Canvas;
 			float num = ((component3 != null) ? Mathf.Max(0.01f, component3.scaleFactor) : 1f);
 			float num2 = 3f / num;
 			CreateHoverExplanationBorderEdge(_hoverExplanationRoot.transform, "BorderTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f - num2), Vector2.zero);
@@ -3706,7 +2295,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 			return;
 		}
 		EnsureHoverExplanation();
-		Canvas component = activeRoot.GetComponent<Canvas>();
+		Canvas component = _uiRoot.Canvas;
 		float num = ((component != null) ? Mathf.Max(1f, component.scaleFactor) : 1f);
 		float num2 = 10f / num;
 		float max = 420f / num;
@@ -3791,7 +2380,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
-	private Button CreateButton(Transform parent, string label, System.Action action, float width = 0f, float height = 36f, Color? color = null, int fontSize = 13, string tooltip = null, bool delayTooltip = false)
+	private Button CreateButton(Transform parent, string label, System.Action action, string tooltip, float width = 0f, float height = 36f, Color? color = null, int fontSize = 13, bool delayTooltip = false)
 	{
 		GameObject gameObject = CreateObject("Button", parent, typeof(Image), typeof(Button));
 		Image component = gameObject.GetComponent<Image>();
@@ -3874,6 +2463,7 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		component2.transition = Selectable.Transition.None;
 		OverlaySelectableVisual overlaySelectableVisual = gameObject.AddComponent<OverlaySelectableVisual>();
 		overlaySelectableVisual.Initialize(component2, component, text, gameObject3, outline, component.color);
+		tooltip = ButtonTooltipText.Require(tooltip);
 		overlaySelectableVisual.SetHoverExplanation(tooltip, ShowHoverExplanation, HideHoverExplanation, delayTooltip);
 		SetLayout(gameObject, (width > 0f) ? width : (-1f), height);
 		return component2;
@@ -3882,8 +2472,9 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	private Text CreateText(Transform parent, string value, int size, Color color, TextAnchor alignment, FontStyle style = FontStyle.Normal, bool localize = true)
 	{
 		Text component = CreateObject("Text", parent, typeof(Text)).GetComponent<Text>();
+		string resolvedText = localize ? PluginLocalization.Translate(value) : value;
 		component.font = _font;
-		component.text = (localize ? PluginLocalization.Translate(value) : value);
+		component.text = resolvedText;
 		component.fontSize = size;
 		component.fontStyle = style;
 		component.color = color;
@@ -3892,36 +2483,6 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		component.verticalOverflow = VerticalWrapMode.Truncate;
 		component.raycastTarget = false;
 		return component;
-	}
-
-	private RectTransform CreateScroll(Transform parent)
-	{
-		GameObject gameObject = CreateObject("Scroll", parent, typeof(Image), typeof(ScrollRect));
-		Stretch(gameObject.GetComponent<RectTransform>());
-		gameObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
-		SetLayout(gameObject, -1f, -1f, 1f, 1f);
-		LayoutElement layoutElement = gameObject.GetComponent<LayoutElement>();
-		layoutElement.minWidth = 1f;
-		layoutElement.minHeight = 1f;
-		GameObject gameObject2 = CreateObject("Viewport", gameObject.transform, typeof(Image), typeof(Mask));
-		RectTransform component = gameObject2.GetComponent<RectTransform>();
-		Stretch(component);
-		gameObject2.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
-		gameObject2.GetComponent<Mask>().showMaskGraphic = false;
-		RectTransform component2 = CreateObject("Content", component, typeof(RectTransform)).GetComponent<RectTransform>();
-		component2.anchorMin = new Vector2(0f, 1f);
-		component2.anchorMax = new Vector2(1f, 1f);
-		component2.pivot = new Vector2(0.5f, 1f);
-		component2.offsetMin = Vector2.zero;
-		component2.offsetMax = Vector2.zero;
-		ScrollRect component3 = gameObject.GetComponent<ScrollRect>();
-		component3.viewport = component;
-		component3.content = component2;
-		component3.horizontal = false;
-		component3.vertical = true;
-		component3.movementType = ScrollRect.MovementType.Clamped;
-		component3.scrollSensitivity = 28f;
-		return component2;
 	}
 
 	private GameObject CreateRow(Transform parent, float height, float spacing)
@@ -3993,14 +2554,6 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
-	private static float CalculateSafeScale(float requestedScale)
-	{
-		float a = ((float)Screen.width - 32f) / 1120f;
-		float b = ((float)Screen.height - 32f) / 790f;
-		float b2 = Mathf.Min(a, b);
-		return Mathf.Clamp(Mathf.Min(requestedScale, b2), 0.75f, 1.5f);
-	}
-
 	private static void CreateFlexibleSpacer(Transform parent)
 	{
 		SetLayout(CreateObject("Spacer", parent), -1f, -1f, 1f);
@@ -4026,65 +2579,42 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 	{
 		if (!(target == null))
 		{
-			target.SetActive(value: false);
-			if (!_deferredDestroy.Contains(target))
-			{
-				_deferredDestroy.Add(target);
-			}
+			_uiRoot.UnregisterLayerSurface(target);
+			_deferredDestroy.Enqueue(target, Time.frameCount, item => item.SetActive(value: false));
 		}
 	}
 
-	private void FlushDeferredDestroy()
+	internal void PumpDeferredDestroy()
 	{
-		if (_deferredDestroy.Count == 0)
-		{
-			return;
-		}
-		foreach (GameObject item in _deferredDestroy)
+		bool canvasRebuilding = CanvasUpdateRegistry.IsRebuildingLayout() || CanvasUpdateRegistry.IsRebuildingGraphics();
+		while (_deferredDestroy.TryDequeueReady(Time.frameCount, canvasRebuilding, out GameObject item))
 		{
 			if (item != null)
 			{
+				item.SetActive(value: false);
 				UnityEngine.Object.Destroy(item);
 			}
 		}
-		_deferredDestroy.Clear();
 	}
 
 	private void BuildItemResults()
 	{
-		_itemResults.Clear();
-		_itemResults.AddRange(_plugin.Catalog.Items.Where((ItemAsset asset) => MatchesItemForFilter(asset, _itemFilter)));
-		_itemPage = 0;
+		_catalogPresenter.ProjectItems();
 	}
 
 	private void BuildVehicleResults()
 	{
-		_vehicleResults.Clear();
-		_vehicleResults.AddRange(_plugin.Catalog.Vehicles.Where((VehicleAsset asset) => (_vehicleCategory == "全部" || AssetCatalog.GetVehicleCategory(asset) == _vehicleCategory) && AssetCatalog.Matches(asset, asset.FriendlyName, GetOriginalVehicleName(asset), _vehicleQuery)));
-		_vehiclePage = 0;
+		_catalogPresenter.ProjectVehicles();
 	}
 
 	private void BuildFavoriteResults()
 	{
-		_favoriteItemResults.Clear();
-		_favoriteItemResults.AddRange(_plugin.Catalog.Items.Where((ItemAsset asset) => _plugin.Favorites.IsItemFavorite(asset) && MatchesItemForFilter(asset, _favoriteItemFilter)));
-		_favoriteVehicleResults.Clear();
-		_favoriteVehicleResults.AddRange(_plugin.Catalog.Vehicles.Where((VehicleAsset asset) => _plugin.Favorites.IsVehicleFavorite(asset) && (_favoriteVehicleCategory == "全部" || AssetCatalog.GetVehicleCategory(asset) == _favoriteVehicleCategory) && AssetCatalog.Matches(asset, asset.FriendlyName, GetOriginalVehicleName(asset), _favoriteQuery)));
-		_favoritePage = 0;
+		_catalogPresenter.ProjectFavorites();
 	}
 
 	private bool MatchesItemForFilter(ItemAsset asset, ItemFilterState filter)
 	{
-		string source = null;
-		_plugin.WorkshopLocalization?.TryGetOriginal(asset, WorkshopTextField.ItemName, out source);
-		return ItemFilterService.Matches(asset, filter, source);
-	}
-
-	private string GetOriginalVehicleName(VehicleAsset asset)
-	{
-		string source = null;
-		_plugin.WorkshopLocalization?.TryGetOriginal(asset, WorkshopTextField.VehicleName, out source);
-		return source;
+		return _catalogPresenter.MatchesItem(asset, filter);
 	}
 
 	private void ResetStatus()
@@ -4118,6 +2648,10 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		if (_statusAccent != null)
 		{
 			_statusAccent.color = GetStatusColor(statusKind);
+		}
+		if (statusKind != StatusKind.Info)
+		{
+			_uiRoot.Toasts?.Show(PluginLocalization.Translate(message), seconds, GetStatusColor(statusKind));
 		}
 		_statusUntil = Time.unscaledTime + seconds;
 	}
@@ -4421,1664 +2955,14 @@ internal sealed class CheatMenuOverlayUi : IDisposable
 		texture = null;
 	}
 
-	private void BuildToolsTab()
-	{
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
-		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 7f);
-		AddToolsTab(gameObject.transform, ToolsTab.Interaction, "交互");
-		AddToolsTab(gameObject.transform, ToolsTab.Inventory, "背包整理");
-		AddToolsTab(gameObject.transform, ToolsTab.AutoPickup, "自动拾取");
-		AddToolsTab(gameObject.transform, ToolsTab.Movement, "移动");
-		AddToolsTab(gameObject.transform, ToolsTab.Translation, "翻译");
-		GameObject gameObject2 = CreateObject("ToolsPanel", _contentHost.transform, typeof(Image));
-		gameObject2.GetComponent<Image>().color = CheatMenuStyle.Surface;
-		AddVerticalLayout(gameObject2, 10f, new RectOffset(18, 18, 16, 16));
-		SetLayout(gameObject2, -1f, -1f, 1f, 1f);
-		CreateLabel(gameObject2.transform, GetToolsTabTitle(_activeToolsTab), 19, CheatMenuStyle.Text);
-		if (_activeToolsTab == ToolsTab.Interaction)
-		{
-			BuildPointToolPanel(gameObject2.transform);
-		}
-		else if (_activeToolsTab == ToolsTab.Inventory)
-		{
-			BuildInventoryArrangePanel(gameObject2.transform);
-		}
-		else if (_activeToolsTab == ToolsTab.AutoPickup)
-		{
-			BuildAutoPickupPanel(gameObject2.transform);
-		}
-		else if (_activeToolsTab == ToolsTab.Movement)
-		{
-			BuildMovementPanel(gameObject2.transform);
-		}
-		else
-		{
-			BuildWorkshopLocalizationPanel(gameObject2.transform);
-		}
-	}
 
-	private static string GetToolsTabTitle(ToolsTab tab)
-	{
-		return tab switch
-		{
-			ToolsTab.Interaction => "准星交互工具",
-			ToolsTab.Inventory => "背包整理",
-			ToolsTab.AutoPickup => "自动拾取",
-			ToolsTab.Movement => "移动工具",
-			_ => "翻译"
-		};
-	}
 
-	private void AddToolsTab(Transform parent, ToolsTab tab, string label)
-	{
-		SetLayout(CreateButton(parent, label, delegate
-		{
-			_activeToolsTab = tab;
-			ReplaceContentHost();
-			BuildToolsTab();
-		}, 0f, 40f, (_activeToolsTab == tab) ? CheatMenuStyle.Accent : CheatMenuStyle.Surface, 14).gameObject, -1f, -1f, 1f);
-	}
 
-	private void BuildInfiniteStoragePanel(Transform panel)
-	{
-		if (_plugin.InfiniteStorage == null)
-		{
-			CreateEmptyState(panel, "无限储存不可用", "储存运行时尚未初始化。");
-			return;
-		}
-		GameObject row = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(row.transform, "启用无限储存", _plugin.InfiniteStorage.Enabled, delegate(bool value)
-		{
-			_plugin.SetInfiniteStorageEnabled(value);
-			RebuildInfiniteStoragePage();
-		});
-		GameObject priorityRow = CreateRow(panel, 34f, 7f);
-		CreateToggleAction(priorityRow.transform, "拾取优先存入无限储存", _plugin.IsInfiniteStoragePickupPriorityEnabled, delegate(bool value)
-		{
-			_plugin.SetInfiniteStoragePickupPriority(value);
-			RebuildInfiniteStoragePage();
-		});
-		CreateLabel(row.transform, "搜索", 13, CheatMenuStyle.Text, 40f);
-		CreateInput(row.transform, _infiniteStorageFilter.SearchQuery, delegate(string value)
-		{
-			_infiniteStorageFilter.SearchQuery = value;
-			_infiniteStoragePage = 0;
-			_searchDebouncer.Schedule(delegate { if (_infiniteStorageRoot != null && _infiniteStorageRoot.activeSelf) { RebuildInfiniteStoragePage(); } });
-		}, 220f);
-		CreateLabel(row.transform, "取出数量", 13, CheatMenuStyle.Text, 56f);
-		CreateButton(row.transform, "−", delegate
-		{
-			_giveAmount = (byte)Math.Max(1, ParseClamped(_itemAmountText, 1, 255, _giveAmount) - 1);
-			_itemAmountText = _giveAmount.ToString();
-			UpdateItemAmountInput();
-		}, 36f, 34f);
-		_itemAmountInput = CreateInput(row.transform, _itemAmountText, delegate(string value)
-		{
-			_itemAmountText = value;
-			if (int.TryParse(value, out var result))
-			{
-				_giveAmount = (byte)Mathf.Clamp(result, 1, 255);
-			}
-		}, 62f);
-		CreateButton(row.transform, "+", delegate
-		{
-			_giveAmount = (byte)Math.Min(255, ParseClamped(_itemAmountText, 1, 255, _giveAmount) + 1);
-			_itemAmountText = _giveAmount.ToString();
-			UpdateItemAmountInput();
-		}, 36f, 34f);
-		CreateButton(row.transform, (_infiniteStorageFilter.ActiveFilterCount == 0) ? "筛选" : $"筛选 {_infiniteStorageFilter.ActiveFilterCount}", ShowInfiniteStorageFilterPanel, 92f, 34f, CheatMenuStyle.Surface, 12);
-		long resourceUnits = _plugin.InfiniteStorage.Entries.Where(entry => entry.UnitKind == StackUnitKind.ResourceUnits).Sum(entry => entry.StoredUnitCount);
-		long instances = _plugin.InfiniteStorage.Entries.Where(entry => entry.UnitKind != StackUnitKind.ResourceUnits).Sum(entry => entry.StoredUnitCount);
-		IReadOnlyList<VirtualStorageEntry> filteredEntries = GetFilteredInfiniteStorageEntries();
-		if (_plugin.InfiniteStorage.LegacyAmbiguousEntries.Count > 0)
-		{
-			GameObject legacyRow = CreateRow(panel, 34f, 7f);
-			CreateLabel(legacyRow.transform, $"检测到 {_plugin.InfiniteStorage.LegacyAmbiguousEntries.Count:N0} 条待处理旧存档记录。", 13, CheatMenuStyle.Warning, 0f);
-			CreateButton(legacyRow.transform, "导出原始备份", delegate
-			{
-				bool exported = _plugin.InfiniteStorage.TryExportLegacyAmbiguousEntries(out _, out _);
-				SetStatus(exported ? "已导出待处理旧存档原始备份。" : "导出待处理旧存档失败。", 4f, exported ? StatusKind.Success : StatusKind.Warning);
-			}, 118f, 30f, CheatMenuStyle.Surface, 12, "导出所有待处理旧存档的原始 JSON 备份。");
-		}
-		CreateButton(panel, "存储当前携带物品", delegate
-		{
-			int moved = _plugin.InfiniteStorage.StoreAllCarried();
-			SetStatus(moved > 0 ? $"已存储 {moved} 个背包格。" : "没有可存储的物品，或无限储存未启用。", 4f, StatusKind.Info);
-			RebuildInfiniteStoragePage();
-		}, 180f, 40f, CheatMenuStyle.Success, 13, "将当前背包中的物品存入无限储存。");
-		CreateLabel(panel, $"显示 {filteredEntries.Count:N0} / {_plugin.InfiniteStorage.Entries.Count:N0} 条目；资源 {resourceUnits:N0}，完整物品 {instances:N0} 个。", 14, CheatMenuStyle.Text);
-		GameObject contentRow = CreateRow(panel, 0f, 10f);
-		SetLayout(contentRow, -1f, -1f, -1f, 1f);
-		HashSet<ushort> storedAssetIds = new HashSet<ushort>(_plugin.InfiniteStorage.Entries.Select(entry => entry.AssetId));
-		BuildItemCategorySidebar(contentRow.transform, "物品分类", _infiniteStorageFilter, delegate(ItemPrimaryCategory category)
-		{
-			_infiniteStorageFilter.Category = category;
-			ItemFilterService.NormalizeForCategory(_infiniteStorageFilter);
-			_infiniteStoragePage = 0;
-			RebuildInfiniteStoragePage();
-		}, asset => storedAssetIds.Contains(asset.id));
-		BuildInfiniteStorageGrid(contentRow.transform, filteredEntries);
-	}
-
-	private void BuildInfiniteStorageGrid(Transform parent, IReadOnlyList<VirtualStorageEntry> entries)
-	{
-		GameObject column = CreateObject("InfiniteStorageGridColumn", parent);
-		AddVerticalLayout(column, 7f, new RectOffset(0, 0, 0, 0));
-		SetLayout(column, -1f, -1f, 1f, 1f);
-		int pageCount = Math.Max(1, Mathf.CeilToInt(entries.Count / 15f));
-		_infiniteStoragePage = Mathf.Clamp(_infiniteStoragePage, 0, pageCount - 1);
-		Action<int> changePage = delegate(int value)
-		{
-			_infiniteStoragePage = value;
-			RebuildInfiniteStoragePage();
-		};
-		BuildPagination(column.transform, _infiniteStoragePage, pageCount, changePage);
-		AddPageScrollHandler(column, _infiniteStoragePage, pageCount, changePage);
-		if (entries.Count == 0)
-		{
-			CreateEmptyState(column.transform, string.IsNullOrWhiteSpace(_infiniteStorageFilter.SearchQuery) ? "当前分类没有已存储物品。" : "没有匹配的物品。", string.IsNullOrWhiteSpace(_infiniteStorageFilter.SearchQuery) ? "存储物品后会显示在这里。" : "请清空搜索或尝试其他关键词。");
-			return;
-		}
-		GameObject grid = CreateObject("InfiniteStorageGrid", column.transform);
-		SetLayout(grid, -1f, 500f, -1f, 1f);
-		GridLayoutGroup layout = grid.AddComponent<GridLayoutGroup>();
-		layout.padding = new RectOffset(4, 4, 4, 4);
-		layout.spacing = new Vector2(8f, 8f);
-		layout.cellSize = new Vector2(155f, 158f);
-		layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		layout.constraintCount = 5;
-		int start = _infiniteStoragePage * 15;
-		int end = Math.Min(start + 15, entries.Count);
-		for (int i = start; i < end; i++)
-		{
-			VirtualStorageEntry entry = entries[i];
-			_infiniteStorageAssetsById.TryGetValue(entry.AssetId, out ItemAsset asset);
-			CreateInfiniteStorageCard(grid.transform, entry, asset);
-		}
-	}
-
-	private void CreateInfiniteStorageCard(Transform parent, VirtualStorageEntry entry, ItemAsset asset)
-	{
-		string displayName = asset == null ? "未解析物品 ID " + entry.AssetId : GetItemDisplayName(asset);
-		InfiniteStorageCardMetadata metadata = ItemInstanceSemantics.BuildCardMetadata(asset, entry);
-		string tooltip = asset == null ? "当前资产未解析；条目保持保守状态隔离。" : AssetHoverDetailsBuilder.BuildItem(asset, displayName, asset.itemDescription, _ammoCompatibilityIndex, _plugin.Catalog.Items);
-		Button button = CreateButton(parent, string.Empty, delegate
-		{
-			_giveAmount = (byte)ParseClamped(_itemAmountText, 1, 255, _giveAmount);
-			_itemAmountText = _giveAmount.ToString();
-			UpdateItemAmountInput();
-			WithdrawInfiniteStorageEntry(entry, _giveAmount);
-		}, 155f, 158f, CheatMenuStyle.Surface, tooltip: tooltip + "\n\n点击取出当前数量（" + metadata.WithdrawUnitLabel + "）。", delayTooltip: true);
-		AddCardContents(button.transform, displayName, metadata.Text, () => asset == null ? null : _plugin.Icons.GetItemIcon(asset), isVehicle: false);
-		Button withdrawAll = CreateButton(button.transform, "取全部", delegate
-		{
-			WithdrawInfiniteStorageEntry(entry, entry.StoredUnitCount);
-		}, 62f, 26f, CheatMenuStyle.Accent, 10, "取出此条目的全部单位。", delayTooltip: true);
-		RectTransform rect = withdrawAll.GetComponent<RectTransform>();
-		Vector2 anchor = (rect.anchorMax = new Vector2(1f, 1f));
-		rect.anchorMin = anchor;
-		rect.pivot = new Vector2(1f, 1f);
-		rect.anchoredPosition = new Vector2(-5f, -5f);
-		rect.sizeDelta = new Vector2(62f, 26f);
-		withdrawAll.transform.SetAsLastSibling();
-	}
-
-	private void WithdrawInfiniteStorageEntry(VirtualStorageEntry entry, long amount)
-	{
-		long moved = _plugin.InfiniteStorage.Withdraw(entry.EntryId, amount);
-		string unit = entry.UnitKind == StackUnitKind.ResourceUnits ? "单位" : "个完整物品";
-		SetStatus(moved > 0 ? $"已取出 {moved:N0} {unit}。" : "原生背包没有可用空间。", 3f, StatusKind.Info);
-		RebuildInfiniteStoragePage();
-	}
-
-	private IReadOnlyList<VirtualStorageEntry> GetFilteredInfiniteStorageEntries()
-	{
-		List<VirtualStorageEntry> results = new List<VirtualStorageEntry>();
-		foreach (VirtualStorageEntry entry in _plugin.InfiniteStorage.Entries)
-		{
-			if (_infiniteStorageAssetsById.TryGetValue(entry.AssetId, out ItemAsset asset) && MatchesItemForFilter(asset, _infiniteStorageFilter))
-			{
-				results.Add(entry);
-			}
-		}
-		return results;
-	}
-
-	private void RebuildInfiniteStorageAssetIndex()
-	{
-		_infiniteStorageAssetsById.Clear();
-		foreach (ItemAsset asset in _plugin.Catalog.Items)
-		{
-			if (asset != null && !_infiniteStorageAssetsById.ContainsKey(asset.id))
-			{
-				_infiniteStorageAssetsById.Add(asset.id, asset);
-			}
-		}
-	}
-
-	private void BuildWorkshopLocalizationPanel(Transform panel)
-	{
-		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
-		if (workshopLocalization == null)
-		{
-			CreateEmptyState(panel, "翻译服务不可用", "插件尚未完成 Workshop 翻译服务初始化。");
-			return;
-		}
-		_ = workshopLocalization.Progress;
-		CreateLabel(panel, "原版与 Workshop 资产翻译", 17, CheatMenuStyle.Text);
-		CreateLabel(panel, "只读取当前已加载的原版与 Workshop 资产；不会修改原始文件、.dat 或 AssetBundle。已有其他汉化时会优先保留原生汉化。", 12, CheatMenuStyle.Muted);
-		_workshopLocalizationStateText = CreateLabel(panel, string.Empty, 13, CheatMenuStyle.Text);
-		_workshopLocalizationSummaryText = CreateLabel(panel, string.Empty, 13, CheatMenuStyle.Muted);
-		_workshopLocalizationApiText = CreateLabel(panel, string.Empty, 12, CheatMenuStyle.Muted);
-		RefreshWorkshopLocalizationPageValues();
-		GameObject gameObject = CreateRow(panel, 40f, 7f);
-		CreateLabel(gameObject.transform, "API 设置", 13, CheatMenuStyle.Text, 75f);
-		Button apiButton = null;
-		apiButton = CreateButton(gameObject.transform, MachineTranslationSettings.GetDisplayName(workshopLocalization.Settings.ApiProtocol) + " ▼", delegate
-		{
-			ToggleWorkshopProtocolDrawer(apiButton);
-		}, 0f, 34f, CheatMenuStyle.Surface, 12, "选择协议并在下方输入 Endpoint、API Key 和 Model。");
-		SetLayout(apiButton.gameObject, -1f, -1f, 1f);
-		CreateButton(gameObject.transform, "开始翻译（未缓存）", StartWorkshopTranslationFromUi, 170f, 34f, CheatMenuStyle.Accent, 12, "扫描当前已加载资产后，翻译缓存中没有的文本；填写配置后点击这里开始。");
-		CreateButton(gameObject.transform, "停止翻译", StopWorkshopTranslationFromUi, 105f, 34f, CheatMenuStyle.Danger, 12, "停止当前翻译任务；已经写入缓存的译文会保留。");
-		bool isCloudProvider = workshopLocalization.Settings.IsCloudProvider;
-		bool isLargeModelProvider = workshopLocalization.Settings.IsLargeModelProvider;
-		bool num = string.Equals(workshopLocalization.Settings.ApiProtocol, "Ollama", StringComparison.OrdinalIgnoreCase);
-		bool flag = true;
-		bool flag2 = !num | isCloudProvider;
-		bool requiresSecretKey = workshopLocalization.Settings.RequiresSecretKey;
-		bool requiresRegion = workshopLocalization.Settings.RequiresRegion;
-		bool flag3 = string.Equals(workshopLocalization.Settings.ApiProtocol, "TencentTmt", StringComparison.OrdinalIgnoreCase) || string.Equals(workshopLocalization.Settings.ApiProtocol, "GoogleCloud", StringComparison.OrdinalIgnoreCase);
-		if (flag)
-		{
-			CreateLabeledInput(panel, "接口地址", workshopLocalization.Settings.Endpoint, delegate(string value)
-			{
-				_plugin.SetWorkshopLocalizationEndpoint(value);
-			}, 0f, password: false, commitOnEndEdit: true, 0f, "请求发送到哪里。大模型通常是 Chat/Message 地址；云翻译使用供应商的 REST 地址。可保留默认值，也可以改成代理地址。");
-		}
-		if (flag2)
-		{
-			CreateLabeledInput(panel, isCloudProvider ? "API Key / 应用 ID" : "API Key", workshopLocalization.Settings.ApiKey, delegate(string value)
-			{
-				_plugin.SetWorkshopLocalizationApiKey(value);
-			}, 0f, password: true, commitOnEndEdit: true, 0f, isCloudProvider ? "云翻译供应商发给你的访问密钥或应用 ID。" : "大模型平台发给你的 API Key；不会写入日志。\nOllama 本地服务通常不需要填写。");
-		}
-		if (requiresSecretKey)
-		{
-			CreateLabeledInput(panel, "Secret Key / 密钥", workshopLocalization.Settings.SecretKey, delegate(string value)
-			{
-				_plugin.SetWorkshopLocalizationSecretKey(value);
-			}, 0f, password: true, commitOnEndEdit: true, 0f, "部分云翻译供应商需要的第二段密钥：腾讯云 SecretKey、百度 Secret Key 或有道密钥。");
-		}
-		if (requiresRegion)
-		{
-			CreateLabeledInput(panel, "区域", workshopLocalization.Settings.Region, delegate(string value)
-			{
-				_plugin.SetWorkshopLocalizationRegion(value);
-			}, 0f, password: false, commitOnEndEdit: true, 0f, "云服务资源所在区域。例如腾讯云 ap-guangzhou、微软 Translator 的资源区域。");
-		}
-		if (flag3)
-		{
-			CreateLabeledInput(panel, "项目 ID", workshopLocalization.Settings.ProjectId, delegate(string value)
-			{
-				_plugin.SetWorkshopLocalizationProjectId(value);
-			}, 0f, password: false, commitOnEndEdit: true, 0f, "云项目或资源的数字/字符串 ID；没有要求的供应商可以留空。");
-		}
-		if (isLargeModelProvider)
-		{
-			CreateLabeledInput(panel, "模型名称", workshopLocalization.Settings.Model, delegate(string value)
-			{
-				_plugin.SetWorkshopLocalizationModel(value);
-			}, 0f, password: false, commitOnEndEdit: true, 0f, "大模型平台上的模型名称，例如 deepseek-chat、gpt-4o-mini、claude-3-5-sonnet。云机器翻译通常不需要填写。");
-		}
-		CreateLabeledInput(panel, "每批翻译数量", workshopLocalization.Settings.BatchSize.ToString(), delegate(string value)
-		{
-			_plugin.SetWorkshopLocalizationBatchSize(value);
-		}, 0f, password: false, commitOnEndEdit: true, 0f, "每次发送给翻译接口的文本数量，范围 1-50。数量越小越稳，但请求次数更多；修改后下次翻译任务生效。");
-		GameObject gameObject2 = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(gameObject2.transform, "启用缓存译文", workshopLocalization.Enabled, delegate(bool value)
-		{
-			_plugin.SetWorkshopLocalizationEnabled(value);
-		}, "关闭后立即回退到原始 Getter 文本。");
-		CreateToggleAction(gameObject2.transform, "应用到原生显示", workshopLocalization.ApplyToNativeUi, delegate(bool value)
-		{
-			_plugin.SetWorkshopLocalizationApplyToNativeUi(value);
-		}, "覆盖 ItemAsset、VehicleAsset 和 Workshop Action 的显示 Getter。");
-		GameObject gameObject3 = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(gameObject3.transform, "资产刷新后自动扫描", workshopLocalization.AutoScanOnAssetsRefreshed, delegate(bool value)
-		{
-			_plugin.SetWorkshopLocalizationAutoScan(value);
-		});
-		CreateToggleAction(gameObject3.transform, "自动翻译未缓存", workshopLocalization.AutoTranslateMissing, delegate(bool value)
-		{
-			_plugin.SetWorkshopLocalizationAutoTranslate(value);
-		}, "需要已配置 API；默认关闭以避免意外费用。");
-		GameObject gameObject4 = CreateRow(panel, 40f, 7f);
-		CreateButton(gameObject4.transform, "扫描并应用缓存", delegate
-		{
-			_plugin.ScanWorkshopLocalization();
-			RefreshWorkshopLocalizationPage();
-		}, 0f, 38f, CheatMenuStyle.Accent);
-		CreateButton(gameObject4.transform, "重新加载缓存", delegate
-		{
-			_plugin.ReloadWorkshopLocalizationCache();
-			RefreshWorkshopLocalizationPage();
-		}, 0f, 38f, CheatMenuStyle.Surface);
-		GameObject gameObject5 = CreateRow(panel, 40f, 7f);
-		CreateButton(gameObject5.transform, "翻译未缓存文本", delegate
-		{
-			bool flag4 = _plugin.TranslateWorkshopLocalization(force: false);
-			RefreshWorkshopLocalizationPage();
-			SetStatus(flag4 ? "Workshop 未缓存文本翻译已启动。" : "未能启动 Workshop 翻译，请检查 API 配置或当前任务状态。", 4f, (!flag4) ? StatusKind.Warning : StatusKind.Info);
-		}, 0f, 38f, CheatMenuStyle.Surface);
-		CreateButton(gameObject5.transform, "强制重译当前文本", delegate
-		{
-			bool flag4 = _plugin.TranslateWorkshopLocalization(force: true);
-			RefreshWorkshopLocalizationPage();
-			SetStatus(flag4 ? "Workshop 强制重译已启动。" : "未能启动 Workshop 强制重译，请检查 API 配置或当前任务状态。", 4f, (!flag4) ? StatusKind.Warning : StatusKind.Info);
-		}, 0f, 38f, CheatMenuStyle.Surface);
-		CreateButton(gameObject5.transform, "取消", delegate
-		{
-			_plugin.CancelWorkshopLocalization();
-			RefreshWorkshopLocalizationPage();
-		}, 0f, 38f, CheatMenuStyle.Danger);
-		CreateLabel(panel, "缓存文件：" + workshopLocalization.CachePath, 11, CheatMenuStyle.Muted);
-	}
-
-	private void ToggleWorkshopProtocolDrawer(Button trigger)
-	{
-		if (_workshopProtocolDrawerOpen)
-		{
-			HideWorkshopProtocolDrawer();
-			return;
-		}
-		_workshopProtocolDrawerOpen = true;
-		_workshopProtocolTriggerButton = trigger;
-		BuildWorkshopProtocolDrawer();
-	}
-
-	private void BuildWorkshopProtocolDrawer()
-	{
-		if (_workshopProtocolTriggerButton == null || _root == null || _plugin.WorkshopLocalization == null)
-		{
-			return;
-		}
-		if (_workshopProtocolDrawerRoot != null)
-		{
-			QueueForDestroy(_workshopProtocolDrawerRoot);
-		}
-		_workshopProtocolDrawerRoot = CreateObject("WorkshopProtocolDrawer", _root.transform, typeof(Image));
-		_workshopProtocolDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		Outline outline = _workshopProtocolDrawerRoot.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.InputBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		_workshopProtocolDrawerPopup = _workshopProtocolDrawerRoot.GetComponent<RectTransform>();
-		RectTransform workshopProtocolDrawerPopup = _workshopProtocolDrawerPopup;
-		Vector2 anchorMin = (_workshopProtocolDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
-		workshopProtocolDrawerPopup.anchorMin = anchorMin;
-		_workshopProtocolDrawerPopup.pivot = new Vector2(0.5f, 1f);
-		string[] supportedProtocols = MachineTranslationSettings.SupportedProtocols;
-		int num = Mathf.CeilToInt((float)supportedProtocols.Length / 3f);
-		_workshopProtocolDrawerPopup.sizeDelta = new Vector2(356f, 12f + (float)num * 28f + (float)Math.Max(0, num - 1) * 4f);
-		GridLayoutGroup gridLayoutGroup = _workshopProtocolDrawerRoot.AddComponent<GridLayoutGroup>();
-		gridLayoutGroup.padding = new RectOffset(6, 6, 6, 6);
-		gridLayoutGroup.spacing = new Vector2(4f, 4f);
-		gridLayoutGroup.cellSize = new Vector2(112f, 28f);
-		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		gridLayoutGroup.constraintCount = 3;
-		gridLayoutGroup.childAlignment = TextAnchor.UpperLeft;
-		string apiProtocol = _plugin.WorkshopLocalization.Settings.ApiProtocol;
-		string[] array = supportedProtocols;
-		foreach (string text in array)
-		{
-			string capturedProtocol = text;
-			string label = PluginLocalization.Translate(MachineTranslationSettings.GetDisplayName(capturedProtocol));
-			SetLayout(CreateButton(_workshopProtocolDrawerRoot.transform, label, delegate
-			{
-				_plugin.SetWorkshopLocalizationApiProtocol(capturedProtocol);
-				HideWorkshopProtocolDrawer();
-				RefreshWorkshopLocalizationPage();
-			}, 0f, 28f, string.Equals(capturedProtocol, apiProtocol, StringComparison.OrdinalIgnoreCase) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 10, capturedProtocol).gameObject, -1f, 28f);
-		}
-		Canvas.ForceUpdateCanvases();
-		LayoutRebuilder.ForceRebuildLayoutImmediate(_workshopProtocolDrawerPopup);
-		_workshopProtocolDrawerRoot.transform.SetAsLastSibling();
-		PositionWorkshopProtocolDrawer();
-	}
-
-	private void MaintainWorkshopProtocolDrawer()
-	{
-		if (!(_workshopProtocolDrawerRoot == null))
-		{
-			PositionWorkshopProtocolDrawer();
-			if (Input.GetMouseButtonDown(0) && _workshopProtocolTriggerButton != null && _workshopProtocolDrawerPopup != null && !RectTransformUtility.RectangleContainsScreenPoint(_workshopProtocolDrawerPopup, Input.mousePosition, null) && !RectTransformUtility.RectangleContainsScreenPoint(_workshopProtocolTriggerButton.GetComponent<RectTransform>(), Input.mousePosition, null))
-			{
-				HideWorkshopProtocolDrawer();
-			}
-		}
-	}
-
-	private void PositionWorkshopProtocolDrawer()
-	{
-		if (!(_workshopProtocolTriggerButton == null) && !(_workshopProtocolDrawerPopup == null) && !(_root == null))
-		{
-			RectTransform component = _workshopProtocolTriggerButton.GetComponent<RectTransform>();
-			RectTransform component2 = _root.GetComponent<RectTransform>();
-			Vector3[] array = new Vector3[4];
-			component.GetWorldCorners(array);
-			Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(null, array[0]);
-			Vector2 screenPoint2 = RectTransformUtility.WorldToScreenPoint(null, array[1]);
-			Vector2 screenPoint3 = RectTransformUtility.WorldToScreenPoint(null, array[2]);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint, null, out var localPoint);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint2, null, out var localPoint2);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint3, null, out var localPoint3);
-			Vector2 sizeDelta = _workshopProtocolDrawerPopup.sizeDelta;
-			float value = (localPoint.x + localPoint3.x) * 0.5f;
-			bool flag = localPoint.y - component2.rect.yMin < sizeDelta.y + 8f;
-			_workshopProtocolDrawerPopup.pivot = (flag ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f));
-			float min = component2.rect.xMin + sizeDelta.x * 0.5f + 8f;
-			float max = component2.rect.xMax - sizeDelta.x * 0.5f - 8f;
-			float x = Mathf.Clamp(value, min, max);
-			float y = (flag ? localPoint2.y : localPoint.y);
-			_workshopProtocolDrawerPopup.anchoredPosition = new Vector2(x, y);
-		}
-	}
-
-	private void HideWorkshopProtocolDrawer()
-	{
-		_workshopProtocolDrawerOpen = false;
-		if (_workshopProtocolDrawerRoot != null)
-		{
-			QueueForDestroy(_workshopProtocolDrawerRoot);
-		}
-		_workshopProtocolDrawerRoot = null;
-		_workshopProtocolDrawerPopup = null;
-		_workshopProtocolTriggerButton = null;
-	}
-
-	private void StartWorkshopTranslationFromUi()
-	{
-		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
-		if (workshopLocalization != null && workshopLocalization.IsTranslationRunning)
-		{
-			SetStatus("翻译正在进行中，请不要重复点击开始翻译。", 5f, StatusKind.Info);
-			return;
-		}
-		_plugin.ScanWorkshopLocalization(allowAutoTranslate: false);
-		bool num = _plugin.TranslateWorkshopLocalization(force: false);
-		WorkshopLocalizationProgress workshopLocalizationProgress = _plugin.WorkshopLocalization?.Progress;
-		bool flag = workshopLocalizationProgress != null && workshopLocalizationProgress.State == WorkshopLocalizationState.Translating;
-		RefreshWorkshopLocalizationPage();
-		if (num | flag)
-		{
-			SetStatus("已开始翻译未缓存文本。", 5f, StatusKind.Info);
-			return;
-		}
-		string text = workshopLocalizationProgress?.Message;
-		string text2 = ((text == "translation API is not configured") ? "未能开始翻译：当前供应商配置不完整。" : ((!(text == "translation cancelled")) ? (string.IsNullOrWhiteSpace(workshopLocalizationProgress?.Message) ? "未能开始翻译：请检查当前供应商配置或任务状态。" : ("未能开始翻译：" + workshopLocalizationProgress.Message)) : "翻译任务已取消。"));
-		string message = text2;
-		SetStatus(message, 5f, StatusKind.Warning);
-	}
-
-	private void StopWorkshopTranslationFromUi()
-	{
-		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
-		if (workshopLocalization == null || !workshopLocalization.IsTranslationRunning)
-		{
-			SetStatus("当前没有正在运行的翻译任务。", 5f, StatusKind.Warning);
-			return;
-		}
-		_plugin.CancelWorkshopLocalization();
-		RefreshWorkshopLocalizationPage();
-		SetStatus("已请求停止翻译；已完成并写入缓存的译文会保留。", 5f, StatusKind.Warning);
-	}
-
-	private void RefreshWorkshopLocalizationPage()
-	{
-		if (_activeToolsTab == ToolsTab.Translation)
-		{
-			ReplaceContentHost();
-			BuildToolsTab();
-		}
-	}
-
-	private void RefreshWorkshopLocalizationPageValues()
-	{
-		WorkshopLocalizationService workshopLocalization = _plugin.WorkshopLocalization;
-		if (workshopLocalization == null)
-		{
-			return;
-		}
-		WorkshopLocalizationProgress progress = workshopLocalization.Progress;
-		string arg = progress.State switch
-		{
-			WorkshopLocalizationState.Scanning => "扫描中",
-			WorkshopLocalizationState.Translating => "翻译中",
-			WorkshopLocalizationState.Cancelled => "已取消",
-			WorkshopLocalizationState.Error => "错误",
-			_ => (!string.Equals(progress.Message, "translation complete", StringComparison.Ordinal)) ? ((!string.Equals(progress.Message, "no uncached text", StringComparison.Ordinal)) ? "空闲" : "完成") : "完成",
-		};
-		if (_workshopLocalizationStateText != null)
-		{
-			_workshopLocalizationStateText.text = PluginLocalization.Translate($"状态：{arg}；已扫描物品 {progress.ItemsScanned} / 载具 {progress.VehiclesScanned}");
-			Text workshopLocalizationStateText = _workshopLocalizationStateText;
-			Color color;
-			switch (progress.State)
-			{
-			case WorkshopLocalizationState.Scanning:
-			case WorkshopLocalizationState.Translating:
-				color = CheatMenuStyle.Accent;
-				break;
-			case WorkshopLocalizationState.Error:
-				color = CheatMenuStyle.Danger;
-				break;
-			case WorkshopLocalizationState.Cancelled:
-				color = CheatMenuStyle.Warning;
-				break;
-			default:
-				color = ((!string.Equals(progress.Message, "translation complete", StringComparison.Ordinal)) ? ((!string.Equals(progress.Message, "no uncached text", StringComparison.Ordinal)) ? CheatMenuStyle.Text : CheatMenuStyle.Success) : CheatMenuStyle.Success);
-				break;
-			}
-			workshopLocalizationStateText.color = color;
-		}
-		if (_workshopLocalizationSummaryText != null)
-		{
-			_workshopLocalizationSummaryText.text = PluginLocalization.Translate($"文本总数 {progress.TotalTexts} · 缓存命中 {progress.CacheHits} · 中文跳过 {progress.SkippedTargetLanguageTexts} · 待翻译 {progress.PendingTranslations} · 完成 {progress.CompletedTranslations} · 失败 {progress.FailedTranslations}");
-		}
-		if (_workshopLocalizationApiText != null)
-		{
-			string text = (workshopLocalization.ApiConfigured ? "已配置" : "未配置");
-			_workshopLocalizationApiText.text = PluginLocalization.Translate("翻译接口：" + text + "；供应商：" + MachineTranslationSettings.GetDisplayName(workshopLocalization.Settings.ApiProtocol) + "；目标语言：" + workshopLocalization.Settings.TargetLanguage + "；模型：" + (string.IsNullOrWhiteSpace(workshopLocalization.Settings.Model) ? "未填写" : workshopLocalization.Settings.Model));
-		}
-	}
-
-	private void BuildInventoryArrangePanel(Transform panel)
-	{
-		InventoryArrangeSettings inventoryArrangeSettings = _plugin.GetInventoryArrangeSettings();
-		string text = PluginLocalization.Translate(InventorySortRegistry.GetDisplayName(inventoryArrangeSettings.Preset));
-		CreateLabel(panel, "安全背包整理", 17, CheatMenuStyle.Text);
-		CreateLabel(panel, "排序预设：" + text + "；默认禁止自动掉落。", 13, CheatMenuStyle.Muted);
-		GameObject gameObject = CreateRow(panel, 44f, 8f);
-		CreateLabel(gameObject.transform, "排序预设", 14, CheatMenuStyle.Text, 110f);
-		Button presetButton = null;
-		presetButton = CreateButton(gameObject.transform, text + " ▼", delegate
-		{
-			ToggleInventoryPresetDrawer(presetButton);
-		}, 0f, 40f, CheatMenuStyle.Surface, 13, "点击后从列表直接选择一个整理预设，预设的具体规则可将鼠标移到选项上查看。");
-		SetLayout(presetButton.gameObject, -1f, -1f, 1f);
-		GameObject scopeRow = CreateRow(panel, 44f, 8f);
-		CreateLabel(scopeRow.transform, "整理范围", 14, CheatMenuStyle.Text, 110f);
-		Button scopeButton = null;
-		scopeButton = CreateButton(scopeRow.transform, "配置随身页 ▼", delegate
-		{
-			ToggleInventoryScopeDrawer(scopeButton);
-		}, 0f, 40f, CheatMenuStyle.Surface, 13, "分别开启或关闭背包、背心、上衣和裤子储物页；关闭的页面不会参与整理。");
-		SetLayout(scopeButton.gameObject, -1f, -1f, 1f);
-		if (inventoryArrangeSettings.Preset == InventorySortPreset.Custom)
-		{
-			CreateLabel(panel, "自定义排序链（最多 5 项）：Key:Direction,Key:Direction", 12, CheatMenuStyle.Muted);
-			CreateInput(panel, _plugin.InventoryArrangeCustomKeys, delegate(string value)
-			{
-				_plugin.SetInventoryArrangeCustomKeys(value);
-			}, 0f, 1f);
-		}
-		GameObject gameObject2 = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(gameObject2.transform, "自动旋转", inventoryArrangeSettings.AutoRotate, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeAutoRotate(value);
-			SetStatus(value ? "整理将允许自动旋转物品。" : "整理已禁止自动旋转物品。", 4f, StatusKind.Info);
-		}, "允许物品在寻找位置时旋转 90°；关闭后保持原旋转。");
-		CreateToggleAction(gameObject2.transform, "允许跨页", inventoryArrangeSettings.AllowCrossPage, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeCrossPage(value);
-			SetStatus(value ? "整理将允许在当前范围内跨页安置。" : "整理将保持原页范围。", 4f, StatusKind.Info);
-		}, "允许在当前整理范围的随身页之间寻找空位；关闭后保持原页范围。");
-		GameObject gameObject3 = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(gameObject3.transform, "保护装备", inventoryArrangeSettings.ProtectEquipped, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeProtectEquipped(value);
-			SetStatus(value ? "已保护当前装备物品。" : "将允许整理当前装备物品。", 4f, StatusKind.Info);
-		}, "保护当前装备物品；开启时不会移除或重排它。");
-		CreateToggleAction(gameObject3.transform, "固定热键物品", inventoryArrangeSettings.FixHotkeyItems, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeFixHotkeyItems(value);
-			SetStatus(value ? "热键绑定物品将保持在原坐标。" : "热键绑定物品会随整理移动并更新坐标。", 4f, StatusKind.Info);
-		}, "开启时固定绑定热键的物品；关闭时整理会同步快捷键到新坐标。");
-		CreateLabel(panel, "安全策略：预检无法完整安置时取消整次操作；不调用自动掉落。", 12, CheatMenuStyle.Warning);
-		CreateLabel(panel, "跨箱集中：打开储物箱时，按住 Ctrl 或 Shift 点击物品，会把同一资产的物品逐件转移到另一侧；目标空间不足时停止，不会丢弃物品。", 12, CheatMenuStyle.Muted);
-		GameObject gameObject4 = CreateRow(panel, 40f, 7f);
-		CreateButton(gameObject4.transform, "预览当前", delegate
-		{
-			ShowInventoryArrangeResult(InventoryArrangeScope.CurrentContext, InventoryArrangeAction.Arrange, preview: true);
-		}, 120f, 34f, CheatMenuStyle.Surface, 13, "只生成移动、归并和跨页摘要，不修改库存。");
-		CreateButton(gameObject4.transform, "整理当前", delegate
-		{
-			ShowInventoryArrangeResult(InventoryArrangeScope.CurrentContext, InventoryArrangeAction.Arrange, preview: false);
-		}, 120f, 34f, CheatMenuStyle.Accent, 13, "整理当前上下文：打开储物箱时整理储物箱，否则整理随身容器。");
-		CreateButton(gameObject4.transform, "整理全部随身", delegate
-		{
-			ShowInventoryArrangeResult(InventoryArrangeScope.AllCarried, InventoryArrangeAction.Arrange, preview: false);
-		}, 150f, 34f, CheatMenuStyle.Accent, 13, "整理所有随身页，不处理当前储物箱；默认保护装备并固定热键物品。");
-		GameObject gameObject5 = CreateRow(panel, 40f, 7f);
-		CreateButton(gameObject5.transform, "仅压缩", delegate
-		{
-			ShowInventoryArrangeResult(InventoryArrangeScope.CurrentContext, InventoryArrangeAction.Compact, preview: false);
-		}, 120f, 34f, CheatMenuStyle.Surface, 13, "只压缩空间并保持相对顺序；不按普通预设重排，自动补弹仍会执行。");
-		CreateButton(gameObject5.transform, "撤销上次整理", ShowInventoryArrangeUndo, 150f, 34f, CheatMenuStyle.Surface, 13, "撤销最近一次成功整理；外部改变库存后撤销会失效。");
-		CreateButton(gameObject5.transform, "仅归并", delegate
-		{
-			ShowInventoryArrangeResult(InventoryArrangeScope.CurrentContext, InventoryArrangeAction.Merge, preview: false);
-		}, 120f, 34f, CheatMenuStyle.Surface, 13, "只归并兼容堆叠，不重排无关物品；弹匣和弹药箱会按兼容组重新分配总弹量。");
-		CreateLabel(gameObject5.transform, "快捷键可在窗口右下角的全局快捷键中设置。", 12, CheatMenuStyle.Muted);
-	}
-
-	private void ToggleInventoryPresetDrawer(Button trigger)
-	{
-		if (_inventoryPresetDrawerOpen)
-		{
-			HideInventoryPresetDrawer();
-			return;
-		}
-		_inventoryPresetDrawerOpen = true;
-		_inventoryPresetTriggerButton = trigger;
-		BuildInventoryPresetDrawer();
-	}
-
-	private void BuildInventoryPresetDrawer()
-	{
-		if (_inventoryPresetTriggerButton == null || _root == null)
-		{
-			return;
-		}
-		if (_inventoryPresetDrawerRoot != null)
-		{
-			QueueForDestroy(_inventoryPresetDrawerRoot);
-		}
-		_inventoryPresetDrawerRoot = CreateObject("InventoryPresetDrawer", _root.transform, typeof(Image));
-		_inventoryPresetDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		Outline outline = _inventoryPresetDrawerRoot.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.InputBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		_inventoryPresetDrawerPopup = _inventoryPresetDrawerRoot.GetComponent<RectTransform>();
-		RectTransform inventoryPresetDrawerPopup = _inventoryPresetDrawerPopup;
-		Vector2 anchorMin = (_inventoryPresetDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
-		inventoryPresetDrawerPopup.anchorMin = anchorMin;
-		_inventoryPresetDrawerPopup.pivot = new Vector2(0.5f, 1f);
-		InventorySortPreset[] availablePresets = InventorySortRegistry.AvailablePresets;
-		int num = Mathf.CeilToInt((float)availablePresets.Length / 3f);
-		_inventoryPresetDrawerPopup.sizeDelta = new Vector2(352f, 12f + (float)num * 28f + (float)Math.Max(0, num - 1) * 4f);
-		GridLayoutGroup gridLayoutGroup = _inventoryPresetDrawerRoot.AddComponent<GridLayoutGroup>();
-		gridLayoutGroup.padding = new RectOffset(6, 6, 6, 6);
-		gridLayoutGroup.spacing = new Vector2(4f, 4f);
-		gridLayoutGroup.cellSize = new Vector2(112f, 28f);
-		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		gridLayoutGroup.constraintCount = 3;
-		gridLayoutGroup.childAlignment = TextAnchor.UpperLeft;
-		InventoryArrangeSettings inventoryArrangeSettings = _plugin.GetInventoryArrangeSettings();
-		InventorySortPreset[] array = availablePresets;
-		foreach (InventorySortPreset inventorySortPreset in array)
-		{
-			InventorySortPreset capturedPreset = inventorySortPreset;
-			string label = PluginLocalization.Translate(InventorySortRegistry.GetDisplayName(capturedPreset));
-			SetLayout(CreateButton(_inventoryPresetDrawerRoot.transform, label, delegate
-			{
-				_plugin.SetInventoryArrangePreset(capturedPreset);
-				HideInventoryPresetDrawer();
-				ReplaceContentHost();
-				BuildToolsTab();
-			}, 0f, 28f, (capturedPreset == inventoryArrangeSettings.Preset) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 10, InventoryPresetTooltip(capturedPreset)).gameObject, -1f, 28f);
-		}
-		Canvas.ForceUpdateCanvases();
-		LayoutRebuilder.ForceRebuildLayoutImmediate(_inventoryPresetDrawerPopup);
-		_inventoryPresetDrawerRoot.transform.SetAsLastSibling();
-		PositionInventoryPresetDrawer();
-	}
-
-	private void MaintainInventoryPresetDrawer()
-	{
-		if (!(_inventoryPresetDrawerRoot == null))
-		{
-			PositionInventoryPresetDrawer();
-			if (Input.GetMouseButtonDown(0) && _inventoryPresetTriggerButton != null && _inventoryPresetDrawerPopup != null && !RectTransformUtility.RectangleContainsScreenPoint(_inventoryPresetDrawerPopup, Input.mousePosition, null) && !RectTransformUtility.RectangleContainsScreenPoint(_inventoryPresetTriggerButton.GetComponent<RectTransform>(), Input.mousePosition, null))
-			{
-				HideInventoryPresetDrawer();
-			}
-		}
-	}
-
-	private void PositionInventoryPresetDrawer()
-	{
-		if (!(_inventoryPresetTriggerButton == null) && !(_inventoryPresetDrawerPopup == null) && !(_root == null))
-		{
-			RectTransform component = _inventoryPresetTriggerButton.GetComponent<RectTransform>();
-			RectTransform component2 = _root.GetComponent<RectTransform>();
-			Vector3[] array = new Vector3[4];
-			component.GetWorldCorners(array);
-			Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(null, array[0]);
-			Vector2 screenPoint2 = RectTransformUtility.WorldToScreenPoint(null, array[1]);
-			Vector2 screenPoint3 = RectTransformUtility.WorldToScreenPoint(null, array[2]);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint, null, out var localPoint);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint2, null, out var localPoint2);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint3, null, out var localPoint3);
-			Vector2 sizeDelta = _inventoryPresetDrawerPopup.sizeDelta;
-			float value = (localPoint.x + localPoint3.x) * 0.5f;
-			bool flag = localPoint.y - component2.rect.yMin < sizeDelta.y + 8f;
-			_inventoryPresetDrawerPopup.pivot = (flag ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f));
-			float min = component2.rect.xMin + sizeDelta.x * 0.5f + 8f;
-			float max = component2.rect.xMax - sizeDelta.x * 0.5f - 8f;
-			float x = Mathf.Clamp(value, min, max);
-			float y = (flag ? localPoint2.y : localPoint.y);
-			_inventoryPresetDrawerPopup.anchoredPosition = new Vector2(x, y);
-		}
-	}
-
-	private void HideInventoryPresetDrawer()
-	{
-		_inventoryPresetDrawerOpen = false;
-		if (_inventoryPresetDrawerRoot != null)
-		{
-			QueueForDestroy(_inventoryPresetDrawerRoot);
-		}
-		_inventoryPresetDrawerRoot = null;
-		_inventoryPresetDrawerPopup = null;
-		_inventoryPresetTriggerButton = null;
-	}
-
-	private void ToggleInventoryScopeDrawer(Button trigger)
-	{
-		if (_inventoryScopeDrawerOpen)
-		{
-			HideInventoryScopeDrawer();
-			return;
-		}
-		_inventoryScopeDrawerOpen = true;
-		_inventoryScopeTriggerButton = trigger;
-		BuildInventoryScopeDrawer();
-	}
-
-	private void BuildInventoryScopeDrawer()
-	{
-		if (_inventoryScopeTriggerButton == null || _root == null)
-		{
-			return;
-		}
-		if (_inventoryScopeDrawerRoot != null)
-		{
-			QueueForDestroy(_inventoryScopeDrawerRoot);
-		}
-		_inventoryScopeDrawerRoot = CreateObject("InventoryScopeDrawer", _root.transform, typeof(Image));
-		_inventoryScopeDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		Outline outline = _inventoryScopeDrawerRoot.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.InputBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		_inventoryScopeDrawerPopup = _inventoryScopeDrawerRoot.GetComponent<RectTransform>();
-		_inventoryScopeDrawerPopup.anchorMin = new Vector2(0.5f, 0.5f);
-		_inventoryScopeDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f);
-		_inventoryScopeDrawerPopup.pivot = new Vector2(0.5f, 1f);
-		_inventoryScopeDrawerPopup.sizeDelta = new Vector2(248f, 218f);
-		VerticalLayoutGroup layout = _inventoryScopeDrawerRoot.AddComponent<VerticalLayoutGroup>();
-		layout.padding = new RectOffset(8, 8, 8, 8);
-		layout.spacing = 4f;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = true;
-		layout.childForceExpandHeight = false;
-		Text title = CreateLabel(_inventoryScopeDrawerRoot.transform, "选择参与整理的随身页", 13, CheatMenuStyle.Text);
-		SetLayout(title.gameObject, -1f, 24f, 1f);
-		InventoryArrangeSettings settings = _plugin.GetInventoryArrangeSettings();
-		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "背包", settings.IncludeBackpackPage, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeIncludeBackpackPage(value);
-			SetStatus(value ? "背包页已纳入整理范围。" : "背包页已排除出整理范围。", 4f, StatusKind.Info);
-		}, "开启后整理背包储物页；关闭后该页物品和位置保持不变。");
-		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "背心", settings.IncludeVestPage, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeIncludeVestPage(value);
-			SetStatus(value ? "背心页已纳入整理范围。" : "背心页已排除出整理范围。", 4f, StatusKind.Info);
-		}, "开启后整理背心储物页；关闭后该页物品和位置保持不变。");
-		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "上衣", settings.IncludeShirtPage, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeIncludeShirtPage(value);
-			SetStatus(value ? "上衣页已纳入整理范围。" : "上衣页已排除出整理范围。", 4f, StatusKind.Info);
-		}, "开启后整理上衣储物页；关闭后该页物品和位置保持不变。");
-		CreateToggleAction(_inventoryScopeDrawerRoot.transform, "裤子", settings.IncludePantsPage, delegate(bool value)
-		{
-			_plugin.SetInventoryArrangeIncludePantsPage(value);
-			SetStatus(value ? "裤子页已纳入整理范围。" : "裤子页已排除出整理范围。", 4f, StatusKind.Info);
-		}, "开启后整理裤子储物页；关闭后该页物品和位置保持不变。");
-		Canvas.ForceUpdateCanvases();
-		LayoutRebuilder.ForceRebuildLayoutImmediate(_inventoryScopeDrawerPopup);
-		_inventoryScopeDrawerRoot.transform.SetAsLastSibling();
-		PositionInventoryScopeDrawer();
-	}
-
-	private void MaintainInventoryScopeDrawer()
-	{
-		if (_inventoryScopeDrawerRoot != null)
-		{
-			PositionInventoryScopeDrawer();
-			if (Input.GetMouseButtonDown(0) && _inventoryScopeTriggerButton != null && _inventoryScopeDrawerPopup != null && !RectTransformUtility.RectangleContainsScreenPoint(_inventoryScopeDrawerPopup, Input.mousePosition, null) && !RectTransformUtility.RectangleContainsScreenPoint(_inventoryScopeTriggerButton.GetComponent<RectTransform>(), Input.mousePosition, null))
-			{
-				HideInventoryScopeDrawer();
-			}
-		}
-	}
-
-	private void PositionInventoryScopeDrawer()
-	{
-		if (_inventoryScopeTriggerButton != null && _inventoryScopeDrawerPopup != null && _root != null)
-		{
-			RectTransform trigger = _inventoryScopeTriggerButton.GetComponent<RectTransform>();
-			RectTransform root = _root.GetComponent<RectTransform>();
-			Vector3[] corners = new Vector3[4];
-			trigger.GetWorldCorners(corners);
-			Vector2 bottom = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
-			Vector2 top = RectTransformUtility.WorldToScreenPoint(null, corners[1]);
-			Vector2 rightTop = RectTransformUtility.WorldToScreenPoint(null, corners[2]);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(root, bottom, null, out var localBottom);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(root, top, null, out var localTop);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(root, rightTop, null, out var localRightTop);
-			Vector2 size = _inventoryScopeDrawerPopup.sizeDelta;
-			float centerX = (localBottom.x + localRightTop.x) * 0.5f;
-			bool placeBelow = localBottom.y - root.rect.yMin < size.y + 8f;
-			_inventoryScopeDrawerPopup.pivot = placeBelow ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f);
-			float minX = root.rect.xMin + size.x * 0.5f + 8f;
-			float maxX = root.rect.xMax - size.x * 0.5f - 8f;
-			float x = Mathf.Clamp(centerX, minX, maxX);
-			float y = placeBelow ? localTop.y : localBottom.y;
-			_inventoryScopeDrawerPopup.anchoredPosition = new Vector2(x, y);
-		}
-	}
-
-	private void HideInventoryScopeDrawer()
-	{
-		_inventoryScopeDrawerOpen = false;
-		if (_inventoryScopeDrawerRoot != null)
-		{
-			QueueForDestroy(_inventoryScopeDrawerRoot);
-		}
-		_inventoryScopeDrawerRoot = null;
-		_inventoryScopeDrawerPopup = null;
-		_inventoryScopeTriggerButton = null;
-	}
-
-	private static string InventoryPresetTooltip(InventorySortPreset preset)
-	{
-		return preset switch
-		{
-			InventorySortPreset.Compatibility => "按类型、占用格数和名称整理，适合平时的一键整理。",
-			InventorySortPreset.Compact => "尽量把物品挤到前面，保持原来的先后顺序；每次整理仍会自动补齐兼容弹匣和弹药箱。",
-			InventorySortPreset.Type => "把同类物品放在一起，例如武器、衣服、食物和工具。",
-			InventorySortPreset.Name => "按物品名称从 A 到 Z 排列，方便按名字找东西。",
-			InventorySortPreset.LargeFirst => "先放大件，再用小件填空位，适合整理占格较大的物品。",
-			InventorySortPreset.SmallFirst => "先放小件，尽量留下连续的大空位。",
-			InventorySortPreset.Quality => "耐久或品质高的物品排在前面。",
-			InventorySortPreset.Rarity => "按稀有度从神话、传奇、史诗、稀有、罕见到普通排列。",
-			InventorySortPreset.StackFill => "相同物品会自动合堆；兼容的半弹匣或弹药箱会重新分配成满的和空的。",
-			InventorySortPreset.Ammo => "剩余弹量多的弹匣或弹药箱排在前面；读不到弹量的物品不会乱改。",
-			InventorySortPreset.Hotkey => "绑定快捷栏的物品优先；开启固定热键物品时，绑定物品不会被移动。",
-			InventorySortPreset.LowMovement => "尽量保持原来的页、位置和旋转，只做必要的整理。",
-			InventorySortPreset.Custom => "按下面输入框里的排序链执行，例如 Name:Descending,Area:Ascending。",
-			_ => "按安全的默认规则整理。",
-		};
-	}
-
-	private void ShowInventoryArrangeResult(InventoryArrangeScope scope, InventoryArrangeAction action, bool preview)
-	{
-		InventoryArrangeResult inventoryArrangeResult = ((!preview) ? _plugin.InventoryArrange?.Execute(scope, action, "工具页") : _plugin.InventoryArrange?.Preview(scope, action));
-		SetStatus(inventoryArrangeResult?.Message ?? "背包整理尚未准备完成。", 6f, (inventoryArrangeResult != null && inventoryArrangeResult.Success) ? StatusKind.Success : StatusKind.Warning);
-	}
-
-	private void ShowInventoryArrangeUndo()
-	{
-		InventoryArrangeResult inventoryArrangeResult = _plugin.InventoryArrange?.Undo();
-		SetStatus(inventoryArrangeResult?.Message ?? "没有可撤销的整理记录。", 6f, (inventoryArrangeResult != null && inventoryArrangeResult.Success) ? StatusKind.Success : StatusKind.Warning);
-	}
 
 	private const int AutoPickupCardPageSize = 10;
 
 	private const int AutoPickupPickerPageSize = 15;
 
-	private void BuildAutoPickupPanel(Transform panel)
-	{
-		AutoPickupFeature feature = _plugin.AutoPickup;
-		if (feature == null)
-		{
-			CreateEmptyState(panel, "自动拾取不可用", "插件尚未完成自动拾取服务初始化。");
-			return;
-		}
-		List<ItemAsset> whitelistAssets = GetFilteredAutoPickupRuleAssets(feature.Rules, ItemFilterRuleAction.Allow);
-		List<ItemAsset> blacklistAssets = GetFilteredAutoPickupRuleAssets(feature.Rules, ItemFilterRuleAction.Deny);
-		int whitelistPageCount = Math.Max(1, Mathf.CeilToInt((float)whitelistAssets.Count / AutoPickupCardPageSize));
-		int blacklistPageCount = Math.Max(1, Mathf.CeilToInt((float)blacklistAssets.Count / AutoPickupCardPageSize));
-		int pageCount = 1 + whitelistPageCount + blacklistPageCount;
-		_autoPickupPage = Mathf.Clamp(_autoPickupPage, 0, pageCount - 1);
-		GameObject pager = CreateRow(panel, 0f, 8f);
-		SetLayout(pager, -1f, 510f, 1f, 0f);
-		GameObject pageBody = CreateObject("AutoPickupPageBody", pager.transform, typeof(Image));
-		pageBody.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-		AddVerticalLayout(pageBody, 8f, new RectOffset(14, 14, 12, 12));
-		SetLayout(pageBody, -1f, -1f, 1f, 1f);
-		AddPageScrollHandler(pageBody, _autoPickupPage, pageCount, delegate(int page)
-		{
-			_autoPickupPage = Mathf.Clamp(page, 0, pageCount - 1);
-			ShowTab(MenuTab.Tools);
-		});
-		pageBody.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-		CreateAutoPickupPageDots(pager.transform, _autoPickupPage, pageCount);
-		if (_autoPickupPage == 0)
-		{
-			BuildAutoPickupSettingsPage(pageBody.transform, feature);
-		}
-		else if (_autoPickupPage <= whitelistPageCount)
-		{
-			BuildAutoPickupRulePage(pageBody.transform, whitelistAssets, _autoPickupPage - 1, whitelistPageCount, ItemFilterRuleAction.Allow);
-		}
-		else
-		{
-			BuildAutoPickupRulePage(pageBody.transform, blacklistAssets, _autoPickupPage - 1 - whitelistPageCount, blacklistPageCount, ItemFilterRuleAction.Deny);
-		}
-	}
-
-	private void CreateAutoPickupPageDots(Transform parent, int page, int pageCount)
-	{
-		GameObject dots = CreateObject("AutoPickupPageDots", parent, typeof(Image));
-		dots.GetComponent<Image>().color = Color.clear;
-		SetLayout(dots, 26f, -1f, 0f, 1f);
-		VerticalLayoutGroup layout = dots.AddComponent<VerticalLayoutGroup>();
-		layout.spacing = 2f;
-		layout.childAlignment = TextAnchor.MiddleCenter;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = false;
-		layout.childForceExpandHeight = false;
-		float dotSize = Mathf.Clamp((480f - Math.Max(0, pageCount - 1) * layout.spacing) / pageCount, 8f, 18f);
-		int fontSize = dotSize >= 12f ? 12 : 8;
-		for (int i = 0; i < pageCount; i++)
-		{
-			Text dot = CreateText(dots.transform, "●", fontSize, i == page ? CheatMenuStyle.AccentBright : CheatMenuStyle.Muted, TextAnchor.MiddleCenter, FontStyle.Normal, localize: false);
-			SetLayout(dot.gameObject, dotSize, dotSize, 0f, 0f);
-		}
-	}
-
-	private void BuildAutoPickupSettingsPage(Transform page, AutoPickupFeature feature)
-	{
-		AutoPickupSettings settings = feature.Settings;
-		AutoPickupRuleDocument document = feature.Rules;
-		AutoPickupDiagnosticsSnapshot diagnostics = feature.Diagnostics;
-		CreateSummaryPanel(page, $"{PluginLocalization.Translate(diagnostics.State)}  ·  候选 {diagnostics.CandidateCount}  ·  成功 {diagnostics.PickedUpCount}  ·  失败 {diagnostics.FailureCount}  ·  重试 {diagnostics.RetryCount}");
-		GameObject switches = CreateRow(page, 40f, 7f);
-		CreateToggleAction(switches.transform, "启用自动拾取", settings.Enabled, delegate(bool value)
-		{
-			_plugin.SetAutoPickupEnabled(value);
-			SetStatus((_plugin.AutoPickup.Settings.Enabled == value) ? (value ? "自动拾取已启用；关闭菜单后开始扫描。" : "自动拾取已关闭。") : "只有进入真正的单人世界后才能启用自动拾取。", 5f, (_plugin.AutoPickup.Settings.Enabled == value) ? StatusKind.Info : StatusKind.Warning);
-		});
-		CreateToggleAction(switches.transform, "菜单打开时暂停", settings.PauseWhenMenuOpen, _plugin.SetAutoPickupPauseWhenMenuOpen);
-		CreateToggleAction(switches.transform, "死亡时暂停", settings.PauseWhenDead, _plugin.SetAutoPickupPauseWhenDead);
-		CreateAutoPickupSlider(page, "拾取距离", settings.Range, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange, "m", _autoPickupRangeDebouncer, _plugin.SetAutoPickupRange);
-		GameObject scheduling = CreateRow(page, 40f, 7f);
-		CreateAutoPickupSlider(scheduling.transform, "扫描频率", settings.FrequencyHz, AutoPickupSettings.MinFrequencyHz, AutoPickupSettings.MaxFrequencyHz, "Hz", _autoPickupFrequencyDebouncer, _plugin.SetAutoPickupFrequency);
-		GameObject dropBlockRow = CreateRow(page, 40f, 8f);
-		CreateLabel(dropBlockRow.transform, "丢弃后禁拾时长", 13, CheatMenuStyle.Text, 120f);
-		InputField dropBlockInput = CreateInput(dropBlockRow.transform, settings.DropBlockMinutes.ToString(CultureInfo.InvariantCulture), delegate(string value)
-		{
-			if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int minutes))
-			{
-				_plugin.SetAutoPickupDropBlockMinutes(minutes);
-			}
-			ShowTab(MenuTab.Tools);
-		}, 92f, 0f, false, true, "玩家丢弃某个物品后，暂时禁止自动拾取同 ID 物品；再次丢弃同 ID 会重新计时。范围 1-1440 分钟，默认 1 分钟。");
-		dropBlockInput.contentType = InputField.ContentType.IntegerNumber;
-		dropBlockInput.characterLimit = 4;
-		CreateLabel(dropBlockRow.transform, "分钟（1-1440）", 12, CheatMenuStyle.Muted, 110f);
-		GameObject qualityFilterRow = CreateRow(page, 40f, 8f);
-		CreateToggleAction(qualityFilterRow.transform, "启用品质过滤", settings.QualityFilterEnabled, _plugin.SetAutoPickupQualityFilterEnabled);
-		CreateLabel(qualityFilterRow.transform, "最低品质", 13, CheatMenuStyle.Text, 72f);
-		InputField qualityInput = CreateInput(qualityFilterRow.transform, settings.MinimumQuality.ToString(CultureInfo.InvariantCulture), delegate(string value)
-		{
-			if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int quality))
-			{
-				_plugin.SetAutoPickupMinimumQuality(quality);
-			}
-			ShowTab(MenuTab.Tools);
-		}, 72f, 0f, false, true, "启用后，自动拾取会忽略品质低于该数值的物品。范围 0-100。");
-		qualityInput.contentType = InputField.ContentType.IntegerNumber;
-		qualityInput.characterLimit = 3;
-		CreateLabel(qualityFilterRow.transform, "品质（0-100）", 12, CheatMenuStyle.Muted, 100f);
-		CreateButton(scheduling.transform, $"每轮 {settings.RequestsPerTick} 个请求", delegate
-		{
-			int value = settings.RequestsPerTick >= AutoPickupSettings.MaxRequestsPerTick ? AutoPickupSettings.MinRequestsPerTick : settings.RequestsPerTick + 1;
-			_plugin.SetAutoPickupRequestsPerTick(value);
-			ShowTab(MenuTab.Tools);
-		}, 150f, 36f, CheatMenuStyle.SurfaceHover, 12, "每次扫描最多发送的原生拾取请求数，范围 1-16。");
-		CreateButton(scheduling.transform, "诊断：" + AutoPickupDiagnosticsLabel(settings.Diagnostics), delegate
-		{
-			AutoPickupDiagnosticsLevel[] values = (AutoPickupDiagnosticsLevel[])Enum.GetValues(typeof(AutoPickupDiagnosticsLevel));
-			int next = (Array.IndexOf(values, settings.Diagnostics) + 1) % values.Length;
-			_plugin.SetAutoPickupDiagnostics(values[next]);
-			ShowTab(MenuTab.Tools);
-		}, 130f, 36f, CheatMenuStyle.SurfaceHover, 12);
-		int whitelistCount = document.Rules.Count(rule => rule.Enabled && rule.Action == ItemFilterRuleAction.Allow && rule.Field == ItemFilterRuleField.AssetId);
-		CreateSection(page, "白名单");
-		GameObject whitelistSummary = CreateRow(page, 38f, 8f);
-		CreateToggleAction(whitelistSummary.transform, "启用白名单", document.Enabled, delegate(bool value)
-		{
-			AutoPickupRuleLoadResult result = _plugin.SetAutoPickupWhitelistEnabled(value);
-			SetStatus(result.Success ? (value ? "白名单已启用；现在只拾取白名单物品。" : "白名单已停用；黑名单仍然生效。") : "保存白名单状态失败：" + result.Error, 4f, result.Success ? StatusKind.Info : StatusKind.Error);
-			ShowTab(MenuTab.Tools);
-		});
-		CreateLabel(whitelistSummary.transform, $"当前 {whitelistCount} 条白名单物品。", 12, CheatMenuStyle.Muted, 170f);
-		CreateButton(whitelistSummary.transform, "管理白名单", delegate
-		{
-			_autoPickupPage = 1;
-			ShowTab(MenuTab.Tools);
-		}, 110f, 34f, CheatMenuStyle.SurfaceHover, 12);
-		CreateButton(whitelistSummary.transform, "添加白名单", ShowAutoPickupWhitelistPicker, 110f, 34f, CheatMenuStyle.Success, 12);
-		CreateSection(page, "黑名单");
-		GameObject blacklistSummary = CreateRow(page, 38f, 8f);
-		int blacklistCount = document.Rules.Count(rule => rule.Enabled && rule.Action == ItemFilterRuleAction.Deny && rule.Field == ItemFilterRuleField.AssetId);
-		CreateLabel(blacklistSummary.transform, $"当前 {blacklistCount} 条黑名单物品；黑名单始终优先。", 12, CheatMenuStyle.Muted);
-		CreateFlexibleSpacer(blacklistSummary.transform);
-		CreateButton(blacklistSummary.transform, "管理黑名单", delegate
-		{
-			_autoPickupPage = GetAutoPickupRuleFirstPage(ItemFilterRuleAction.Deny);
-			ShowTab(MenuTab.Tools);
-		}, 110f, 34f, CheatMenuStyle.SurfaceHover, 12);
-		CreateButton(blacklistSummary.transform, "添加黑名单", ShowAutoPickupBlacklistPicker, 110f, 34f, CheatMenuStyle.Danger, 12);
-	}
-
-	private void BuildAutoPickupRulePage(Transform page, List<ItemAsset> assets, int cardPage, int pageCount, ItemFilterRuleAction ruleAction)
-	{
-		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
-		CreateSection(page, whitelist ? "白名单物品" : "黑名单物品");
-		GameObject header = CreateRow(page, 38f, 8f);
-		CreateLabel(header.transform, whitelist ? "点击物品卡片可取消白名单。" : "点击物品卡片可取消黑名单。", 12, CheatMenuStyle.Muted);
-		CreateFlexibleSpacer(header.transform);
-		CreateButton(header.transform, whitelist ? "添加白名单" : "添加黑名单", whitelist ? ShowAutoPickupWhitelistPicker : ShowAutoPickupBlacklistPicker, 110f, 34f, whitelist ? CheatMenuStyle.Success : CheatMenuStyle.Danger, 12);
-		GameObject searchRow = CreateRow(page, 36f, 7f);
-		CreateLabel(searchRow.transform, "搜索", 12, CheatMenuStyle.Muted, 42f);
-		CreateInput(searchRow.transform, _autoPickupRuleSearch, delegate(string value)
-		{
-			_autoPickupRuleSearch = value ?? string.Empty;
-			_autoPickupPage = GetAutoPickupRuleFirstPage(ruleAction);
-			_autoPickupRuleSearchDebouncer.Schedule(delegate
-			{
-				if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.AutoPickup && _autoPickupPage > 0)
-				{
-					ShowTab(MenuTab.Tools);
-				}
-			});
-		}, 0f, 1f);
-		CreateLabel(searchRow.transform, $"{assets.Count} 件  ·  第 {cardPage + 1}/{pageCount} 页", 11, CheatMenuStyle.Muted, 150f, TextAnchor.MiddleRight);
-		if (assets.Count == 0)
-		{
-			CreateEmptyState(page, whitelist ? "白名单为空" : "黑名单为空", whitelist ? "启用白名单并添加物品后，只会拾取白名单物品。" : "默认不限制物品；点击“添加黑名单”从当前背包选择物品。");
-			return;
-		}
-		GameObject grid = CreateObject("AutoPickupBlacklistGrid", page);
-		SetLayout(grid, -1f, 330f, 1f, 0f);
-		GridLayoutGroup layout = grid.AddComponent<GridLayoutGroup>();
-		layout.padding = new RectOffset(4, 4, 4, 4);
-		layout.spacing = new Vector2(8f, 8f);
-		layout.cellSize = new Vector2(155f, 158f);
-		layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		layout.constraintCount = 5;
-		int start = cardPage * AutoPickupCardPageSize;
-		int end = Math.Min(start + AutoPickupCardPageSize, assets.Count);
-		for (int i = start; i < end; i++)
-		{
-			ItemAsset asset = assets[i];
-			CreateAutoPickupItemCard(grid.transform, asset, ruleAction, isListed: true, delegate { RemoveAutoPickupRule(ruleAction, asset.id); });
-		}
-	}
-
-	private string GetItemDisplayName(ItemAsset asset)
-	{
-		if (asset == null)
-		{
-			return string.Empty;
-		}
-		WorkshopLocalizationService localization = _plugin.WorkshopLocalization;
-		return localization != null && localization.TryGetTranslation(asset, WorkshopTextField.ItemName, out string translation) && !string.IsNullOrWhiteSpace(translation) ? translation : asset.FriendlyName;
-	}
-
-	private List<ItemAsset> GetAutoPickupRuleAssets(AutoPickupRuleDocument document, ItemFilterRuleAction ruleAction)
-	{
-		HashSet<ushort> ids = new HashSet<ushort>();
-		foreach (ItemFilterRule rule in document?.Rules ?? Enumerable.Empty<ItemFilterRule>())
-		{
-			if (rule.Enabled && rule.Action == ruleAction && rule.Field == ItemFilterRuleField.AssetId && ushort.TryParse(rule.Value, NumberStyles.None, CultureInfo.InvariantCulture, out ushort id))
-			{
-				ids.Add(id);
-			}
-		}
-		List<ItemAsset> assets = _plugin.Catalog.Items.Where(asset => asset != null && ids.Contains(asset.id)).ToList();
-		assets.Sort((left, right) => string.Compare(GetItemDisplayName(left), GetItemDisplayName(right), StringComparison.CurrentCultureIgnoreCase));
-		return assets;
-	}
-
-	private List<ItemAsset> GetFilteredAutoPickupRuleAssets(AutoPickupRuleDocument document, ItemFilterRuleAction ruleAction)
-	{
-		List<ItemAsset> assets = GetAutoPickupRuleAssets(document, ruleAction);
-		string query = (_autoPickupRuleSearch ?? string.Empty).Trim();
-		if (query.Length > 0)
-		{
-			assets = assets.Where(asset => AssetCatalog.Matches(asset, GetItemDisplayName(asset), query)).ToList();
-		}
-		return assets;
-	}
-
-	private HashSet<ushort> GetAutoPickupRuleIds(ItemFilterRuleAction ruleAction)
-	{
-		HashSet<ushort> ids = new HashSet<ushort>();
-		foreach (ItemFilterRule rule in _plugin.AutoPickup.Rules.Rules)
-		{
-			if (rule.Enabled && rule.Action == ruleAction && rule.Field == ItemFilterRuleField.AssetId && ushort.TryParse(rule.Value, NumberStyles.None, CultureInfo.InvariantCulture, out ushort id))
-			{
-				ids.Add(id);
-			}
-		}
-		return ids;
-	}
-
-	private int GetAutoPickupRuleFirstPage(ItemFilterRuleAction ruleAction)
-	{
-		if (ruleAction == ItemFilterRuleAction.Allow)
-		{
-			return 1;
-		}
-		int whitelistCount = GetFilteredAutoPickupRuleAssets(_plugin.AutoPickup.Rules, ItemFilterRuleAction.Allow).Count;
-		return 1 + Math.Max(1, Mathf.CeilToInt((float)whitelistCount / AutoPickupCardPageSize));
-	}
-
-	private List<ItemAsset> GetCurrentBackpackAssets()
-	{
-		List<ItemAsset> result = new List<ItemAsset>();
-		HashSet<ushort> seen = new HashSet<ushort>();
-		PlayerInventory inventory = Player.LocalPlayer?.inventory;
-		if (inventory?.items == null)
-		{
-			return result;
-		}
-		for (byte page = PlayerInventory.BACKPACK; page < PlayerInventory.STORAGE && page < inventory.items.Length; page++)
-		{
-			SDG.Unturned.Items items = inventory.items[page];
-			if (items == null)
-			{
-				continue;
-			}
-			for (byte index = 0; index < items.getItemCount(); index++)
-			{
-				ItemAsset asset = items.getItem(index)?.GetAsset();
-				if (asset != null && seen.Add(asset.id))
-				{
-					result.Add(asset);
-				}
-			}
-		}
-		result.Sort((left, right) => string.Compare(GetItemDisplayName(left), GetItemDisplayName(right), StringComparison.CurrentCultureIgnoreCase));
-		return result;
-	}
-
-	private void CreateAutoPickupItemCard(Transform parent, ItemAsset asset, ItemFilterRuleAction ruleAction, bool isListed, System.Action action)
-	{
-		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
-		string displayName = GetItemDisplayName(asset);
-		string tooltip = AssetHoverDetailsBuilder.BuildItem(asset, displayName, asset.itemDescription, _ammoCompatibilityIndex, _plugin.Catalog.Items);
-		Color color = !isListed ? CheatMenuStyle.Surface : (whitelist ? CheatMenuStyle.Success : CheatMenuStyle.Danger);
-		Button button = CreateButton(parent, string.Empty, action, 155f, 158f, color, tooltip: tooltip, delayTooltip: true);
-		string meta = whitelist
-			? (isListed ? $"ID {asset.id}  ·  点击取消白名单" : $"ID {asset.id}  ·  点击加入白名单")
-			: (isListed ? $"ID {asset.id}  ·  点击取消黑名单" : $"ID {asset.id}  ·  点击加入黑名单");
-		AddCardContents(button.transform, displayName, meta, () => _plugin.Icons.GetItemIcon(asset), isVehicle: false);
-	}
-
-	private void AddAutoPickupRule(ItemFilterRuleAction ruleAction, ItemAsset asset)
-	{
-		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
-		if (asset == null || GetAutoPickupRuleIds(ruleAction).Contains(asset.id))
-		{
-			SetStatus(whitelist ? "该物品已经在白名单中。" : "该物品已经在黑名单中。", 3f, StatusKind.Info);
-			return;
-		}
-		AutoPickupRuleDocument document = _plugin.AutoPickup.Rules;
-		List<ItemFilterRule> rules = document.Rules.Select(rule => rule.Clone()).ToList();
-		rules.Add(new ItemFilterRule
-		{
-			Action = ruleAction,
-			Field = ItemFilterRuleField.AssetId,
-			Value = asset.id.ToString(CultureInfo.InvariantCulture)
-		});
-		bool whitelistEnabled = whitelist || document.Enabled;
-		AutoPickupRuleLoadResult result = _plugin.SetAutoPickupRules(whitelistEnabled, whitelistEnabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly, rules);
-		string success = whitelist ? $"已将 {GetItemDisplayName(asset)} 加入白名单。" : $"已将 {GetItemDisplayName(asset)} 加入黑名单。";
-		string failure = (whitelist ? "保存白名单失败：" : "保存黑名单失败：") + result.Error;
-		SetStatus(result.Success ? success : failure, 4f, result.Success ? StatusKind.Success : StatusKind.Error);
-		if (result.Success)
-		{
-			RefreshAutoPickupPanel(ruleAction);
-		}
-	}
-
-	private void RemoveAutoPickupRule(ItemFilterRuleAction ruleAction, ushort assetId)
-	{
-		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
-		AutoPickupRuleDocument document = _plugin.AutoPickup.Rules;
-		List<ItemFilterRule> rules = document.Rules.Where(rule => !(rule.Action == ruleAction && rule.Field == ItemFilterRuleField.AssetId && string.Equals(rule.Value, assetId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))).Select(rule => rule.Clone()).ToList();
-		AutoPickupRuleLoadResult result = _plugin.SetAutoPickupRules(document.Enabled, document.Mode, rules);
-		string success = whitelist ? $"已取消物品 ID {assetId} 的白名单。" : $"已取消物品 ID {assetId} 的黑名单。";
-		string failure = (whitelist ? "保存白名单失败：" : "保存黑名单失败：") + result.Error;
-		SetStatus(result.Success ? success : failure, 4f, result.Success ? StatusKind.Success : StatusKind.Error);
-		if (result.Success)
-		{
-			RefreshAutoPickupPanel(ruleAction);
-		}
-	}
-
-	private void RefreshAutoPickupPanel(ItemFilterRuleAction ruleAction)
-	{
-		_autoPickupPage = GetAutoPickupRuleFirstPage(ruleAction);
-		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.AutoPickup)
-		{
-			ShowTab(MenuTab.Tools);
-		}
-	}
-
-	private void ShowAutoPickupWhitelistPicker()
-	{
-		ShowAutoPickupRulePicker(ItemFilterRuleAction.Allow);
-	}
-
-	private void ShowAutoPickupBlacklistPicker()
-	{
-		ShowAutoPickupRulePicker(ItemFilterRuleAction.Deny);
-	}
-
-	private void ShowAutoPickupRulePicker(ItemFilterRuleAction ruleAction)
-	{
-		_autoPickupPickerAction = ruleAction;
-		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
-		if (_autoPickupBlacklistPickerRoot != null)
-		{
-			_autoPickupBlacklistPickerRoot.SetActive(true);
-			BuildAutoPickupBlacklistPickerContents();
-			return;
-		}
-		HideHoverExplanation();
-		_autoPickupBlacklistPickerRoot = CreateObject("AutoPickupBlacklistPicker", _root.transform, typeof(Image));
-		_autoPickupBlacklistPickerRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.65f);
-		RectTransform rootRect = _autoPickupBlacklistPickerRoot.GetComponent<RectTransform>();
-		rootRect.anchorMin = Vector2.zero;
-		rootRect.anchorMax = Vector2.one;
-		rootRect.offsetMin = Vector2.zero;
-		rootRect.offsetMax = Vector2.zero;
-		GameObject popup = CreateObject("Popup", _autoPickupBlacklistPickerRoot.transform, typeof(Image));
-		popup.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		RectTransform popupRect = popup.GetComponent<RectTransform>();
-		popupRect.anchorMin = new Vector2(0.5f, 0.5f);
-		popupRect.anchorMax = new Vector2(0.5f, 0.5f);
-		popupRect.pivot = new Vector2(0.5f, 0.5f);
-		popupRect.sizeDelta = new Vector2(980f, 760f);
-		VerticalLayoutGroup layout = popup.AddComponent<VerticalLayoutGroup>();
-		layout.padding = new RectOffset(18, 18, 16, 16);
-		layout.spacing = 8f;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = true;
-		layout.childForceExpandHeight = false;
-		GameObject header = CreateRow(popup.transform, 38f, 8f);
-		CreateLabel(header.transform, whitelist ? "从当前背包添加白名单" : "从当前背包添加黑名单", 18, CheatMenuStyle.Text);
-		CreateFlexibleSpacer(header.transform);
-		CreateButton(header.transform, "×", HideAutoPickupBlacklistPicker, 42f, 36f, CheatMenuStyle.Surface, 22);
-		CreateLabel(popup.transform, whitelist ? "物品按 ID 自动去重；点击卡片加入白名单，悬停卡片可查看完整物品详情。" : "物品按 ID 自动去重；点击卡片加入黑名单，悬停卡片可查看完整物品详情。", 12, CheatMenuStyle.Muted);
-		GameObject search = CreateRow(popup.transform, 36f, 7f);
-		CreateLabel(search.transform, "搜索", 12, CheatMenuStyle.Muted, 42f);
-		CreateInput(search.transform, _autoPickupBlacklistPickerSearch, delegate(string value)
-		{
-			_autoPickupBlacklistPickerSearch = value ?? string.Empty;
-			_autoPickupBlacklistPickerPage = 0;
-			BuildAutoPickupBlacklistPickerContents();
-		}, 0f, 1f);
-		_autoPickupBlacklistPickerHost = CreateObject("PickerHost", popup.transform, typeof(Image));
-		_autoPickupBlacklistPickerHost.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-		AddVerticalLayout(_autoPickupBlacklistPickerHost, 8f, new RectOffset(8, 8, 8, 8));
-		SetLayout(_autoPickupBlacklistPickerHost, -1f, 560f, 1f, 0f);
-		_autoPickupBlacklistPickerRoot.transform.SetAsLastSibling();
-		BuildAutoPickupBlacklistPickerContents();
-	}
-
-	private void BuildAutoPickupBlacklistPickerContents()
-	{
-		if (_autoPickupBlacklistPickerHost == null || _plugin.AutoPickup == null)
-		{
-			return;
-		}
-		for (int i = _autoPickupBlacklistPickerHost.transform.childCount - 1; i >= 0; i--)
-		{
-			GameObject child = _autoPickupBlacklistPickerHost.transform.GetChild(i).gameObject;
-			child.SetActive(false);
-			QueueForDestroy(child);
-		}
-		List<ItemAsset> assets = GetCurrentBackpackAssets();
-		ItemFilterRuleAction ruleAction = _autoPickupPickerAction;
-		bool whitelist = ruleAction == ItemFilterRuleAction.Allow;
-		string query = (_autoPickupBlacklistPickerSearch ?? string.Empty).Trim();
-		if (query.Length > 0)
-		{
-			assets = assets.Where(asset => AssetCatalog.Matches(asset, GetItemDisplayName(asset), query)).ToList();
-		}
-		int pageCount = Math.Max(1, Mathf.CeilToInt((float)assets.Count / AutoPickupPickerPageSize));
-		_autoPickupBlacklistPickerPage = Mathf.Clamp(_autoPickupBlacklistPickerPage, 0, pageCount - 1);
-		GameObject header = CreateRow(_autoPickupBlacklistPickerHost.transform, 30f, 6f);
-		CreateLabel(header.transform, $"当前背包去重后 {assets.Count} 件  ·  第 {_autoPickupBlacklistPickerPage + 1}/{pageCount} 页", 11, CheatMenuStyle.Muted);
-		if (assets.Count == 0)
-		{
-			CreateEmptyState(_autoPickupBlacklistPickerHost.transform, "当前背包没有匹配物品。", "请先进入单人世界并确认物品在随身背包中。");
-			return;
-		}
-		GameObject grid = CreateObject("PickerGrid", _autoPickupBlacklistPickerHost.transform);
-		SetLayout(grid, -1f, 500f, 1f, 0f);
-		GridLayoutGroup layout = grid.AddComponent<GridLayoutGroup>();
-		layout.padding = new RectOffset(4, 4, 4, 4);
-		layout.spacing = new Vector2(8f, 8f);
-		layout.cellSize = new Vector2(155f, 158f);
-		layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-		layout.constraintCount = 5;
-		AddPageScrollHandler(grid, _autoPickupBlacklistPickerPage, pageCount, delegate(int value)
-		{
-			_autoPickupBlacklistPickerPage = value;
-			BuildAutoPickupBlacklistPickerContents();
-		});
-		HashSet<ushort> listedIds = GetAutoPickupRuleIds(ruleAction);
-		int start = _autoPickupBlacklistPickerPage * AutoPickupPickerPageSize;
-		int end = Math.Min(start + AutoPickupPickerPageSize, assets.Count);
-		for (int i = start; i < end; i++)
-		{
-			ItemAsset asset = assets[i];
-			bool isListed = listedIds.Contains(asset.id);
-			CreateAutoPickupItemCard(grid.transform, asset, ruleAction, isListed, isListed ? delegate { SetStatus(whitelist ? "该物品已经在白名单中。" : "该物品已经在黑名单中。", 3f, StatusKind.Info); } : delegate { AddAutoPickupRule(ruleAction, asset); });
-		}
-	}
-
-	private void HideAutoPickupBlacklistPicker()
-	{
-		if (_autoPickupBlacklistPickerRoot != null)
-		{
-			QueueForDestroy(_autoPickupBlacklistPickerRoot);
-		}
-		_autoPickupBlacklistPickerRoot = null;
-		_autoPickupBlacklistPickerHost = null;
-	}
 
 
-	private void CreateAutoPickupSlider(Transform parent, string label, float value, float min, float max, string suffix, UiDebouncer debouncer, Action<float> changed)
-	{
-		GameObject row = CreateRow(parent, 40f, 8f);
-		CreateLabel(row.transform, label, 13, CheatMenuStyle.Text, 92f);
-		Text valueText = CreateText(row.transform, $"{value:0}{suffix}", 12, CheatMenuStyle.Muted, TextAnchor.MiddleRight, FontStyle.Normal, localize: false);
-		SetLayout(valueText.gameObject, 68f, 30f);
-		SetLayout(CreateTimeSlider(row.transform, Mathf.InverseLerp(min, max, value), delegate(float normalized)
-		{
-			float selected = Mathf.Clamp(Mathf.Round(Mathf.Lerp(min, max, Mathf.Clamp01(normalized))), min, max);
-			valueText.text = $"{selected:0}{suffix}";
-			debouncer.Schedule(delegate { changed(selected); });
-		}).gameObject, -1f, -1f, 1f);
-	}
-
-
-	private static string AutoPickupDiagnosticsLabel(AutoPickupDiagnosticsLevel level)
-	{
-		return level switch
-		{
-			AutoPickupDiagnosticsLevel.Off => "关闭",
-			AutoPickupDiagnosticsLevel.Failures => "失败",
-			AutoPickupDiagnosticsLevel.Summary => "摘要",
-			_ => "逐项"
-		};
-	}
-
-	private void BuildPointToolPanel(Transform panel)
-	{
-		GameObject creatureHealthRow = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(creatureHealthRow.transform, "生物头顶血条", _plugin.CreatureHealthBarEnabled, delegate(bool value)
-		{
-			_plugin.SetCreatureHealthBarEnabled(value);
-			SetStatus(value ? "生物头顶血条已开启。" : "生物头顶血条已关闭。", 5f, StatusKind.Info);
-		});
-		CreateLabel(panel, "准心目标或实际受伤后的生物会显示当前生命 / 生命上限。", 12, CheatMenuStyle.Muted);
-		GameObject gameObject = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(gameObject.transform, "启用准星交互工具", _plugin.PointTool.Enabled, delegate(bool value)
-		{
-			_plugin.SetPointToolEnabled(value);
-			SetStatus(value ? "准星交互工具已开启。" : "准星交互工具已关闭。", 5f, StatusKind.Info);
-		});
-		Button modeTrigger = null;
-		modeTrigger = CreatePointToolModeButton(gameObject.transform, _plugin.PointTool.Mode, delegate
-		{
-			TogglePointToolModeDrawer(modeTrigger);
-		});
-		CreateLabel(panel, "中键触发；删除必须同时按住 Shift。", 13, CheatMenuStyle.Muted);
-		CreateButton(panel, $"最大距离 {_plugin.PointTool.Range:0}m", delegate
-		{
-			float pointToolRange = ((_plugin.PointTool.Range >= 250f) ? 25f : (_plugin.PointTool.Range + 25f));
-			_plugin.SetPointToolRange(pointToolRange);
-			ReplaceContentHost();
-			BuildToolsTab();
-		}, 220f);
-		GameObject gameObject2 = CreateRow(panel, 40f, 7f);
-		CreateToggleAction(gameObject2.transform, "名称", _plugin.PointTool.ShowTargetName, delegate(bool value)
-		{
-			_plugin.SetPointToolShowTargetName(value);
-		});
-		CreateToggleAction(gameObject2.transform, "ID / GUID", _plugin.PointTool.ShowId, delegate(bool value)
-		{
-			_plugin.SetPointToolShowId(value);
-		});
-		CreateToggleAction(gameObject2.transform, "生命 / 耐久", _plugin.PointTool.ShowHealth, delegate(bool value)
-		{
-			_plugin.SetPointToolShowHealth(value);
-		});
-		BuildPointToolDescriptions(panel);
-	}
-
-	private void BuildPointToolDescriptions(Transform parent)
-	{
-		GameObject gameObject = CreateObject("PointToolDescriptions", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-		Outline outline = gameObject.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.InputBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		AddVerticalLayout(gameObject, 5f, new RectOffset(12, 12, 10, 10));
-		SetLayout(gameObject, -1f, 286f, 1f, 1f);
-		CreateLabel(gameObject.transform, "各模式功能介绍", 14, CheatMenuStyle.Text);
-		AddPointToolDescription(gameObject.transform, PointToolMode.Smart, "根据准星目标自动选择单一动作：维修、实用、准星传送、检查或 Shift + 中键删除。");
-		AddPointToolDescription(gameObject.transform, PointToolMode.Inspect, "查看准星指向对象的名称、ID / GUID、生命 / 耐久和位置等信息。");
-		AddPointToolDescription(gameObject.transform, PointToolMode.Repair, "维修车辆耐久、电瓶、油量、轮胎并扶正翻倒车辆，也可修复路障和建筑。");
-		AddPointToolDescription(gameObject.transform, PointToolMode.Teleport, "将玩家传送到准星指向的世界表面，并自动寻找安全落点。");
-		AddPointToolDescription(gameObject.transform, PointToolMode.Utility, "执行准星指向对象的原生交互，例如上车、打开容器或切换设备。");
-		AddPointToolDescription(gameObject.transform, PointToolMode.Delete, "删除准星指向的可删除对象；必须同时按住 Shift 再点击中键。");
-	}
-
-	private void AddPointToolDescription(Transform parent, PointToolMode mode, string description)
-	{
-		GameObject gameObject = CreateRow(parent, 32f, 10f);
-		CreateLabel(gameObject.transform, PointToolModeLabel(mode), 12, CheatMenuStyle.Accent, 72f);
-		SetLayout(CreateText(gameObject.transform, description, 12, CheatMenuStyle.Muted, TextAnchor.MiddleLeft).gameObject, -1f, 32f, 1f);
-	}
-
-	private static string PointToolModeLabel(PointToolMode mode)
-	{
-		return mode switch
-		{
-			PointToolMode.Smart => "智能",
-			PointToolMode.Inspect => "检查",
-			PointToolMode.Repair => "维修",
-			PointToolMode.Teleport => "传送",
-			PointToolMode.Utility => "实用",
-			PointToolMode.Delete => "删除",
-			_ => "智能",
-		};
-	}
-
-	private Button CreatePointToolModeButton(Transform parent, PointToolMode mode, System.Action action)
-	{
-		return CreateButton(parent, PointToolModeLabel(mode), action, 150f, 40f, (_plugin.PointTool.Mode == mode) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12);
-	}
-
-	private void TogglePointToolModeDrawer(Button trigger)
-	{
-		if (_pointToolModeDrawerOpen)
-		{
-			HidePointToolModeDrawer();
-			return;
-		}
-		_pointToolModeDrawerOpen = true;
-		_pointToolModeTriggerButton = trigger;
-		BuildPointToolModeDrawer();
-	}
-
-	private void BuildPointToolModeDrawer()
-	{
-		if (_pointToolModeTriggerButton == null || _root == null)
-		{
-			return;
-		}
-		if (_pointToolModeDrawerRoot != null)
-		{
-			QueueForDestroy(_pointToolModeDrawerRoot);
-		}
-		_pointToolModeDrawerRoot = CreateObject("PointToolModeDrawer", _root.transform, typeof(Image));
-		_pointToolModeDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
-		Outline outline = _pointToolModeDrawerRoot.AddComponent<Outline>();
-		outline.effectColor = CheatMenuStyle.InputBorder;
-		outline.effectDistance = Vector2.one;
-		outline.useGraphicAlpha = false;
-		_pointToolModeDrawerPopup = _pointToolModeDrawerRoot.GetComponent<RectTransform>();
-		RectTransform pointToolModeDrawerPopup = _pointToolModeDrawerPopup;
-		Vector2 anchorMin = (pointToolModeDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
-		pointToolModeDrawerPopup.anchorMin = anchorMin;
-		pointToolModeDrawerPopup.pivot = new Vector2(0f, 1f);
-		pointToolModeDrawerPopup.sizeDelta = new Vector2(150f, 280f);
-		VerticalLayoutGroup verticalLayoutGroup = _pointToolModeDrawerRoot.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		verticalLayoutGroup.spacing = 4f;
-		verticalLayoutGroup.childControlWidth = true;
-		verticalLayoutGroup.childControlHeight = true;
-		verticalLayoutGroup.childForceExpandWidth = true;
-		verticalLayoutGroup.childForceExpandHeight = false;
-		PointToolMode[] pointToolModes = PointToolModes;
-		foreach (PointToolMode pointToolMode in pointToolModes)
-		{
-			PointToolMode capturedMode = pointToolMode;
-			SetLayout(CreateButton(_pointToolModeDrawerRoot.transform, PointToolModeLabel(capturedMode), delegate
-			{
-				_plugin.SetPointToolMode(capturedMode);
-				HidePointToolModeDrawer();
-				ReplaceContentHost();
-				BuildToolsTab();
-			}, 0f, 42f, (_plugin.PointTool.Mode == capturedMode) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12).gameObject, -1f, 42f, 1f);
-		}
-		Canvas.ForceUpdateCanvases();
-		LayoutRebuilder.ForceRebuildLayoutImmediate(_pointToolModeDrawerPopup);
-		PositionPointToolModeDrawer();
-	}
-
-	private void MaintainPointToolModeDrawer()
-	{
-		if (!(_pointToolModeDrawerRoot == null))
-		{
-			PositionPointToolModeDrawer();
-			if (Input.GetMouseButtonDown(0) && _pointToolModeTriggerButton != null && _pointToolModeDrawerPopup != null && !RectTransformUtility.RectangleContainsScreenPoint(_pointToolModeDrawerPopup, Input.mousePosition, null) && !RectTransformUtility.RectangleContainsScreenPoint(_pointToolModeTriggerButton.GetComponent<RectTransform>(), Input.mousePosition, null))
-			{
-				HidePointToolModeDrawer();
-			}
-		}
-	}
-
-	private void PositionPointToolModeDrawer()
-	{
-		if (!(_pointToolModeTriggerButton == null) && !(_pointToolModeDrawerPopup == null) && !(_root == null))
-		{
-			RectTransform component = _pointToolModeTriggerButton.GetComponent<RectTransform>();
-			RectTransform component2 = _root.GetComponent<RectTransform>();
-			Vector3[] array = new Vector3[4];
-			component.GetWorldCorners(array);
-			Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(null, array[0]);
-			Vector2 screenPoint2 = RectTransformUtility.WorldToScreenPoint(null, array[1]);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint, null, out var localPoint);
-			RectTransformUtility.ScreenPointToLocalPointInRectangle(component2, screenPoint2, null, out var localPoint2);
-			Vector2 sizeDelta = _pointToolModeDrawerPopup.sizeDelta;
-			sizeDelta.x = component.rect.width;
-			_pointToolModeDrawerPopup.sizeDelta = sizeDelta;
-			RectTransform pointToolModeDrawerPopup = _pointToolModeDrawerPopup;
-			Vector2 anchorMin = (_pointToolModeDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
-			pointToolModeDrawerPopup.anchorMin = anchorMin;
-			bool flag = localPoint.y - component2.rect.yMin < _pointToolModeDrawerPopup.rect.height + 8f;
-			_pointToolModeDrawerPopup.pivot = (flag ? new Vector2(0f, 0f) : new Vector2(0f, 1f));
-			_pointToolModeDrawerPopup.anchoredPosition = (flag ? localPoint2 : localPoint);
-		}
-	}
-
-	private void HidePointToolModeDrawer()
-	{
-		_pointToolModeDrawerOpen = false;
-		if (_pointToolModeDrawerRoot != null)
-		{
-			QueueForDestroy(_pointToolModeDrawerRoot);
-		}
-		_pointToolModeDrawerRoot = null;
-		_pointToolModeDrawerPopup = null;
-		_pointToolModeTriggerButton = null;
-	}
-
-	private void BuildMovementPanel(Transform panel)
-	{
-		GameObject modeRow = CreateRow(panel, 40f, 8f);
-		CreateLabel(modeRow.transform, $"飞行模式：{_plugin.Movement.Mode.ToDisplayName()}", 13, CheatMenuStyle.Text);
-		CreateFlexibleSpacer(modeRow.transform);
-		CreateButton(modeRow.transform, "⇆", delegate
-		{
-			FlightMode nextMode = _plugin.Movement.Mode == FlightMode.WorldAxis ? FlightMode.ViewDirection : FlightMode.WorldAxis;
-			_plugin.SetFlightMode(nextMode);
-			SetStatus($"飞行模式已切换为 {nextMode.ToDisplayName()}。", 5f, StatusKind.Info);
-			ReplaceContentHost();
-			BuildToolsTab();
-		}, 44f, 36f, CheatMenuStyle.Accent, 18, "切换飞行模式：在世界轴与视角指向之间切换。", delayTooltip: false);
-		GameObject gameObject = CreateRow(panel, 42f, 8f);
-		CreateToggleAction(gameObject.transform, "飞行", _plugin.Movement.FlightEnabled, delegate(bool value)
-		{
-			_plugin.Movement.SetFlight(value);
-			SetStatus(value ? "飞行已开启。" : "飞行已关闭。", 5f, StatusKind.Info);
-		});
-		CreateToggleAction(gameObject.transform, "穿墙", _plugin.Movement.NoclipEnabled, delegate(bool value)
-		{
-			_plugin.Movement.SetNoclip(value);
-			SetStatus(value ? "穿墙已开启。" : "穿墙已关闭。", 5f, StatusKind.Info);
-		});
-		CreateMovementSpeedSlider(panel, "水平速度", _plugin.Movement.FlightSpeed, _plugin.SetFlightSpeed);
-		CreateMovementSpeedSlider(panel, "垂直速度", _plugin.Movement.VerticalSpeed, _plugin.SetFlightVerticalSpeed);
-		CreateToggleAction(panel, "关闭穿墙后寻找安全位置", _plugin.Movement.SafeExit, delegate(bool value)
-		{
-			_plugin.SetNoclipSafeExit(value);
-		});
-		CreateLabel(panel, "WASD 移动，Space 上升，Ctrl 下降。", 13, CheatMenuStyle.Muted);
-	}
-
-	private void CreateMovementSpeedSlider(Transform parent, string label, float value, Action<float> changed)
-	{
-		GameObject gameObject = CreateRow(parent, 40f, 8f);
-		CreateLabel(gameObject.transform, label, 13, CheatMenuStyle.Text, 92f);
-		Text valueText = CreateText(gameObject.transform, $"{value:0}x", 12, CheatMenuStyle.Muted, TextAnchor.MiddleRight, FontStyle.Normal, localize: false);
-		SetLayout(valueText.gameObject, 42f, 30f);
-		SetLayout(CreateTimeSlider(gameObject.transform, Mathf.InverseLerp(1f, 10f, value), delegate(float normalized)
-		{
-			float num = Mathf.Clamp(Mathf.Round(Mathf.Lerp(1f, 10f, Mathf.Clamp01(normalized))), 1f, 10f);
-			changed(num);
-			valueText.text = $"{num:0}x";
-		}).gameObject, -1f, -1f, 1f);
-	}
 }

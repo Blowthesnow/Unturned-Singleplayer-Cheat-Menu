@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\ButtonTooltipText.cs" Link="ButtonTooltipText.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\UiLifecyclePolicy.cs" Link="UiLifecyclePolicy.cs" />
+	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\SystemFontDisplayNameResolver.cs" Link="SystemFontDisplayNameResolver.cs" />
+	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\UiSearchEditState.cs" Link="UiSearchEditState.cs" />
+	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\DeferredUiDestroyQueue.cs" Link="DeferredUiDestroyQueue.cs" />
+  </ItemGroup>
+</Project>

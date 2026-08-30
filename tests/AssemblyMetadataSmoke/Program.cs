@@ -44,6 +44,27 @@ foreach (TypeDefinitionHandle handle in reader.TypeDefinitions)
     types[string.IsNullOrEmpty(@namespace) ? name : $"{@namespace}.{name}"] = type;
 }
 
+foreach (string typeName in new[]
+{
+    "SDG.Unturned.Provider",
+    "SDG.Unturned.MenuUI",
+    "SDG.Unturned.PlayerUI",
+})
+{
+    if (!types.TryGetValue(typeName, out TypeDefinition type))
+        throw new InvalidOperationException($"Required runtime Update type is missing: {typeName}");
+
+    int updateCount = type.GetMethods()
+        .Select(handle => reader.GetMethodDefinition(handle))
+        .Count(method =>
+            reader.GetString(method.Name) == "Update" &&
+            (method.Attributes & System.Reflection.MethodAttributes.Static) == 0 &&
+            method.GetParameters().All(handle => reader.GetParameter(handle).SequenceNumber == 0));
+
+    if (updateCount != 1)
+        throw new InvalidOperationException($"Expected exactly one instance parameterless Update method on {typeName}, found {updateCount}.");
+}
+
 foreach ((string typeName, string[] properties) in requiredProperties)
 {
     if (!types.TryGetValue(typeName, out TypeDefinition type))

@@ -4,6 +4,35 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Added an editable minimap HUD with circular/square layouts; persisted anchors, offsets, size, radius, and zoom shortcuts; player, group, teleport, zombie, animal, player, and item markers; six item-rarity filters; other-floor indicators; and native-map, realtime-surface, height-slice, or fallback-grid backgrounds.
+- Added shared nearby-item snapshots so the minimap and automatic pickup can reuse one max-radius/max-frequency scan without coupling display data to pickup-only filters or actions.
+- Added transactional BepInEx configuration initialization with exact rollback for existing, empty, and first-run configuration files.
+- Added dedicated `ConfigInitializationSmoke`, `MinimapSmoke`, `UiArchitectureSmoke`, and `WorkshopLocalizationSmoke` projects and expanded existing regression coverage.
+
+### Changed
+
+- Replaced transient runtime host/driver ownership with `PluginRuntimeContext`, `PluginRuntimeComposition`, a static per-frame `RuntimeUpdatePatch` bridge, and one persistent `PluginUiRoot` for menu, HUD, modal, input, and teardown ownership.
+- Split the former monolithic overlay into feature views, presenters, view hosts, state stores, search/edit controllers, toast/window helpers, and deferred destruction outside active Canvas rebuilds.
+- Replaced per-widget font creation with a shared validated Windows system-font provider and unified HUD text under the root canvas.
+- Workshop localization now normalizes up to two API keys, creates one worker per key, dispatches batches concurrently, supports batch sizes from `1–100`, and treats unsupported Mono `MaxConnectionsPerServer` setters as a compatibility fallback rather than a startup failure.
+- Vehicle thumbnails now always use the generated auto-framing camera and highest available LOD; authored `Icon2/Icon` transforms are ignored and cache format version `2` invalidates incompatible PNG keys without deleting existing files.
+- Automatic pickup can explicitly follow minimap range and rarity settings, both disabled by default; its rule picker covers the complete carried inventory including the Hands page.
+- Reference preparation now removes the production IMGUI dependency, includes TextMeshPro/TextCore assemblies, and can explicitly remove retired references after path validation.
+- Consolidated public documentation into the Chinese/English README, this changelog, contribution/security policies, and the detailed source-update log; implementation plans, audits, reviews, research notes, and stale acceptance ledgers were removed.
+
+### Fixed
+
+- Prevented failed configuration binding or save operations from leaving partially migrated files or in-memory values.
+- Prevented scene changes, stale page objects, Canvas rebuilds, and duplicate per-component `Update` loops from leaving broken UI references or destroying replacement views too early.
+- Preserved explicit input ownership, IME/search edit state, window geometry, modal stacking, and deterministic teardown across menu and scene transitions.
+- Kept source/build/Smoke evidence separate from real singleplayer visual and interaction acceptance.
+
+### Verification
+
+- Final merged-main build and Smoke evidence will be recorded before this source-only push.
+
 ## [1.9.0] - 2026-08-27 (source push; unreleased)
 
 ### Added
@@ -72,7 +101,7 @@ All notable changes to this project are documented here.
 
 ### Verified
 
-- Release build, six smoke-test projects, version-metadata checks, package validation, and final hashes are recorded in `ACCEPTANCE.md`.
+- Release build, six smoke-test projects, version-metadata checks, package validation, and final hashes were recorded during the v1.6.0 release preparation.
 - Existing v1.5.0 singleplayer runtime evidence is retained; the new item-filter and shortcut behavior is not mislabeled as fresh in-game acceptance.
 
 ## [1.5.0] - 2026-08-16
@@ -95,7 +124,7 @@ All notable changes to this project are documented here.
 
 - Release build: zero warnings and zero errors.
 - Localization, favorites serialization, and teleport serialization smoke tests.
-- Existing real singleplayer screenshot evidence for the six-page overlay, vehicle right-front framing, and the 1.1 screenshot baseline is retained; full-scale/interaction runtime limits remain documented in `ACCEPTANCE.md`.
+- Existing real singleplayer screenshot evidence for the six-page overlay, vehicle right-front framing, and the 1.1 screenshot baseline is retained; full-scale interaction evidence remains separate from automated verification.
 
 ## [1.2.0] - 2026-08-15
 

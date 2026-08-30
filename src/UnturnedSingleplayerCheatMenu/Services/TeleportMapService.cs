@@ -83,6 +83,19 @@ internal sealed class TeleportMapService
 		return new Vector2(worldPosition.x / num + 0.5f, 0.5f - worldPosition.z / num);
 	}
 
+	public static bool TryGetLocalPlayerMapRotation(out float rotation)
+	{
+		Player player = Player.LocalPlayer;
+		if (player == null)
+		{
+			rotation = 0f;
+			return false;
+		}
+		CartographyVolume mainVolume = VolumeManager<CartographyVolume, CartographyVolumeManager>.Get().GetMainVolume();
+		rotation = player.transform.rotation.eulerAngles.y - (mainVolume != null ? mainVolume.transform.eulerAngles.y : 0f);
+		return true;
+	}
+
 	public static Vector3 DeprojectMapToWorld(Vector2 mapPosition)
 	{
 		CartographyVolume mainVolume = VolumeManager<CartographyVolume, CartographyVolumeManager>.Get().GetMainVolume();

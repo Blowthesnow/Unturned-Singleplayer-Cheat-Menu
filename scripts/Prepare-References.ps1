@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$GameRoot
+    [string]$GameRoot,
+
+    [switch]$RemoveRetiredReferences
 )
 
 Set-StrictMode -Version Latest
@@ -28,12 +30,14 @@ $sources = @{
     'SDG.Glazier.Runtime.dll' = Join-Path $managedRoot 'SDG.Glazier.Runtime.dll'
     'UnityEngine.dll' = Join-Path $managedRoot 'UnityEngine.dll'
     'UnityEngine.CoreModule.dll' = Join-Path $managedRoot 'UnityEngine.CoreModule.dll'
-    'UnityEngine.IMGUIModule.dll' = Join-Path $managedRoot 'UnityEngine.IMGUIModule.dll'
     'UnityEngine.InputLegacyModule.dll' = Join-Path $managedRoot 'UnityEngine.InputLegacyModule.dll'
     'UnityEngine.PhysicsModule.dll' = Join-Path $managedRoot 'UnityEngine.PhysicsModule.dll'
     'UnityEngine.JSONSerializeModule.dll' = Join-Path $managedRoot 'UnityEngine.JSONSerializeModule.dll'
     'UnityEngine.TextRenderingModule.dll' = Join-Path $managedRoot 'UnityEngine.TextRenderingModule.dll'
     'UnityEngine.UI.dll' = Join-Path $managedRoot 'UnityEngine.UI.dll'
+    'Unity.TextMeshPro.dll' = Join-Path $managedRoot 'Unity.TextMeshPro.dll'
+    'UnityEngine.TextCoreFontEngineModule.dll' = Join-Path $managedRoot 'UnityEngine.TextCoreFontEngineModule.dll'
+    'UnityEngine.TextCoreTextEngineModule.dll' = Join-Path $managedRoot 'UnityEngine.TextCoreTextEngineModule.dll'
     'UnityEngine.UIModule.dll' = Join-Path $managedRoot 'UnityEngine.UIModule.dll'
 }
 
@@ -46,6 +50,26 @@ foreach ($entry in $sources.GetEnumerator()) {
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
 foreach ($entry in $sources.GetEnumerator()) {
     Copy-Item -LiteralPath $entry.Value -Destination (Join-Path $destination $entry.Key) -Force
+}
+
+$retiredReferences = @('UnityEngine.IMGUIModule.dll')
+foreach ($retiredName in $retiredReferences) {
+    $retiredPath = Join-Path $destination $retiredName
+    if (-not (Test-Path -LiteralPath $retiredPath -PathType Leaf)) {
+        continue
+    }
+    if ($RemoveRetiredReferences) {
+        $resolvedDestination = [IO.Path]::GetFullPath($destination).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+        $resolvedRetired = [IO.Path]::GetFullPath($retiredPath)
+        if (-not $resolvedRetired.StartsWith($resolvedDestination, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to remove a retired reference outside lib: $resolvedRetired"
+        }
+        Remove-Item -LiteralPath $resolvedRetired -Force
+        Write-Host "Removed retired reference: $resolvedRetired"
+    }
+    else {
+        Write-Warning "Retired reference remains in lib: $retiredPath. Re-run with -RemoveRetiredReferences after reviewing the target."
+    }
 }
 
 Write-Host "Prepared $($sources.Count) local references in: $destination"

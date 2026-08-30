@@ -30,6 +30,12 @@ internal static class GlobalShortcutActions
 
 	internal const string ToggleAutoPickup = "auto-pickup.toggle";
 
+	internal const string ToggleMinimap = "minimap.toggle";
+
+	internal const string ZoomMinimapIn = "minimap.zoom.in";
+
+	internal const string ZoomMinimapOut = "minimap.zoom.out";
+
 	internal const string ToggleInfiniteStorageEnabled = "infinite-storage.enabled.toggle";
 
 	internal const string ToggleFreezeTime = "world.freeze-time.toggle";

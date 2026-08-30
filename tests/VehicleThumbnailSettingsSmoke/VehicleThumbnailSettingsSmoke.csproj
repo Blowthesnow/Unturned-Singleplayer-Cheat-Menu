@@ -9,5 +9,6 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\VehicleThumbnailRenderSettings.cs" Link="VehicleThumbnailRenderSettings.cs" />
+    <EmbeddedResource Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\VehicleIconRenderer.cs" LogicalName="VehicleIconRenderer.cs" />
   </ItemGroup>
 </Project>

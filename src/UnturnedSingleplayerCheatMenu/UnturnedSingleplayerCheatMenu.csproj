@@ -29,7 +29,6 @@
     <Reference Include="SDG.Glazier.Runtime" HintPath="$(MSBuildThisFileDirectory)..\..\lib\SDG.Glazier.Runtime.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.CoreModule.dll" Private="false" />
-    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.IMGUIModule.dll" Private="false" />
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.InputLegacyModule.dll" Private="false" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.PhysicsModule.dll" Private="false" />
     <Reference Include="UnityEngine.JSONSerializeModule" HintPath="$(MSBuildThisFileDirectory)..\..\lib\UnityEngine.JSONSerializeModule.dll" Private="false" />

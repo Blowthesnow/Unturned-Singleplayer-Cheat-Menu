@@ -12,7 +12,9 @@ internal sealed class OverlayIconBinder : MonoBehaviour
 
 	private RawImage _target;
 
-	private Text _previewState;
+	private AspectRatioFitter _aspectFitter;
+
+	private UiText _previewState;
 
 	private Func<Texture2D> _loader;
 
@@ -22,9 +24,10 @@ internal sealed class OverlayIconBinder : MonoBehaviour
 
 	private int _attemptCount;
 
-	public void Initialize(RawImage target, Text previewState, Func<Texture2D> loader, bool isVehicle)
+	public void Initialize(RawImage target, AspectRatioFitter aspectFitter, UiText previewState, Func<Texture2D> loader, bool isVehicle)
 	{
 		_target = target;
+		_aspectFitter = aspectFitter;
 		_previewState = previewState;
 		_loader = loader;
 		_isVehicle = isVehicle;
@@ -33,11 +36,6 @@ internal sealed class OverlayIconBinder : MonoBehaviour
 			Pending.Add(this);
 		}
 		TryLoad();
-	}
-
-	private void Update()
-	{
-		PumpIfDue();
 	}
 
 	internal static void PumpPending()
@@ -82,6 +80,10 @@ internal sealed class OverlayIconBinder : MonoBehaviour
 			return;
 		}
 		_target.texture = texture2D;
+		if (_aspectFitter != null)
+		{
+			_aspectFitter.aspectRatio = (float)Math.Max(1, texture2D.width) / Math.Max(1, texture2D.height);
+		}
 		if (_previewState != null)
 		{
 			_previewState.gameObject.SetActive(value: false);
@@ -98,6 +100,7 @@ internal sealed class OverlayIconBinder : MonoBehaviour
 	{
 		Pending.Remove(this);
 		_target = null;
+		_aspectFitter = null;
 		_previewState = null;
 		_loader = null;
 		_isVehicle = false;

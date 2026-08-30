@@ -1,12 +1,16 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
 
 internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHandler, IEventSystemHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler, ISelectHandler, IDeselectHandler
 {
+	private static readonly List<OverlaySelectableVisual> ActiveVisuals = new List<OverlaySelectableVisual>();
+
 	private Selectable _selectable;
 
 	private Image _background;
@@ -128,6 +132,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 
 	private void OnDisable()
 	{
+		ActiveVisuals.Remove(this);
 		_hovered = false;
 		_pressed = false;
 		_selected = false;
@@ -140,10 +145,28 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 
 	private void OnEnable()
 	{
+		if (!ActiveVisuals.Contains(this))
+		{
+			ActiveVisuals.Add(this);
+		}
 		Refresh();
 	}
 
-	private void Update()
+	internal static void PumpAll()
+	{
+		for (int i = ActiveVisuals.Count - 1; i >= 0; i--)
+		{
+			OverlaySelectableVisual visual = ActiveVisuals[i];
+			if (visual == null)
+			{
+				ActiveVisuals.RemoveAt(i);
+				continue;
+			}
+			visual.Pump();
+		}
+	}
+
+	private void Pump()
 	{
 		if (_selectable != null && _lastInteractable != _selectable.interactable)
 		{

@@ -6,6 +6,7 @@ using BepInEx;
 using BepInEx.Logging;
 using SDG.Unturned;
 using UnityEngine;
+using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.Services;
 
 namespace UnturnedSingleplayerCheatMenu.AutoPickup;
@@ -37,76 +38,55 @@ internal sealed class AutoPickupCandidate
 	public AutoPickupItemDescriptor Descriptor { get; set; }
 }
 
-internal sealed class DropScanner
+internal sealed class AutoPickupCandidateAdapter
 {
-	private readonly List<RegionCoordinate> _regions = new List<RegionCoordinate>();
+	private readonly List<AutoPickupCandidate> _result = new List<AutoPickupCandidate>();
 
-	private readonly HashSet<uint> _instances = new HashSet<uint>();
-
-	public IReadOnlyList<AutoPickupCandidate> Scan(Vector3 center, float radius, int snapshotVersion)
+	public IReadOnlyList<AutoPickupCandidate> Adapt(NearbyItemSnapshot snapshot, float radius, int snapshotVersion, Vector3? consumerCenter = null)
 	{
-		List<AutoPickupCandidate> result = new List<AutoPickupCandidate>();
-		_regions.Clear();
-		_instances.Clear();
-		if (ItemManager.regions == null)
+		_result.Clear();
+		if (snapshot == null)
 		{
-			return result;
+			return _result;
 		}
 		radius = Mathf.Clamp(radius, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange);
 		float radiusSquared = radius * radius;
-		Regions.getRegionsInRadius(center, radius, _regions);
-		for (int regionIndex = 0; regionIndex < _regions.Count; regionIndex++)
+		for (int index = 0; index < snapshot.Items.Count; index++)
 		{
-			RegionCoordinate coordinate = _regions[regionIndex];
-			ItemRegion region = ItemManager.regions[coordinate.x, coordinate.y];
-			if (region == null)
+			NearbyGroundItem raw = snapshot.Items[index];
+			ItemDrop drop = raw.Drop;
+			ItemAsset asset = raw.Asset;
+			float distanceSquared = consumerCenter.HasValue ? (raw.Position - consumerCenter.Value).sqrMagnitude : raw.DistanceSquared;
+			if (drop == null || asset == null || AutoPickupDropGate.IsSuppressed(drop) || distanceSquared > radiusSquared)
 			{
 				continue;
 			}
-			List<ItemDrop> drops = region.drops;
-			for (int dropIndex = 0; dropIndex < drops.Count; dropIndex++)
+			_result.Add(new AutoPickupCandidate
 			{
-				ItemDrop drop = drops[dropIndex];
-				InteractableItem interactable = drop?.interactableItem;
-				ItemAsset asset = interactable?.asset;
-				Item item = interactable?.item;
-				Transform model = drop?.model;
-				if (drop == null || model == null || interactable == null || asset == null || item == null || AutoPickupDropGate.IsSuppressed(drop) || !_instances.Add(drop.instanceID))
+				InstanceId = raw.InstanceId,
+				RegionX = raw.RegionX,
+				RegionY = raw.RegionY,
+				Position = raw.Position,
+				DistanceSquared = distanceSquared,
+				Amount = raw.Amount,
+				Quality = raw.Quality,
+				State = raw.State == null ? Array.Empty<byte>() : (byte[])raw.State.Clone(),
+				SnapshotVersion = snapshotVersion,
+				Drop = drop,
+				Asset = asset,
+				Descriptor = new AutoPickupItemDescriptor
 				{
-					continue;
+					AssetId = asset.id,
+					Guid = asset.GUID.ToString("D"),
+					AssetName = asset.name ?? string.Empty,
+					DisplayName = asset.FriendlyName ?? string.Empty,
+					ItemType = asset.type.ToString(),
+					Category = AssetCatalog.GetItemCategory(asset).ToString()
 				}
-				float distanceSquared = (model.position - center).sqrMagnitude;
-				if (distanceSquared > radiusSquared)
-				{
-					continue;
-				}
-				result.Add(new AutoPickupCandidate
-				{
-					InstanceId = drop.instanceID,
-					RegionX = coordinate.x,
-					RegionY = coordinate.y,
-					Position = model.position,
-					DistanceSquared = distanceSquared,
-					Amount = item.amount,
-					Quality = item.quality,
-					State = item.state == null ? Array.Empty<byte>() : (byte[])item.state.Clone(),
-					SnapshotVersion = snapshotVersion,
-					Drop = drop,
-					Asset = asset,
-					Descriptor = new AutoPickupItemDescriptor
-					{
-						AssetId = asset.id,
-						Guid = asset.GUID.ToString("D"),
-						AssetName = asset.name ?? string.Empty,
-						DisplayName = asset.FriendlyName ?? string.Empty,
-						ItemType = asset.type.ToString(),
-						Category = AssetCatalog.GetItemCategory(asset).ToString()
-					}
-				});
-			}
+			});
 		}
-		result.Sort((left, right) => left.DistanceSquared.CompareTo(right.DistanceSquared));
-		return result;
+		_result.Sort((left, right) => left.DistanceSquared.CompareTo(right.DistanceSquared));
+		return _result;
 	}
 
 	public static bool IsCurrent(AutoPickupCandidate candidate)
@@ -341,7 +321,7 @@ internal sealed class NativePickupExecutor
 			return new NativePickupAttempt(AutoPickupResultKind.UnknownFailure, 0, 0, SingleplayerGuard.RejectionReason);
 		}
 		Player player = Player.LocalPlayer;
-		if (candidate == null || player == null || !DropScanner.IsCurrent(candidate))
+		if (candidate == null || player == null || !AutoPickupCandidateAdapter.IsCurrent(candidate))
 		{
 			return new NativePickupAttempt(AutoPickupResultKind.StaleDrop, 0, 0, "掉落快照已经失效。");
 		}
@@ -375,11 +355,11 @@ internal sealed class NativePickupExecutor
 			return new NativePickupAttempt(AutoPickupResultKind.UnknownFailure, before, before, exception.Message, requestSent: true);
 		}
 		int after = CountInventoryAmount(player.inventory, candidate.Asset.id);
-		if (!DropScanner.IsCurrent(candidate) && after > before)
+		if (!AutoPickupCandidateAdapter.IsCurrent(candidate) && after > before)
 		{
 			return new NativePickupAttempt(AutoPickupResultKind.PickedUp, before, after, "掉落已移除且背包数量增加。", requestSent: true);
 		}
-		if (!DropScanner.IsCurrent(candidate))
+		if (!AutoPickupCandidateAdapter.IsCurrent(candidate))
 		{
 			return new NativePickupAttempt(AutoPickupResultKind.UnknownFailure, before, after, "掉落已移除，但背包数量未增加。", requestSent: true);
 		}
@@ -397,7 +377,7 @@ internal sealed class NativePickupExecutor
 		try
 		{
 			ItemManager.ReceiveDestroyItem(candidate.RegionX, candidate.RegionY, candidate.InstanceId, true);
-			removed = !DropScanner.IsCurrent(candidate);
+			removed = !AutoPickupCandidateAdapter.IsCurrent(candidate);
 		}
 		catch
 		{
@@ -457,7 +437,9 @@ internal sealed class AutoPickupFeature
 
 	private readonly ManualLogSource _log;
 
-	private readonly DropScanner _scanner = new DropScanner();
+	private readonly NearbyItemIndex _itemIndex;
+
+	private readonly AutoPickupCandidateAdapter _candidateAdapter = new AutoPickupCandidateAdapter();
 
 	private readonly NativePickupExecutor _executor;
 
@@ -509,9 +491,10 @@ internal sealed class AutoPickupFeature
 
 	public AutoPickupDiagnosticsSnapshot Diagnostics => new AutoPickupDiagnosticsSnapshot(_candidateCount, _scanCount, _requestedCount, _pickedUpCount, _filteredCount, _failureCount, _retryCount, _lastScanTime, _lastFailure, _state);
 
-	public AutoPickupFeature(ManualLogSource log, AutoPickupSettings settings, string rulesPath)
+	public AutoPickupFeature(ManualLogSource log, AutoPickupSettings settings, string rulesPath, NearbyItemIndex itemIndex = null)
 	{
 		_log = log;
+		_itemIndex = itemIndex ?? new NearbyItemIndex();
 		_settings = (settings ?? new AutoPickupSettings()).Normalize().Clone();
 		_executor = new NativePickupExecutor(StoreCandidate, RollbackStoredCandidate, PreferInfiniteStorage);
 		string path = Path.IsPathRooted(rulesPath ?? string.Empty) ? rulesPath : Path.Combine(Paths.ConfigPath, string.IsNullOrWhiteSpace(rulesPath) ? "AutoPickup.rules.json" : rulesPath);
@@ -579,7 +562,24 @@ internal sealed class AutoPickupFeature
 		_lastFailure = string.Empty;
 	}
 
-	public void Pump(bool menuOpen)
+	internal bool TryGetItemScanDemand(bool menuOpen, out float radius, out float frequencyHz)
+	{
+		radius = ResolveEffectiveRange();
+		frequencyHz = _settings.FrequencyHz;
+		if (!_settings.Enabled || !SingleplayerGuard.IsReady)
+		{
+			return false;
+		}
+		Player player = Player.LocalPlayer;
+		if (player == null || (_settings.PauseWhenDead && (player.life == null || player.life.isDead)) ||
+			(_settings.PauseWhenMenuOpen && menuOpen))
+		{
+			return false;
+		}
+		return true;
+	}
+
+	public void Pump(bool menuOpen, NearbyItemSnapshot sharedSnapshot = null)
 	{
 		AutoPickupDropGate.Attach(Player.LocalPlayer?.inventory);
 		float now = Time.realtimeSinceStartup;
@@ -617,7 +617,11 @@ internal sealed class AutoPickupFeature
 		}
 		_state = "运行中";
 		_snapshotVersion++;
-		IReadOnlyList<AutoPickupCandidate> candidates = _scanner.Scan(player.transform.position, _settings.Range, _snapshotVersion);
+		float effectiveRange = ResolveEffectiveRange();
+		NearbyItemSnapshot rawSnapshot = sharedSnapshot != null && sharedSnapshot.Radius + 0.001f >= effectiveRange
+			? sharedSnapshot
+			: _itemIndex.Refresh(player.transform.position, effectiveRange, _snapshotVersion);
+		IReadOnlyList<AutoPickupCandidate> candidates = _candidateAdapter.Adapt(rawSnapshot, effectiveRange, _snapshotVersion, player.transform.position);
 		_candidateCount = candidates.Count;
 		_scanCount++;
 		_lastScanTime = now;
@@ -635,6 +639,11 @@ internal sealed class AutoPickupFeature
 				_filteredCount++;
 				continue;
 			}
+			if (_settings.UseMinimapRarityFilter && !AllowsMinimapRarity(candidate.Asset))
+			{
+				_filteredCount++;
+				continue;
+			}
 			if (!_matcher.Matches(candidate.Descriptor))
 			{
 				_filteredCount++;
@@ -645,7 +654,7 @@ internal sealed class AutoPickupFeature
 				_retryCount++;
 				continue;
 			}
-			NativePickupAttempt attempt = _executor.Execute(candidate, _settings.Range);
+			NativePickupAttempt attempt = _executor.Execute(candidate, effectiveRange);
 			budget--;
 			RecordAttempt(candidate, attempt, now);
 		}
@@ -653,6 +662,28 @@ internal sealed class AutoPickupFeature
 		{
 			_log?.LogInfo($"[AutoPickup] 扫描摘要：候选={_candidateCount} 请求={_requestedCount} 成功={_pickedUpCount} 过滤={_filteredCount} 失败={_failureCount} 重试={_retryCount}。");
 		}
+	}
+
+	private float ResolveEffectiveRange()
+	{
+		if (!_settings.UseMinimapRange)
+		{
+			return _settings.Range;
+		}
+		MinimapSettings minimap = CheatMenuPlugin.Instance?.Minimap?.Settings;
+		return minimap == null ? _settings.Range : Mathf.Clamp(minimap.VisibleRadiusMeters, AutoPickupSettings.MinRange, AutoPickupSettings.MaxRange);
+	}
+
+	private static bool AllowsMinimapRarity(ItemAsset asset)
+	{
+		MinimapSettings minimap = CheatMenuPlugin.Instance?.Minimap?.Settings;
+		if (asset == null || minimap == null)
+		{
+			return true;
+		}
+		int rarity = (int)asset.rarity;
+		return rarity >= 0 && rarity <= (int)MinimapItemRarity.Mythical &&
+			(minimap.ItemRarityMask & (ItemRarityMask)(1 << rarity)) != 0;
 	}
 
 	private void RecordAttempt(AutoPickupCandidate candidate, NativePickupAttempt attempt, float now)
@@ -700,7 +731,7 @@ internal sealed class AutoPickupFeature
 		foreach (KeyValuePair<uint, PendingPickup> pair in _pending)
 		{
 			PendingPickup pending = pair.Value;
-			if (!DropScanner.IsCurrent(pending.Candidate))
+			if (!AutoPickupCandidateAdapter.IsCurrent(pending.Candidate))
 			{
 				int after = NativePickupExecutor.CountInventoryAmount(Player.LocalPlayer.inventory, pending.Candidate.Asset.id);
 				if (after > pending.InventoryAmountBefore)

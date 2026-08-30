@@ -26,6 +26,13 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		}
 	}
 
+	private sealed class TranslationCounters
+	{
+		internal int Completed;
+
+		internal int Failed;
+	}
+
 	private sealed class ReferenceComparer : IEqualityComparer<object>
 	{
 		internal static readonly ReferenceComparer Instance = new ReferenceComparer();
@@ -46,6 +53,8 @@ internal sealed class WorkshopLocalizationService : IDisposable
 	}
 
 	private readonly object _gate = new object();
+
+	private readonly object _cacheSaveGate = new object();
 
 	private readonly WorkshopLocalizationScanner _scanner;
 
@@ -73,6 +82,8 @@ internal sealed class WorkshopLocalizationService : IDisposable
 
 	private int _snapshotVersion;
 
+	private int _presentationVersion;
+
 	private bool _disposed;
 
 	internal MachineTranslationSettings Settings { get; }
@@ -90,6 +101,8 @@ internal sealed class WorkshopLocalizationService : IDisposable
 	internal string CachePath => _cache.Path;
 
 	internal int SnapshotVersion => Volatile.Read(ref _snapshotVersion);
+
+	internal int PresentationVersion => Volatile.Read(ref _presentationVersion);
 
 	internal int CacheEntryCount => _cache.Count;
 
@@ -165,6 +178,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		lock (_gate)
 		{
 			_progress.State = WorkshopLocalizationState.Scanning;
+			MarkPresentationChangedLocked();
 		}
 		WorkshopLocalizationScanResult workshopLocalizationScanResult = _scanner.Scan(Settings.SourceLanguage, Settings.TargetLanguage);
 		List<WorkshopLocalizationCandidate> list = workshopLocalizationScanResult.Candidates.ToList();
@@ -212,6 +226,14 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		lock (_gate)
 		{
 			PublishSnapshotLocked();
+		}
+	}
+
+	internal void NotifySettingsChanged()
+	{
+		lock (_gate)
+		{
+			MarkPresentationChangedLocked();
 		}
 	}
 
@@ -285,6 +307,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 			_progress.FailedTranslations = 0;
 			_progress.State = ((list2.Count != 0) ? WorkshopLocalizationState.Translating : WorkshopLocalizationState.Idle);
 			_progress.Message = ((list2.Count == 0) ? "no uncached text" : "translation started");
+			MarkPresentationChangedLocked();
 		}
 		if (list2.Count == 0)
 		{
@@ -292,12 +315,13 @@ internal sealed class WorkshopLocalizationService : IDisposable
 			return true;
 		}
 		CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+		IReadOnlyList<MachineTranslationSettings> workerSettings = Settings.CreateApiKeyWorkerSettings();
 		lock (_gate)
 		{
 			_translationCancellation?.Cancel();
 			_translationCancellation = cancellationTokenSource;
-			_translationTask = TranslateWorkerAsync(generation, list2.Select((WorkshopLocalizationCandidate candidate) => new WorkshopTranslationWorkItem(candidate.Key, candidate.Field, candidate.SourceText, candidate.AssetName, candidate.AssetGuid, candidate.LegacyId, candidate.ActionKey, candidate.AssetType, candidate.LocalizationKey, candidate.SchemaVersion)).ToList(), cancellationTokenSource.Token);
-			_info?.Invoke($"Workshop translation started: provider={Settings.ApiProtocol}, pending={list2.Count}, force={force}.");
+			_translationTask = TranslateWorkerAsync(generation, list2.Select((WorkshopLocalizationCandidate candidate) => new WorkshopTranslationWorkItem(candidate.Key, candidate.Field, candidate.SourceText, candidate.AssetName, candidate.AssetGuid, candidate.LegacyId, candidate.ActionKey, candidate.AssetType, candidate.LocalizationKey, candidate.SchemaVersion)).ToList(), workerSettings, cancellationTokenSource.Token);
+			_info?.Invoke($"Workshop translation started: provider={Settings.ApiProtocol}, pending={list2.Count}, workers={workerSettings.Count}, force={force}.");
 		}
 		return true;
 	}
@@ -313,6 +337,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 			{
 				_progress.State = WorkshopLocalizationState.Cancelled;
 				_progress.Message = "translation cancelled";
+				MarkPresentationChangedLocked();
 			}
 		}
 		translationCancellation?.Cancel();
@@ -340,6 +365,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 					_progress.State = WorkshopLocalizationState.Idle;
 					_progress.Message = (pendingApply.Changed ? "translation complete" : "translation produced no valid entries");
 				}
+				MarkPresentationChangedLocked();
 			}
 		}
 	}
@@ -364,78 +390,20 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		}
 	}
 
-	private async Task TranslateWorkerAsync(int generation, IReadOnlyList<WorkshopTranslationWorkItem> workItems, CancellationToken cancellationToken)
+	private async Task TranslateWorkerAsync(int generation, IReadOnlyList<WorkshopTranslationWorkItem> workItems, IReadOnlyList<MachineTranslationSettings> workerSettings, CancellationToken cancellationToken)
 	{
-		int batchSize = MachineTranslationSettings.NormalizeBatchSize(Settings.BatchSize);
-		int completed = 0;
-		int failed = 0;
+		int batchSize = MachineTranslationSettings.ResolveParallelBatchSize(workItems.Count, workerSettings[0].BatchSize, workerSettings.Count);
+		TranslationCounters counters = new TranslationCounters();
 		string error = null;
 		try
 		{
+			List<IReadOnlyList<WorkshopTranslationWorkItem>> batches = new List<IReadOnlyList<WorkshopTranslationWorkItem>>();
 			for (int offset = 0; offset < workItems.Count; offset += batchSize)
 			{
-				cancellationToken.ThrowIfCancellationRequested();
-				List<WorkshopTranslationWorkItem> batch = workItems.Skip(offset).Take(batchSize).ToList();
-				List<WorkshopTranslationRequest> requests = batch.Select(delegate(WorkshopTranslationWorkItem workItem)
-				{
-					WorkshopProtectedText workshopProtectedText2 = WorkshopRichTextProtector.Protect(workItem.SourceText);
-					return new WorkshopTranslationRequest(workItem.Key, workItem.Field, workshopProtectedText2.Text);
-				}).ToList();
-				WorkshopTranslationBatchResult workshopTranslationBatchResult = await _client.TranslateAsync(requests, Settings, cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
-				if (!workshopTranslationBatchResult.Success)
-				{
-					if (batch.Count > 1)
-					{
-						_warn?.Invoke($"Workshop translation batch failed: {workshopTranslationBatchResult.Error}; retrying {batch.Count} entries individually.");
-						foreach (WorkshopTranslationWorkItem singleItem in batch)
-						{
-							cancellationToken.ThrowIfCancellationRequested();
-							WorkshopProtectedText workshopProtectedText = WorkshopRichTextProtector.Protect(singleItem.SourceText);
-							WorkshopTranslationBatchResult workshopTranslationBatchResult2 = await _client.TranslateAsync(new WorkshopTranslationRequest[1]
-							{
-								new WorkshopTranslationRequest(singleItem.Key, singleItem.Field, workshopProtectedText.Text)
-							}, Settings, cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
-							string error2;
-							if (!workshopTranslationBatchResult2.Success)
-							{
-								failed++;
-								_warn?.Invoke("Workshop translation single-entry failed for " + singleItem.Key + ": " + workshopTranslationBatchResult2.Error);
-							}
-							else if (!TryApplyTranslationEntry(singleItem, workshopTranslationBatchResult2, out error2))
-							{
-								failed++;
-								_warn?.Invoke("Workshop translation entry rejected for " + singleItem.Key + ": " + error2);
-							}
-							else
-							{
-								completed++;
-							}
-						}
-					}
-					else
-					{
-						failed += batch.Count;
-						_warn?.Invoke("Workshop translation batch failed: " + workshopTranslationBatchResult.Error);
-					}
-					_cache.Save(Settings.SourceLanguage, Settings.TargetLanguage);
-					UpdateTranslationProgress(workItems.Count, completed, failed);
-					continue;
-				}
-				foreach (WorkshopTranslationWorkItem item in batch)
-				{
-					if (!TryApplyTranslationEntry(item, workshopTranslationBatchResult, out var error3))
-					{
-						failed++;
-						_warn?.Invoke("Workshop translation entry rejected for " + item.Key + ": " + error3);
-					}
-					else
-					{
-						completed++;
-					}
-				}
-				_cache.Save(Settings.SourceLanguage, Settings.TargetLanguage);
-				UpdateTranslationProgress(workItems.Count, completed, failed);
+				batches.Add(workItems.Skip(offset).Take(batchSize).ToList());
 			}
+			_info?.Invoke($"Workshop translation dispatch: workers={workerSettings.Count}, batches={batches.Count}, effectiveConcurrency={Math.Min(workerSettings.Count, batches.Count)}, batchSize={batchSize}.");
+			await ParallelTranslationDispatcher.RunAsync(workerSettings, batches, (settings, batch, token) => TranslateBatchAsync(workItems.Count, batch, settings, counters, token), cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
 		}
 		catch (OperationCanceledException)
 		{
@@ -445,16 +413,19 @@ internal sealed class WorkshopLocalizationService : IDisposable
 				{
 					_progress.State = WorkshopLocalizationState.Cancelled;
 					_progress.Message = "translation cancelled";
+					MarkPresentationChangedLocked();
 				}
 			}
 		}
 		catch (Exception ex2)
 		{
 			error = "translation failed: " + ex2.Message;
-			_warn?.Invoke($"Workshop translation worker failed after {completed} completed and {failed} failed: {ex2}");
+			_warn?.Invoke($"Workshop translation worker failed after {Volatile.Read(ref counters.Completed)} completed and {Volatile.Read(ref counters.Failed)} failed: {ex2}");
 		}
 		finally
 		{
+			int completed = Volatile.Read(ref counters.Completed);
+			int failed = Volatile.Read(ref counters.Failed);
 			Interlocked.Exchange(ref _pendingApply, new PendingApply(generation, completed > 0, error));
 			lock (_gate)
 			{
@@ -465,11 +436,74 @@ internal sealed class WorkshopLocalizationService : IDisposable
 					_progress.State = WorkshopLocalizationState.Error;
 					_progress.Message = error;
 				}
+				MarkPresentationChangedLocked();
 			}
 		}
 	}
 
-	private bool TryApplyTranslationEntry(WorkshopTranslationWorkItem workItem, WorkshopTranslationBatchResult result, out string error)
+	private async Task TranslateBatchAsync(int total, IReadOnlyList<WorkshopTranslationWorkItem> batch, MachineTranslationSettings workerSettings, TranslationCounters counters, CancellationToken cancellationToken)
+	{
+		List<WorkshopTranslationRequest> requests = batch.Select(delegate(WorkshopTranslationWorkItem workItem)
+		{
+			WorkshopProtectedText protectedText = WorkshopRichTextProtector.Protect(workItem.SourceText);
+			return new WorkshopTranslationRequest(workItem.Key, workItem.Field, protectedText.Text);
+		}).ToList();
+		WorkshopTranslationBatchResult result = await _client.TranslateAsync(requests, workerSettings, cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
+		if (!result.Success)
+		{
+			if (batch.Count > 1)
+			{
+				_warn?.Invoke($"Workshop translation batch failed: {result.Error}; retrying {batch.Count} entries individually.");
+				foreach (WorkshopTranslationWorkItem singleItem in batch)
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+					WorkshopProtectedText protectedText = WorkshopRichTextProtector.Protect(singleItem.SourceText);
+					WorkshopTranslationBatchResult singleResult = await _client.TranslateAsync(new WorkshopTranslationRequest[1]
+					{
+						new WorkshopTranslationRequest(singleItem.Key, singleItem.Field, protectedText.Text)
+					}, workerSettings, cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
+					if (!singleResult.Success)
+					{
+						Interlocked.Increment(ref counters.Failed);
+						_warn?.Invoke("Workshop translation single-entry failed for " + singleItem.Key + ": " + singleResult.Error);
+					}
+					else if (!TryApplyTranslationEntry(singleItem, singleResult, workerSettings, out string applyError))
+					{
+						Interlocked.Increment(ref counters.Failed);
+						_warn?.Invoke("Workshop translation entry rejected for " + singleItem.Key + ": " + applyError);
+					}
+					else
+					{
+						Interlocked.Increment(ref counters.Completed);
+					}
+				}
+			}
+			else
+			{
+				Interlocked.Add(ref counters.Failed, batch.Count);
+				_warn?.Invoke("Workshop translation batch failed: " + result.Error);
+			}
+		}
+		else
+		{
+			foreach (WorkshopTranslationWorkItem item in batch)
+			{
+				if (!TryApplyTranslationEntry(item, result, workerSettings, out string applyError))
+				{
+					Interlocked.Increment(ref counters.Failed);
+					_warn?.Invoke("Workshop translation entry rejected for " + item.Key + ": " + applyError);
+				}
+				else
+				{
+					Interlocked.Increment(ref counters.Completed);
+				}
+			}
+		}
+		SaveTranslationCache(workerSettings);
+		UpdateTranslationProgress(total, counters);
+	}
+
+	private bool TryApplyTranslationEntry(WorkshopTranslationWorkItem workItem, WorkshopTranslationBatchResult result, MachineTranslationSettings workerSettings, out string error)
 	{
 		error = null;
 		if (!result.Translations.TryGetValue(workItem.Key, out var value))
@@ -487,8 +521,8 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		{
 			Key = workItem.Key,
 			SchemaVersion = workItem.SchemaVersion,
-			SourceLanguage = Settings.SourceLanguage,
-			TargetLanguage = Settings.TargetLanguage,
+			SourceLanguage = workerSettings.SourceLanguage,
+			TargetLanguage = workerSettings.TargetLanguage,
 			Field = workItem.Field,
 			SourceText = workItem.SourceText,
 			Translation = restored,
@@ -498,9 +532,9 @@ internal sealed class WorkshopLocalizationService : IDisposable
 			ActionKey = workItem.ActionKey,
 			AssetType = workItem.AssetType,
 			LocalizationKey = workItem.LocalizationKey,
-			ApiProtocol = Settings.ApiProtocol,
-			Provider = Settings.ApiProtocol,
-			Model = Settings.Model,
+			ApiProtocol = workerSettings.ApiProtocol,
+			Provider = workerSettings.ApiProtocol,
+			Model = workerSettings.Model,
 			CreatedUtc = utcNow,
 			UpdatedUtc = utcNow,
 			LastUsedUtc = utcNow
@@ -508,20 +542,18 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		return true;
 	}
 
+	private void SaveTranslationCache(MachineTranslationSettings workerSettings)
+	{
+		lock (_cacheSaveGate)
+		{
+			_cache.Save(workerSettings.SourceLanguage, workerSettings.TargetLanguage);
+		}
+	}
+
 	private void SetProgressLocked(WorkshopLocalizationProgress progress)
 	{
 		_progress = progress ?? new WorkshopLocalizationProgress();
-		_progress.Version = _snapshotVersion;
-	}
-
-	private void UpdateTranslationProgress(int total, int completed, int failed)
-	{
-		lock (_gate)
-		{
-			_progress.CompletedTranslations = completed;
-			_progress.FailedTranslations = failed;
-			_progress.PendingTranslations = Math.Max(0, total - completed - failed);
-		}
+		MarkPresentationChangedLocked();
 	}
 
 	private void PublishSnapshotLocked()
@@ -544,7 +576,7 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		_snapshot = new WorkshopLocalizationSnapshot(dictionary, dictionary2);
 		_snapshotVersion++;
 		_progress.CacheHits = _candidates.Select((WorkshopLocalizationCandidate candidate) => candidate.Key).Distinct<string>(StringComparer.Ordinal).Count((string key) => _cache.TryGet(key, out var _));
-		_progress.Version = _snapshotVersion;
+		MarkPresentationChangedLocked();
 	}
 
 	private void SetMessage(WorkshopLocalizationState state, string message)
@@ -553,7 +585,27 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		{
 			_progress.State = state;
 			_progress.Message = message;
+			MarkPresentationChangedLocked();
 		}
+	}
+
+	private void UpdateTranslationProgress(int total, TranslationCounters counters)
+	{
+		lock (_gate)
+		{
+			int completed = Volatile.Read(ref counters.Completed);
+			int failed = Volatile.Read(ref counters.Failed);
+			_progress.CompletedTranslations = completed;
+			_progress.FailedTranslations = failed;
+			_progress.PendingTranslations = Math.Max(0, total - completed - failed);
+			MarkPresentationChangedLocked();
+		}
+	}
+
+	private void MarkPresentationChangedLocked()
+	{
+		int version = Interlocked.Increment(ref _presentationVersion);
+		_progress.Version = version;
 	}
 
 	private bool ShouldTreatCachedTranslationAsComplete(WorkshopLocalizationCandidate candidate, WorkshopTranslationCacheEntry cached)

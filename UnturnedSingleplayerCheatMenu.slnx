@@ -1,8 +1,10 @@
 <Solution>
   <Project Path="src/UnturnedSingleplayerCheatMenu/UnturnedSingleplayerCheatMenu.csproj" />
   <Project Path="tests/AutoPickupSmoke/AutoPickupSmoke.csproj" />
+  <Project Path="tests/MinimapSmoke/MinimapSmoke.csproj" />
   <Project Path="tests/InfiniteStorageSmoke/InfiniteStorageSmoke.csproj" />
   <Project Path="tests/CreatureHealthBarSmoke/CreatureHealthBarSmoke.csproj" />
+  <Project Path="tests/ConfigInitializationSmoke/ConfigInitializationSmoke.csproj" />
   <Project Path="tests/AssemblyMetadataSmoke/AssemblyMetadataSmoke.csproj" />
   <Project Path="tests/FavoritesSerializationSmoke/FavoritesSerializationSmoke.csproj" />
   <Project Path="tests/ItemFilteringSmoke/ItemFilteringSmoke.csproj" />
@@ -14,5 +16,7 @@
   <Project Path="tests/PointToolActionSmoke/PointToolActionSmoke.csproj" />
   <Project Path="tests/ShortcutToggleSmoke/ShortcutToggleSmoke.csproj" />
   <Project Path="tests/TeleportSerializationSmoke/TeleportSerializationSmoke.csproj" />
+  <Project Path="tests/UiArchitectureSmoke/UiArchitectureSmoke.csproj" />
   <Project Path="tests/VehicleThumbnailSettingsSmoke/VehicleThumbnailSettingsSmoke.csproj" />
+  <Project Path="tests/WorkshopLocalizationSmoke/WorkshopLocalizationSmoke.csproj" />
 </Solution>

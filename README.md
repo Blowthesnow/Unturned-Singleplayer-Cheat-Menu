@@ -1,8 +1,8 @@
 # Unturned Singleplayer Cheat Menu
 
-[English](README.en.md) · [更新日志](CHANGELOG.md) · [验收记录](ACCEPTANCE.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
+[English](README.en.md) · [更新日志](CHANGELOG.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.9.0`，新增自动拾取、无限储存、生物生命条、悬停详情、视角飞行和全局快捷键，并修复背包整理与 Workshop 本地化问题。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.9.0`，新增自动拾取、无限储存、生物生命条、可编辑小地图、悬停详情、视角飞行和全局快捷键，并完成运行时与 uGUI 生命周期重构、Workshop 双 API Key 并发和车辆缩略图统一相机渲染。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
@@ -67,7 +67,7 @@
 - 自动扫描所有已加载的 `VehicleAsset`。
 - 按陆地车辆、固定翼飞机、直升机、飞艇和船只分类。
 - 支持名称、ID、GUID、来源搜索和分页。
-- 优先使用官方车辆图标；缺失或透明时，根据实际模型自动生成缩略图。
+- 所有车辆都根据实际模型使用统一的自动取景相机生成缩略图，不再采用资产自带的 `Icon2/Icon` 预设取景。
 - 可选择 `128 × 96`、`192 × 144` 或 `256 × 192`，并调整自动取景倍率；生成结果按车辆 GUID 与渲染配置写入磁盘缓存。
 - 每次可生成 `1–20` 辆，并在玩家前方按地面阵列摆放，避免全部重叠。
 
@@ -89,6 +89,13 @@
 - 坐标、朝向、地图和创建时间写入独立 JSON 文件。
 
 界面会保存最后选择的主页面和传送子视图，下次打开时恢复。
+
+### 小地图
+
+- 支持圆形/方形 HUD、锚点、偏移、尺寸和可视半径设置，并提供直接拖动和缩放的布局编辑模式。
+- 可显示玩家、同组原生标记、传送点、僵尸、动物、其他玩家和地面物品；物品可按六档稀有度筛选，并以楼层箭头区分高低差。
+- 背景可在原生地图裁剪、实时地表、实时高度切片和回退网格之间切换；洞穴/建筑遮挡探测会按设置自动选择合适背景。
+- 自动拾取可以显式选择跟随小地图范围与稀有度；两者默认关闭，避免改变既有拾取规则。
 
 ### 其他
 
@@ -155,6 +162,8 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` 
 | `com.codex.unturned.singleplayer-cheat-menu.cfg` | 界面语言、快捷键、UI 缩放、每页卡片数、车辆缩略图、准星工具和移动设置 |
 | `UnturnedSingleplayerCheatMenu.favorites.json` | 物品与车辆收藏 |
 | `UnturnedSingleplayerCheatMenu.teleports.json` | 具名传送点 |
+| `AutoPickup.rules.json` | 自动拾取白名单/黑名单规则 |
+| `UnturnedSingleplayerCheatMenu/InfiniteStorage/<世界>/<玩家>.json` | 按世界和玩家隔离的无限储存数据 |
 | `BepInEx/LogOutput.log` | BepInEx 与插件运行日志 |
 
 默认快捷键是 `End`，可以在配置文件中的 `ToggleShortcut` 修改。修改前请退出游戏。
@@ -162,6 +171,8 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` 
 插件窗口右上角提供 `EN` / `中文` 语言切换按钮，点击后立即刷新界面并写回 `Interface.Language`，不需要重启游戏。
 
 `Interface.Language` 初始默认为 `Auto`：简体/繁体中文 Unturned 使用中文，其余游戏语言使用英文。也可以在配置文件中显式填写 `English` 或 `Chinese`；未知值按 `Auto` 处理。
+
+Workshop 本地化页支持最多两个 API Key。首行保留 `+`，后续行可用 `×` 删除；每个 Key 使用独立 worker 并行消费批次，批量大小范围为 `1–100`。该页面使用垂直滚动布局，增加输入行不会压缩下方设置。
 
 自动扫描只会显示**当前游戏进程已经成功加载并进入 `Assets` 映射的内容**。未订阅、下载失败、依赖缺失或当前地图没有加载的模组不会被插件凭空发现。进入世界后可以在“其他”页点击“重新扫描”刷新。
 
@@ -182,14 +193,10 @@ BepInEx\plugins\UnturnedSingleplayerCheatMenu
 ```powershell
 .\scripts\Prepare-References.ps1 -GameRoot 'C:\Program Files (x86)\Steam\steamapps\common\Unturned'
 dotnet build .\UnturnedSingleplayerCheatMenu.slnx -c Release
-dotnet run --project .\tests\FavoritesSerializationSmoke\FavoritesSerializationSmoke.csproj -c Release
-dotnet run --project .\tests\ItemFilteringSmoke\ItemFilteringSmoke.csproj -c Release
-dotnet run --project .\tests\LocalizationSmoke\LocalizationSmoke.csproj -c Release
-dotnet run --project .\tests\MovementSpeedSmoke\MovementSpeedSmoke.csproj -c Release
-dotnet run --project .\tests\PointToolActionSmoke\PointToolActionSmoke.csproj -c Release
-dotnet run --project .\tests\ShortcutToggleSmoke\ShortcutToggleSmoke.csproj -c Release
-dotnet run --project .\tests\TeleportSerializationSmoke\TeleportSerializationSmoke.csproj -c Release
-dotnet run --project .\tests\VehicleThumbnailSettingsSmoke\VehicleThumbnailSettingsSmoke.csproj -c Release
+Get-ChildItem .\tests -Recurse -Filter '*Smoke.csproj' | Sort-Object FullName | ForEach-Object {
+    dotnet run --project $_.FullName -c Release
+    if ($LASTEXITCODE -ne 0) { throw "Smoke failed: $($_.FullName)" }
+}
 ```
 
 `Prepare-References.ps1` 只会把编译所需程序集复制到被 Git 忽略的本地 `lib/` 目录。Release DLL 输出到 `artifacts/UnturnedSingleplayerCheatMenu.dll`。
@@ -219,3 +226,8 @@ SHA-256: FA500D0EC9E4E927797462CB72D713C1B6E409FE698F2F945C498F64BC31B3CF
 本项目是社区制作的非官方单人游戏模组，与 Smartly Dressed Games、Unturned、BattlEye 或 BepInEx 项目没有隶属或背书关系。使用前请自行备份存档并理解第三方插件可能在游戏更新后失效。
 
 插件源码采用 [MIT License](LICENSE)。Unturned、Unity、BepInEx 及发行包中相应第三方文件仍遵循各自的许可证和权利声明。
+## 当前架构验证入口
+
+当前源码使用单一 `PluginUiRoot`，由 `RuntimeUpdatePatch` 挂接 `Provider/MenuUI/PlayerUI.Update` 并按帧去重后分发 `PluginRuntimeContext` 的 Update/LateUpdate；这条静态桥与旧版相同，不依赖会在 Unturned 启动场景切换时被销毁的临时 BepInEx/Driver 组件。`PluginUiRoot` 若随启动场景丢失会自行重建。它还包含输入释放、窗口拖动/位置持久化和按当前地图隔离的传送点视图。生产源码不再包含旧 IMGUI 菜单或 `UnityEngine.IMGUIModule` 生产引用。
+
+Release 构建后应递归发现并串行运行 `tests/**/*Smoke.csproj`，不要依赖手写项目数量或旧 `bin/obj` 目录。Smoke 只证明源码和自动化契约；输入、IME、EventSystem 场景切换、原生菜单共存、HUD、字体和视觉结果仍需真实单人游戏验收。

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using SDG.Unturned;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Services;
+using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
 
@@ -14,7 +16,7 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 
 	private const float MaxZoom = 8f;
 
-	private const float PlayerMarkerSize = 16f;
+	private const float PlayerMarkerSize = 20f;
 
 	private const float TeleportMarkerSize = 16f;
 
@@ -32,17 +34,13 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 
 	private Image _playerMarker;
 
-	private Image _playerMarkerCenter;
-
 	private Texture2D _texture;
 
 	private Texture2D _playerMarkerTexture;
 
-	private Texture2D _playerMarkerCenterTexture;
-
 	private Sprite _playerMarkerSprite;
 
-	private Sprite _playerMarkerCenterSprite;
+	private bool _ownsPlayerMarkerTexture;
 
 	private Action<Vector3> _rightClick;
 
@@ -51,6 +49,8 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 	private GameObject _tooltipRoot;
 
 	private Text _tooltipText;
+
+	private Font _font;
 
 	private TeleportPoint _tooltipPoint;
 
@@ -107,27 +107,16 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 		GameObject gameObject3 = new GameObject("PlayerMarker", typeof(RectTransform), typeof(Image));
 		gameObject3.transform.SetParent(_content, worldPositionStays: false);
 		_playerMarker = gameObject3.GetComponent<Image>();
-		_playerMarker.sprite = TeleportMarkerIconFactory.CreateCircleSprite(Mathf.RoundToInt(16f), out _playerMarkerTexture);
+		_playerMarker.sprite = CreatePlayerMarkerSprite(out _playerMarkerTexture, out _ownsPlayerMarkerTexture);
 		_playerMarkerSprite = _playerMarker.sprite;
-		_playerMarker.color = new Color(0.1f, 0.48f, 0.88f, 1f);
+		_playerMarker.color = Color.white;
+		_playerMarker.preserveAspect = true;
 		_playerMarker.raycastTarget = false;
 		RectTransform rectTransform = _playerMarker.rectTransform;
 		anchorMin = (_playerMarker.rectTransform.anchorMax = new Vector2(0.5f, 0.5f));
 		rectTransform.anchorMin = anchorMin;
 		_playerMarker.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-		_playerMarker.rectTransform.sizeDelta = new Vector2(16f, 16f);
-		GameObject gameObject4 = new GameObject("PlayerMarkerCenter", typeof(RectTransform), typeof(Image));
-		gameObject4.transform.SetParent(_content, worldPositionStays: false);
-		_playerMarkerCenter = gameObject4.GetComponent<Image>();
-		_playerMarkerCenter.sprite = TeleportMarkerIconFactory.CreateCircleSprite(Mathf.RoundToInt(12.16f), out _playerMarkerCenterTexture);
-		_playerMarkerCenterSprite = _playerMarkerCenter.sprite;
-		_playerMarkerCenter.color = new Color(0.22f, 0.82f, 0.34f, 1f);
-		_playerMarkerCenter.raycastTarget = false;
-		RectTransform rectTransform2 = _playerMarkerCenter.rectTransform;
-		anchorMin = (_playerMarkerCenter.rectTransform.anchorMax = new Vector2(0.5f, 0.5f));
-		rectTransform2.anchorMin = anchorMin;
-		_playerMarkerCenter.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-		_playerMarkerCenter.rectTransform.sizeDelta = new Vector2(12.16f, 12.16f);
+		_playerMarker.rectTransform.sizeDelta = new Vector2(20f, 20f);
 		_zoom = 1f;
 		_lastViewportSize = Vector2.zero;
 		RefreshLayout(force: true);
@@ -136,14 +125,16 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 	public void RefreshPlayerMarker(Vector3 worldPosition)
 	{
 		RefreshLayout();
-		if (!(_playerMarker == null) && !(_playerMarkerCenter == null) && !(_content == null))
+		if (!(_playerMarker == null) && !(_content == null))
 		{
 			Vector2 normalized = TeleportMapService.ProjectWorldPositionToMap(worldPosition);
 			Vector2 anchoredPosition = NormalizedToContentPosition(normalized);
 			_playerMarker.rectTransform.anchoredPosition = anchoredPosition;
-			_playerMarkerCenter.rectTransform.anchoredPosition = anchoredPosition;
+			if (TeleportMapService.TryGetLocalPlayerMapRotation(out float rotation))
+			{
+				_playerMarker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -rotation);
+			}
 			_playerMarker.transform.SetAsLastSibling();
-			_playerMarkerCenter.transform.SetAsLastSibling();
 		}
 	}
 
@@ -246,7 +237,8 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 		{
 			EnsureTooltip();
 			_tooltipPoint = point;
-			_tooltipText.text = $"{point.Name}\n{point.Map} · X {point.X:F1}  Y {point.Y:F1}  Z {point.Z:F1}";
+			string tooltip = $"{point.Name}\n{point.Map} · X {point.X:F1}  Y {point.Y:F1}  Z {point.Z:F1}";
+			_tooltipText.text = tooltip;
 			_tooltipRoot.SetActive(value: true);
 			_tooltipRoot.transform.SetAsLastSibling();
 			if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_viewport, screenPosition, null, out var localPoint))
@@ -309,6 +301,7 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 	{
 		if (!(_tooltipRoot != null))
 		{
+			_font = SystemFontProvider.Resolve(null);
 			_tooltipRoot = new GameObject("TeleportMarkerTooltip", typeof(RectTransform), typeof(Image));
 			_tooltipRoot.transform.SetParent(base.transform, worldPositionStays: false);
 			Image component = _tooltipRoot.GetComponent<Image>();
@@ -325,7 +318,7 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 			component2.sizeDelta = new Vector2(300f, 56f);
 			_tooltipText = new GameObject("Text", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
 			_tooltipText.transform.SetParent(_tooltipRoot.transform, worldPositionStays: false);
-			_tooltipText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+			_tooltipText.font = _font;
 			_tooltipText.fontSize = 12;
 			_tooltipText.color = Color.white;
 			_tooltipText.alignment = TextAnchor.MiddleLeft;
@@ -451,6 +444,19 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 		rect.offsetMax = Vector2.zero;
 	}
 
+	private static Sprite CreatePlayerMarkerSprite(out Texture2D texture, out bool ownsTexture)
+	{
+		texture = PlayerDashboardInformationUI.icons.load<Texture2D>("Player");
+		ownsTexture = false;
+		if (texture != null)
+		{
+			return Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
+		}
+
+		ownsTexture = true;
+		return TeleportMarkerIconFactory.CreateCircleSprite(Mathf.RoundToInt(PlayerMarkerSize), out texture);
+	}
+
 	private void OnDestroy()
 	{
 		if (_tooltipRoot != null)
@@ -475,17 +481,9 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 		{
 			UnityEngine.Object.Destroy(_playerMarkerSprite);
 		}
-		if (_playerMarkerTexture != null)
+		if (_ownsPlayerMarkerTexture && _playerMarkerTexture != null)
 		{
 			UnityEngine.Object.Destroy(_playerMarkerTexture);
-		}
-		if (_playerMarkerCenterSprite != null)
-		{
-			UnityEngine.Object.Destroy(_playerMarkerCenterSprite);
-		}
-		if (_playerMarkerCenterTexture != null)
-		{
-			UnityEngine.Object.Destroy(_playerMarkerCenterTexture);
 		}
 		_markerSprites.Clear();
 		_markerTextures.Clear();

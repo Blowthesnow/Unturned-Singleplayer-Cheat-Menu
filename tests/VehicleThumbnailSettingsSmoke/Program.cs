@@ -12,7 +12,27 @@ Equal(128, defaults.Width, "Default width");
 Equal(96, defaults.Height, "Default height");
 Equal(1.0f, defaults.Framing, "Default framing");
 Equal(1000, defaults.GetFramingMilli(), "Stable milli framing cache key");
-Equal(1, defaults.CacheFormatVersion, "Cache format version");
+Equal(2, defaults.CacheFormatVersion, "Generated-camera cache format version");
+
+string rendererSource;
+using (Stream stream = typeof(VehicleThumbnailRenderSettings).Assembly.GetManifestResourceStream("VehicleIconRenderer.cs")
+    ?? throw new InvalidOperationException("Embedded VehicleIconRenderer source was not found."))
+using (StreamReader reader = new StreamReader(stream))
+{
+    rendererSource = reader.ReadToEnd();
+}
+
+if (rendererSource.Contains("transform.Find(\"Icon2\")", StringComparison.Ordinal) ||
+    rendererSource.Contains("transform.Find(\"Icon\")", StringComparison.Ordinal))
+{
+    throw new InvalidOperationException("Vehicle thumbnails must not use asset-authored Icon2/Icon camera transforms.");
+}
+
+if (!rendererSource.Contains("CreateGeneratedIconTransform(transform, componentsInChildren, settings", StringComparison.Ordinal) ||
+    !rendererSource.Contains("ForceHighestLod(transform);", StringComparison.Ordinal))
+{
+    throw new InvalidOperationException("Vehicle thumbnails must always use the generated camera and highest LOD.");
+}
 
 VehicleThumbnailRenderSettings balanced =
     VehicleThumbnailRenderSettings.Normalize(192, 0.5f);

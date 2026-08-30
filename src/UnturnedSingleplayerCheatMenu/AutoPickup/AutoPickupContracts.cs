@@ -65,19 +65,6 @@ internal sealed class AutoPickupSettings
 
 	public float Range { get; set; } = 40f;
 
-	// Compatibility aliases for older callers/config migrations. The runtime uses Range.
-	public float ScanRadius
-	{
-		get => Range;
-		set => Range = value;
-	}
-
-	public float RequestRange
-	{
-		get => Range;
-		set => Range = value;
-	}
-
 	public float FrequencyHz { get; set; } = 10f;
 
 	public int RequestsPerTick { get; set; } = 4;
@@ -91,6 +78,10 @@ internal sealed class AutoPickupSettings
 	public bool PauseWhenMenuOpen { get; set; } = true;
 
 	public bool PauseWhenDead { get; set; } = true;
+
+	public bool UseMinimapRange { get; set; }
+
+	public bool UseMinimapRarityFilter { get; set; }
 
 	public AutoPickupDiagnosticsLevel Diagnostics { get; set; } = AutoPickupDiagnosticsLevel.Failures;
 
@@ -117,6 +108,8 @@ internal sealed class AutoPickupSettings
 			MinimumQuality = MinimumQuality,
 			PauseWhenMenuOpen = PauseWhenMenuOpen,
 			PauseWhenDead = PauseWhenDead,
+			UseMinimapRange = UseMinimapRange,
+			UseMinimapRarityFilter = UseMinimapRarityFilter,
 			Diagnostics = Diagnostics
 		};
 	}

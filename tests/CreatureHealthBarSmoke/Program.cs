@@ -18,6 +18,12 @@ Check(hudSource.Contains("label.alignment = TextAnchor.MiddleCenter", StringComp
 Check(hudSource.Contains("labelRect.offsetMin = new Vector2(2f, 4f)", StringComparison.Ordinal)
       && hudSource.Contains("labelRect.offsetMax = new Vector2(-2f, 0f)", StringComparison.Ordinal),
     "Health-bar value bounds must keep their size while shifting two reference pixels upward for optical centering.");
+Check(hudSource.Contains("typeof(Canvas), typeof(CanvasScaler)", StringComparison.Ordinal)
+      && hudSource.Contains("CanvasScaler.ScaleMode.ConstantPixelSize", StringComparison.Ordinal)
+      && hudSource.Contains("scaler.scaleFactor = 1f", StringComparison.Ordinal),
+    "Health bars must retain the tooltip-feature pixel-space Canvas so distance scaling is not flattened by the unified UI scaler.");
+Check(!hudSource.Contains("_uiRoot.HudLayer", StringComparison.Ordinal),
+    "Health bars must not be parented under the unified HudLayer because its responsive Canvas changes the tooltip-feature sizing contract.");
 
 Check(ScopeTextureViewportMapper.TryMap(0.4333f, 0.7348f, 3840f, 2160f, true, out float croppedX, out float croppedY),
     "A target inside the single-render middle-square crop must remain visible.");

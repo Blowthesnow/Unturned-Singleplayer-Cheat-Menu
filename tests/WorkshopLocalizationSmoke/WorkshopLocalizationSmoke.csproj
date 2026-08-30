@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx" HintPath="..\..\lib\BepInEx.dll" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\HttpClientHandlerCompatibility.cs" Link="HttpClientHandlerCompatibility.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\MachineTranslationSettings.cs" Link="MachineTranslationSettings.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\ParallelTranslationDispatcher.cs" Link="ParallelTranslationDispatcher.cs" />
+  </ItemGroup>
+</Project>

@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal sealed class MachineTranslationSettings
 {
+	internal const int MaxApiKeyCount = 2;
+
 	internal const string TencentTmtProvider = "TencentTmt";
 
 	internal const string BaiduTranslateProvider = "BaiduTranslate";
@@ -63,11 +66,17 @@ internal sealed class MachineTranslationSettings
 
 	private int _apiKeyIndex;
 
+	private string _apiKey = string.Empty;
+
 	internal string ApiProtocol { get; set; } = "OpenAICompatible";
 
 	internal string Endpoint { get; set; }
 
-	internal string ApiKey { get; set; }
+	internal string ApiKey
+	{
+		get => _apiKey;
+		set => _apiKey = SerializeApiKeys(ParseApiKeys(value));
+	}
 
 	internal string SecretKey { get; set; }
 
@@ -87,10 +96,11 @@ internal sealed class MachineTranslationSettings
 
 	internal int MaxRetries { get; set; } = 2;
 
-	internal int ApiKeyCount => (from value in (ApiKey ?? string.Empty).Split(new char[4] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-		select value.Trim() into value
-		where value.Length > 0
-		select value).Distinct<string>(StringComparer.Ordinal).Count();
+	internal IReadOnlyList<string> ApiKeys => ParseApiKeys(ApiKey);
+
+	internal int ApiKeyCount => ApiKeys.Count;
+
+	internal int ParallelWorkerCount => Math.Max(1, ApiKeyCount);
 
 	internal bool IsProtocolSupported => SupportedProtocols.Any((string value) => string.Equals(value, ApiProtocol, StringComparison.OrdinalIgnoreCase));
 
@@ -158,10 +168,7 @@ internal sealed class MachineTranslationSettings
 
 	internal string GetNextApiKey()
 	{
-		string[] array = (from value in (ApiKey ?? string.Empty).Split(new char[4] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-			select value.Trim() into value
-			where value.Length > 0
-			select value).Distinct<string>(StringComparer.Ordinal).ToArray();
+		string[] array = ApiKeys.ToArray();
 		if (array.Length == 0)
 		{
 			return string.Empty;
@@ -174,9 +181,70 @@ internal sealed class MachineTranslationSettings
 		}
 	}
 
+	internal IReadOnlyList<MachineTranslationSettings> CreateApiKeyWorkerSettings()
+	{
+		IReadOnlyList<string> apiKeys = ApiKeys;
+		if (apiKeys.Count == 0)
+		{
+			return new[] { CloneForApiKey(string.Empty) };
+		}
+		return apiKeys.Select(CloneForApiKey).ToArray();
+	}
+
+	internal static string SerializeApiKeys(IEnumerable<string> values)
+	{
+		return string.Join("\n", NormalizeApiKeys(values));
+	}
+
+	private static IReadOnlyList<string> ParseApiKeys(string value)
+	{
+		return NormalizeApiKeys((value ?? string.Empty).Split(new char[4] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries));
+	}
+
+	private static string[] NormalizeApiKeys(IEnumerable<string> values)
+	{
+		return (values ?? Array.Empty<string>())
+			.Select(value => (value ?? string.Empty).Trim())
+			.Where(value => value.Length > 0)
+			.Distinct(StringComparer.Ordinal)
+			.Take(MaxApiKeyCount)
+			.ToArray();
+	}
+
+	private MachineTranslationSettings CloneForApiKey(string apiKey)
+	{
+		return new MachineTranslationSettings
+		{
+			ApiProtocol = ApiProtocol,
+			Endpoint = Endpoint,
+			ApiKey = apiKey,
+			SecretKey = SecretKey,
+			Region = Region,
+			ProjectId = ProjectId,
+			Model = Model,
+			SourceLanguage = SourceLanguage,
+			TargetLanguage = TargetLanguage,
+			BatchSize = BatchSize,
+			TimeoutSeconds = TimeoutSeconds,
+			MaxRetries = MaxRetries
+		};
+	}
+
 	internal static int NormalizeBatchSize(int value)
 	{
-		return Math.Max(1, Math.Min(50, value));
+		return Math.Max(1, Math.Min(100, value));
+	}
+
+	internal static int ResolveParallelBatchSize(int totalItems, int configuredBatchSize, int workerCount)
+	{
+		int normalizedBatchSize = NormalizeBatchSize(configuredBatchSize);
+		if (totalItems <= 0)
+		{
+			return normalizedBatchSize;
+		}
+		int availableWorkers = Math.Max(1, Math.Min(MaxApiKeyCount, workerCount));
+		int balancedBatchSize = (totalItems + availableWorkers - 1) / availableWorkers;
+		return Math.Max(1, Math.Min(normalizedBatchSize, balancedBatchSize));
 	}
 
 	internal static bool LooksLikeTargetLanguage(string text, string targetLanguage)
