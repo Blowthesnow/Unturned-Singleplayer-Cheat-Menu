@@ -77,7 +77,7 @@ internal sealed partial class CheatMenuOverlayUi
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
-		AddVerticalLayout(gameObject, 5f, new RectOffset(12, 12, 10, 10));
+		AddVerticalLayout(gameObject, CheatMenuStyle.Theme.Space1, new RectOffset(12, 12, 8, 8));
 		SetLayout(gameObject, -1f, 286f, 1f, 1f);
 		CreateLabel(gameObject.transform, "各模式功能介绍", 14, CheatMenuStyle.Text);
 		AddPointToolDescription(gameObject.transform, PointToolMode.Smart, "根据准星目标自动选择单一动作：维修、实用、准星传送、检查或 Shift + 中键删除。");
@@ -141,11 +141,15 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 		_pointToolModeDrawerRoot = CreateObject("PointToolModeDrawer", _uiRoot.PopupLayer, typeof(Image));
 		_uiRoot.RegisterPopup(_pointToolModeDrawerRoot, HidePointToolModeDrawer);
-		_pointToolModeDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image drawerImage = _pointToolModeDrawerRoot.GetComponent<Image>();
+		drawerImage.color = CheatMenuStyle.Panel;
+		_fluentHandles.RegisterScope(_pointToolModeDrawerRoot);
+		_fluentControls.StyleSurface(_pointToolModeDrawerRoot, drawerImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
 		Outline outline = _pointToolModeDrawerRoot.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		_pointToolModeDrawerPopup = _pointToolModeDrawerRoot.GetComponent<RectTransform>();
 		RectTransform pointToolModeDrawerPopup = _pointToolModeDrawerPopup;
 		Vector2 anchorMin = (pointToolModeDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));

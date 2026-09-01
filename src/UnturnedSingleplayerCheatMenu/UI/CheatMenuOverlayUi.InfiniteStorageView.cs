@@ -20,6 +20,20 @@ namespace UnturnedSingleplayerCheatMenu.UI;
 
 internal sealed partial class CheatMenuOverlayUi
 {
+	private static readonly InfiniteStorageDecomposeScope[] InfiniteStorageDecomposeScopes =
+	{
+		InfiniteStorageDecomposeScope.SingleItem,
+		InfiniteStorageDecomposeScope.AssetId,
+		InfiniteStorageDecomposeScope.Stack
+	};
+
+	private bool _infiniteStorageDecomposeMode;
+	private InfiniteStorageDecomposeScope _infiniteStorageDecomposeScope = InfiniteStorageDecomposeScope.SingleItem;
+	private bool _infiniteStorageDecomposeScopeDrawerOpen;
+	private GameObject _infiniteStorageDecomposeScopeDrawerRoot;
+	private RectTransform _infiniteStorageDecomposeScopeDrawerPopup;
+	private Button _infiniteStorageDecomposeScopeTriggerButton;
+
 	private void BuildInfiniteStoragePanel(Transform panel)
 	{
 		InfiniteStoragePageSnapshot snapshot = _infiniteStoragePresenter.CaptureSnapshot();
@@ -38,14 +52,28 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			_infiniteStoragePresenter.SetPickupPriority(value);
 		});
-		CreateLabel(row.transform, "搜索", 13, CheatMenuStyle.Text, 40f);
+		CreateButton(priorityRow.transform, PluginLocalization.Translate("分解模式") + (_infiniteStorageDecomposeMode ? " ON" : " OFF"), delegate
+		{
+			_infiniteStorageDecomposeMode = !_infiniteStorageDecomposeMode;
+			HideInfiniteStorageDecomposeScopeDrawer();
+			SetStatus(_infiniteStorageDecomposeMode ? "分解模式已开启；只有可分解的非材料物品会在悬停时变红。" : "分解模式已关闭。", 4f, StatusKind.Info);
+			RebuildInfiniteStoragePage();
+		}, "开启后只有带原生分解配方的非材料物品卡片会在悬停时变红；点击卡片按所选范围分解，分解产物直接存回无限储存。",
+			132f, 34f, _infiniteStorageDecomposeMode ? CheatMenuStyle.Danger : CheatMenuStyle.Surface, 12);
+		Button decomposeScopeTrigger = null;
+		decomposeScopeTrigger = CreateButton(priorityRow.transform,
+			PluginLocalization.Translate("分解范围") + "：" + PluginLocalization.Translate(InfiniteStorageDecomposeScopeLabel(_infiniteStorageDecomposeScope)) + " ▼",
+			delegate { ToggleInfiniteStorageDecomposeScopeDrawer(decomposeScopeTrigger); },
+			"选择分解范围：单物品只分解一个；ID 分解所有同 ID 物品；堆叠分解当前卡片的全部数量。",
+			170f, 34f, CheatMenuStyle.Surface, 11);
+		CreateLabel(row.transform, "搜索", 13, CheatMenuStyle.Text, 64f);
 		CreateSearchInput(row.transform, _infiniteStorageFilter.SearchQuery, delegate(string value)
 		{
 			_infiniteStorageFilter.SearchQuery = value;
 			_infiniteStoragePage = 0;
 			RefreshInfiniteStorageResultsRegion();
 		}, 220f);
-		CreateLabel(row.transform, "取出数量", 13, CheatMenuStyle.Text, 56f);
+		CreateLabel(row.transform, "取出数量", 13, CheatMenuStyle.Text, CheatMenuStyle.InfiniteStorageWithdrawLabelWidth);
 		CreateButton(row.transform, "−", delegate
 		{
 			_giveAmount = (byte)Math.Max(1, ParseClamped(_itemAmountText, 1, 255, _giveAmount) - 1);
@@ -97,7 +125,7 @@ internal sealed partial class CheatMenuOverlayUi
 		}, asset => storedAssetIds.Contains(asset.id));
 		_infiniteStorageResultsHost = CreateObject("InfiniteStorageResultsHost", _infiniteStorageContentRow.transform, typeof(Image));
 		_infiniteStorageResultsHost.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-		AddVerticalLayout(_infiniteStorageResultsHost, 7f, new RectOffset(8, 8, 8, 8));
+		AddVerticalLayout(_infiniteStorageResultsHost, CheatMenuStyle.Theme.Space2, new RectOffset(8, 8, 8, 8));
 		SetLayout(_infiniteStorageResultsHost, -1f, -1f, 1f, 1f);
 		RefreshInfiniteStorageResultsRegion();
 	}
@@ -164,7 +192,7 @@ internal sealed partial class CheatMenuOverlayUi
 	private void BuildInfiniteStorageGrid(Transform parent, IReadOnlyList<VirtualStorageEntry> entries)
 	{
 		GameObject column = CreateObject("InfiniteStorageGridColumn", parent);
-		AddVerticalLayout(column, 7f, new RectOffset(0, 0, 0, 0));
+		AddVerticalLayout(column, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
 		SetLayout(column, -1f, -1f, 1f, 1f);
 		int pageCount = Math.Max(1, Mathf.CeilToInt(entries.Count / 15f));
 		_infiniteStoragePage = Mathf.Clamp(_infiniteStoragePage, 0, pageCount - 1);
@@ -203,25 +231,219 @@ internal sealed partial class CheatMenuOverlayUi
 		string displayName = asset == null ? "未解析物品 ID " + entry.AssetId : GetItemDisplayName(asset);
 		InfiniteStorageCardMetadata metadata = ItemInstanceSemantics.BuildCardMetadata(asset, entry);
 		string tooltip = asset == null ? "当前资产未解析；条目保持保守状态隔离。" : AssetHoverDetailsBuilder.BuildItem(asset, displayName, asset.itemDescription, _ammoCompatibilityIndex, _catalogPresenter.Items);
+		bool canDecompose = _infiniteStoragePresenter.CanDecompose(entry.EntryId);
+		string interactionTooltip = !_infiniteStorageDecomposeMode
+			? string.Format(PluginLocalization.Translate("点击取出当前数量（{0}）。"), PluginLocalization.Translate(metadata.WithdrawUnitLabel))
+			: canDecompose
+				? string.Format(PluginLocalization.Translate("点击按“{0}”范围分解；产物会直接存回无限储存。"), PluginLocalization.Translate(InfiniteStorageDecomposeScopeLabel(_infiniteStorageDecomposeScope)))
+				: entry.UnitKind == StackUnitKind.ResourceUnits || InfiniteStorageDecomposeEligibility.IsMaterialAsset(asset)
+					? "材料无法继续分解；关闭分解模式后可正常取出。"
+					: "该物品没有可用的原生分解配方；分解模式不会处理它。";
 		Button button = CreateButton(parent, string.Empty, delegate
 		{
+			if (_infiniteStorageDecomposeMode)
+			{
+				if (!canDecompose) return;
+				InfiniteStorageDecomposeResult result = _infiniteStoragePresenter.Decompose(entry.EntryId, _infiniteStorageDecomposeScope);
+				if (result.Success)
+				{
+					SetStatus($"已分解 {result.DecomposedUnitCount:N0} 个物品；{result.ProducedUnitCount:N0} 个产物单位（{result.ProducedAssetCount:N0} 种）已存入无限储存。", 5f, StatusKind.Success);
+				}
+				else
+				{
+					SetStatus(InfiniteStorageDecomposeFailureText(result.Failure), 5f, StatusKind.Warning);
+				}
+				RefreshInfiniteStorageContentRegions();
+				return;
+			}
 			_giveAmount = (byte)ParseClamped(_itemAmountText, 1, 255, _giveAmount);
 			_itemAmountText = _giveAmount.ToString();
 			UpdateItemAmountInput();
 			WithdrawInfiniteStorageEntry(entry, _giveAmount);
-		}, tooltip + "\n\n点击取出当前数量（" + metadata.WithdrawUnitLabel + "）。", 155f, 158f, CheatMenuStyle.Surface, delayTooltip: true);
-		AddCardContents(button.transform, displayName, metadata.Text, () => asset == null ? null : _catalogPresenter.GetItemIcon(asset), isVehicle: false);
-		Button withdrawAll = CreateButton(button.transform, "取全部", delegate
+		}, tooltip + "\n\n" + interactionTooltip, 155f, 158f, CheatMenuStyle.Surface, delayTooltip: true);
+		if (_infiniteStorageDecomposeMode)
 		{
-			WithdrawInfiniteStorageEntry(entry, entry.StoredUnitCount);
-		}, "取出此条目的全部单位。", 62f, 26f, CheatMenuStyle.Accent, 10, delayTooltip: true);
-		RectTransform rect = withdrawAll.GetComponent<RectTransform>();
-		Vector2 anchor = (rect.anchorMax = new Vector2(1f, 1f));
-		rect.anchorMin = anchor;
-		rect.pivot = new Vector2(1f, 1f);
-		rect.anchoredPosition = new Vector2(-5f, -5f);
-		rect.sizeDelta = new Vector2(62f, 26f);
-		withdrawAll.transform.SetAsLastSibling();
+			button.interactable = canDecompose;
+			if (canDecompose)
+			{
+				_fluentControls.MarkDestructiveHover(button);
+			}
+		}
+		AddCardContents(button.transform, displayName, metadata.Text, () => asset == null ? null : _catalogPresenter.GetItemIcon(asset), isVehicle: false);
+		if (!_infiniteStorageDecomposeMode)
+		{
+			Button withdrawAll = CreateButton(button.transform, "取全部", delegate
+			{
+				WithdrawInfiniteStorageEntry(entry, entry.StoredUnitCount);
+			}, "取出此条目的全部单位。", 62f, 26f, CheatMenuStyle.Accent, 10, delayTooltip: true);
+			RectTransform rect = withdrawAll.GetComponent<RectTransform>();
+			Vector2 anchor = (rect.anchorMax = new Vector2(1f, 1f));
+			rect.anchorMin = anchor;
+			rect.pivot = new Vector2(1f, 1f);
+			rect.anchoredPosition = new Vector2(-5f, -5f);
+			rect.sizeDelta = new Vector2(62f, 26f);
+			withdrawAll.transform.SetAsLastSibling();
+		}
+	}
+
+	private static string InfiniteStorageDecomposeScopeLabel(InfiniteStorageDecomposeScope scope)
+	{
+		return scope switch
+		{
+			InfiniteStorageDecomposeScope.AssetId => "ID",
+			InfiniteStorageDecomposeScope.Stack => "堆叠",
+			_ => "单物品"
+		};
+	}
+
+	private static string InfiniteStorageDecomposeScopeTooltip(InfiniteStorageDecomposeScope scope)
+	{
+		return scope switch
+		{
+			InfiniteStorageDecomposeScope.AssetId => "分解无限储存中所有同 ID 的可分解物品，包括不同品质或状态的卡片。",
+			InfiniteStorageDecomposeScope.Stack => "分解鼠标指向卡片中的全部数量；不会处理其他同 ID 卡片。",
+			_ => "只从鼠标指向的卡片分解一个物品。"
+		};
+	}
+
+	private static string InfiniteStorageDecomposeFailureText(InfiniteStorageDecomposeFailure failure)
+	{
+		return failure switch
+		{
+			InfiniteStorageDecomposeFailure.StorageUnavailable => "无限储存尚未启用或加载完成。",
+			InfiniteStorageDecomposeFailure.EntryNotFound => "物品卡片已经失效，请刷新后重试。",
+			InfiniteStorageDecomposeFailure.MaterialNotDecomposable => "材料无法继续分解。",
+			InfiniteStorageDecomposeFailure.AssetNotFound => "无法解析该物品资产。",
+			InfiniteStorageDecomposeFailure.NoSalvageRecipe => "该物品没有原生分解配方。",
+			InfiniteStorageDecomposeFailure.UnsupportedSalvageRecipe => "该物品的分解配方不是受支持的单物品分解配方。",
+			InfiniteStorageDecomposeFailure.OutputAssetNotFound => "分解产物中存在无法解析的物品。",
+			InfiniteStorageDecomposeFailure.PersistenceFailed => "分解结果保存失败，原物品和分解产物已回滚。",
+			InfiniteStorageDecomposeFailure.ArithmeticOverflow => "分解数量过大，操作已取消。",
+			_ => "分解失败，原物品未被扣除。"
+		};
+	}
+
+	private void ToggleInfiniteStorageDecomposeScopeDrawer(Button trigger)
+	{
+		if (_infiniteStorageDecomposeScopeDrawerOpen)
+		{
+			HideInfiniteStorageDecomposeScopeDrawer();
+			return;
+		}
+		_infiniteStorageDecomposeScopeDrawerOpen = true;
+		_infiniteStorageDecomposeScopeTriggerButton = trigger;
+		BuildInfiniteStorageDecomposeScopeDrawer();
+	}
+
+	private void BuildInfiniteStorageDecomposeScopeDrawer()
+	{
+		if (_infiniteStorageDecomposeScopeTriggerButton == null || _uiRoot.PopupLayer == null)
+		{
+			return;
+		}
+		if (_infiniteStorageDecomposeScopeDrawerRoot != null)
+		{
+			QueueForDestroy(_infiniteStorageDecomposeScopeDrawerRoot);
+		}
+		_infiniteStorageDecomposeScopeDrawerRoot = CreateObject("InfiniteStorageDecomposeScopeDrawer", _uiRoot.PopupLayer, typeof(Image));
+		_uiRoot.RegisterPopup(_infiniteStorageDecomposeScopeDrawerRoot, HideInfiniteStorageDecomposeScopeDrawer);
+		Image drawerImage = _infiniteStorageDecomposeScopeDrawerRoot.GetComponent<Image>();
+		drawerImage.color = CheatMenuStyle.Panel;
+		_fluentHandles.RegisterScope(_infiniteStorageDecomposeScopeDrawerRoot);
+		_fluentControls.StyleSurface(_infiniteStorageDecomposeScopeDrawerRoot, drawerImage,
+			ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
+		Outline outline = _infiniteStorageDecomposeScopeDrawerRoot.AddComponent<Outline>();
+		outline.effectColor = CheatMenuStyle.InputBorder;
+		outline.effectDistance = Vector2.one;
+		outline.useGraphicAlpha = false;
+		outline.enabled = false;
+		_infiniteStorageDecomposeScopeDrawerPopup = _infiniteStorageDecomposeScopeDrawerRoot.GetComponent<RectTransform>();
+		_infiniteStorageDecomposeScopeDrawerPopup.anchorMin = _infiniteStorageDecomposeScopeDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f);
+		_infiniteStorageDecomposeScopeDrawerPopup.pivot = new Vector2(0f, 1f);
+		_infiniteStorageDecomposeScopeDrawerPopup.sizeDelta = new Vector2(184f, 144f);
+		VerticalLayoutGroup layout = _infiniteStorageDecomposeScopeDrawerRoot.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(8, 8, 8, 8);
+		layout.spacing = CheatMenuStyle.Theme.Space1;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+		foreach (InfiniteStorageDecomposeScope scope in InfiniteStorageDecomposeScopes)
+		{
+			InfiniteStorageDecomposeScope capturedScope = scope;
+			SetLayout(CreateButton(_infiniteStorageDecomposeScopeDrawerRoot.transform,
+				InfiniteStorageDecomposeScopeLabel(capturedScope), delegate
+				{
+					_infiniteStorageDecomposeScope = capturedScope;
+					HideInfiniteStorageDecomposeScopeDrawer();
+					RebuildInfiniteStoragePage();
+				}, InfiniteStorageDecomposeScopeTooltip(capturedScope), 0f, 40f,
+				capturedScope == _infiniteStorageDecomposeScope ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12).gameObject,
+				-1f, 40f, 1f);
+		}
+		Canvas.ForceUpdateCanvases();
+		LayoutRebuilder.ForceRebuildLayoutImmediate(_infiniteStorageDecomposeScopeDrawerPopup);
+		_infiniteStorageDecomposeScopeDrawerRoot.transform.SetAsLastSibling();
+		PositionInfiniteStorageDecomposeScopeDrawer();
+	}
+
+	private void MaintainInfiniteStorageDecomposeScopeDrawer()
+	{
+		if (_infiniteStorageDecomposeScopeDrawerRoot == null)
+		{
+			return;
+		}
+		PositionInfiniteStorageDecomposeScopeDrawer();
+		if (Input.GetMouseButtonDown(0) && _infiniteStorageDecomposeScopeTriggerButton != null &&
+			_infiniteStorageDecomposeScopeDrawerPopup != null &&
+			!RectTransformUtility.RectangleContainsScreenPoint(_infiniteStorageDecomposeScopeDrawerPopup, Input.mousePosition, null) &&
+			!RectTransformUtility.RectangleContainsScreenPoint(_infiniteStorageDecomposeScopeTriggerButton.GetComponent<RectTransform>(), Input.mousePosition, null))
+		{
+			HideInfiniteStorageDecomposeScopeDrawer();
+		}
+	}
+
+	private void PositionInfiniteStorageDecomposeScopeDrawer()
+	{
+		if (_infiniteStorageDecomposeScopeTriggerButton == null || _infiniteStorageDecomposeScopeDrawerPopup == null || _uiRoot.PopupLayer == null)
+		{
+			return;
+		}
+		RectTransform trigger = _infiniteStorageDecomposeScopeTriggerButton.GetComponent<RectTransform>();
+		RectTransform bounds = _uiRoot.PopupLayer;
+		Vector3[] corners = new Vector3[4];
+		trigger.GetWorldCorners(corners);
+		RectTransformUtility.ScreenPointToLocalPointInRectangle(bounds, RectTransformUtility.WorldToScreenPoint(null, corners[0]), null, out Vector2 bottomLeft);
+		RectTransformUtility.ScreenPointToLocalPointInRectangle(bounds, RectTransformUtility.WorldToScreenPoint(null, corners[1]), null, out Vector2 topLeft);
+		Vector2 size = _infiniteStorageDecomposeScopeDrawerPopup.sizeDelta;
+		bool openAbove = bottomLeft.y - bounds.rect.yMin < size.y + 8f;
+		float x = Mathf.Clamp(bottomLeft.x, bounds.rect.xMin + 8f, bounds.rect.xMax - size.x - 8f);
+		_infiniteStorageDecomposeScopeDrawerPopup.pivot = openAbove ? new Vector2(0f, 0f) : new Vector2(0f, 1f);
+		_infiniteStorageDecomposeScopeDrawerPopup.anchoredPosition = new Vector2(x, openAbove ? topLeft.y : bottomLeft.y);
+	}
+
+	private void HideInfiniteStorageDecomposeScopeDrawer()
+	{
+		_infiniteStorageDecomposeScopeDrawerOpen = false;
+		if (_infiniteStorageDecomposeScopeDrawerRoot != null)
+		{
+			QueueForDestroy(_infiniteStorageDecomposeScopeDrawerRoot);
+		}
+		_infiniteStorageDecomposeScopeDrawerRoot = null;
+		_infiniteStorageDecomposeScopeDrawerPopup = null;
+		_infiniteStorageDecomposeScopeTriggerButton = null;
+	}
+
+	private void DisposeInfiniteStorageDecomposeScopeDrawer()
+	{
+		_infiniteStorageDecomposeScopeDrawerOpen = false;
+		if (_infiniteStorageDecomposeScopeDrawerRoot != null)
+		{
+			UnityEngine.Object.Destroy(_infiniteStorageDecomposeScopeDrawerRoot);
+		}
+		_infiniteStorageDecomposeScopeDrawerRoot = null;
+		_infiniteStorageDecomposeScopeDrawerPopup = null;
+		_infiniteStorageDecomposeScopeTriggerButton = null;
 	}
 
 	private void WithdrawInfiniteStorageEntry(VirtualStorageEntry entry, long amount)

@@ -124,11 +124,15 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 		_inventoryPresetDrawerRoot = CreateObject("InventoryPresetDrawer", _uiRoot.PopupLayer, typeof(Image));
 		_uiRoot.RegisterPopup(_inventoryPresetDrawerRoot, HideInventoryPresetDrawer);
-		_inventoryPresetDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image drawerImage = _inventoryPresetDrawerRoot.GetComponent<Image>();
+		drawerImage.color = CheatMenuStyle.Panel;
+		_fluentHandles.RegisterScope(_inventoryPresetDrawerRoot);
+		_fluentControls.StyleSurface(_inventoryPresetDrawerRoot, drawerImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
 		Outline outline = _inventoryPresetDrawerRoot.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		_inventoryPresetDrawerPopup = _inventoryPresetDrawerRoot.GetComponent<RectTransform>();
 		RectTransform inventoryPresetDrawerPopup = _inventoryPresetDrawerPopup;
 		Vector2 anchorMin = (_inventoryPresetDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
@@ -136,11 +140,11 @@ internal sealed partial class CheatMenuOverlayUi
 		_inventoryPresetDrawerPopup.pivot = new Vector2(0.5f, 1f);
 		InventorySortPreset[] availablePresets = InventorySortRegistry.AvailablePresets;
 		int num = Mathf.CeilToInt((float)availablePresets.Length / 3f);
-		_inventoryPresetDrawerPopup.sizeDelta = new Vector2(352f, 12f + (float)num * 28f + (float)Math.Max(0, num - 1) * 4f);
+		_inventoryPresetDrawerPopup.sizeDelta = new Vector2(352f, CheatMenuStyle.Theme.Space4 + (float)num * CheatMenuStyle.Theme.ControlCompact + (float)Math.Max(0, num - 1) * CheatMenuStyle.Theme.Space1);
 		GridLayoutGroup gridLayoutGroup = _inventoryPresetDrawerRoot.AddComponent<GridLayoutGroup>();
-		gridLayoutGroup.padding = new RectOffset(6, 6, 6, 6);
+		gridLayoutGroup.padding = new RectOffset(8, 8, 8, 8);
 		gridLayoutGroup.spacing = new Vector2(4f, 4f);
-		gridLayoutGroup.cellSize = new Vector2(112f, 28f);
+		gridLayoutGroup.cellSize = new Vector2(112f, CheatMenuStyle.Theme.ControlCompact);
 		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		gridLayoutGroup.constraintCount = 3;
 		gridLayoutGroup.childAlignment = TextAnchor.UpperLeft;
@@ -155,7 +159,7 @@ internal sealed partial class CheatMenuOverlayUi
 				_inventoryPresenter.SetPreset(capturedPreset);
 				HideInventoryPresetDrawer();
 				RefreshActiveToolsPageContent();
-			}, InventoryPresetTooltip(capturedPreset), 0f, 28f, (capturedPreset == inventoryArrangeSettings.Preset) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 10).gameObject, -1f, 28f);
+			}, InventoryPresetTooltip(capturedPreset), 0f, CheatMenuStyle.Theme.ControlCompact, (capturedPreset == inventoryArrangeSettings.Preset) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 10).gameObject, -1f, CheatMenuStyle.Theme.ControlCompact);
 		}
 		Canvas.ForceUpdateCanvases();
 		LayoutRebuilder.ForceRebuildLayoutImmediate(_inventoryPresetDrawerPopup);
@@ -237,11 +241,15 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 		_inventoryScopeDrawerRoot = CreateObject("InventoryScopeDrawer", _uiRoot.PopupLayer, typeof(Image));
 		_uiRoot.RegisterPopup(_inventoryScopeDrawerRoot, HideInventoryScopeDrawer);
-		_inventoryScopeDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image scopeDrawerImage = _inventoryScopeDrawerRoot.GetComponent<Image>();
+		scopeDrawerImage.color = CheatMenuStyle.Panel;
+		_fluentHandles.RegisterScope(_inventoryScopeDrawerRoot);
+		_fluentControls.StyleSurface(_inventoryScopeDrawerRoot, scopeDrawerImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
 		Outline outline = _inventoryScopeDrawerRoot.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		_inventoryScopeDrawerPopup = _inventoryScopeDrawerRoot.GetComponent<RectTransform>();
 		_inventoryScopeDrawerPopup.anchorMin = new Vector2(0.5f, 0.5f);
 		_inventoryScopeDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f);

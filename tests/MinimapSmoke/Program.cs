@@ -6,9 +6,106 @@ static void Check(bool condition, string message)
         throw new InvalidOperationException(message);
 }
 
+static string FindRepositoryFile(params string[] relativeSegments)
+{
+    DirectoryInfo directory = new(AppContext.BaseDirectory);
+    while (directory != null)
+    {
+        string candidate = Path.Combine([directory.FullName, .. relativeSegments]);
+        if (File.Exists(candidate))
+            return candidate;
+        directory = directory.Parent;
+    }
+
+    throw new FileNotFoundException($"Could not locate repository file: {Path.Combine(relativeSegments)}");
+}
+
+string nearbyWorldScannerSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Minimap", "NearbyWorldScanner.cs"));
+Check(nearbyWorldScannerSource.Contains("ZombieManager.AllZombies", StringComparison.Ordinal) &&
+      !nearbyWorldScannerSource.Contains("ZombieManager.getZombiesInRadius", StringComparison.Ordinal),
+    "Zombie radar must scan every instantiated zombie instead of disappearing at navigation-region boundaries.");
+
+Check(ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: true, minimapEnabled: true, showZombies: true) &&
+      !ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: false, minimapEnabled: true, showZombies: true) &&
+      !ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: true, minimapEnabled: false, showZombies: true) &&
+      !ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: true, minimapEnabled: true, showZombies: false),
+    "Zombie-region retention must be restricted to an active singleplayer zombie radar.");
+Check(ZombieRegionRetentionPolicy.ShouldSuppressBoundExitDestroy(
+          retentionEnabled: true, insideBoundUpdate: true, existingZombieCount: 1) &&
+      !ZombieRegionRetentionPolicy.ShouldSuppressBoundExitDestroy(
+          retentionEnabled: true, insideBoundUpdate: false, existingZombieCount: 1) &&
+      !ZombieRegionRetentionPolicy.ShouldSuppressBoundExitDestroy(
+          retentionEnabled: true, insideBoundUpdate: true, existingZombieCount: 0),
+    "Only non-empty ZombieManager bound exits may suppress the native region destroy call.");
+Check(ZombieRegionRetentionPolicy.ShouldReuseExistingRegion(retentionEnabled: true, insideBoundUpdate: true, existingZombieCount: 1) &&
+      !ZombieRegionRetentionPolicy.ShouldReuseExistingRegion(retentionEnabled: true, insideBoundUpdate: true, existingZombieCount: 0),
+    "Re-entering a retained region must reuse its zombies without blocking first-time generation.");
+float protectionRadius = ZombieRegionRetentionPolicy.ResolveProtectionRadius(100f);
+Check(protectionRadius == 116f &&
+      ZombieRegionRetentionPolicy.ResolveProtectionRadius(float.NaN) ==
+          ZombieRegionRetentionPolicy.ProtectionRadiusPaddingMeters &&
+      ZombieRegionRetentionPolicy.IsInsideProtectionRadius(100f, 0f, protectionRadius) &&
+      !ZombieRegionRetentionPolicy.IsInsideProtectionRadius(117f, 0f, protectionRadius),
+    "Radar cleanup must protect the complete scan radius plus a stable boundary hysteresis margin.");
+Check(ZombieRegionRetentionPolicy.CanRecycleRegion(
+          trackedByPlugin: true, isNetworked: false, playerCount: 0,
+          hasLiveZombieInsideProtectionRadius: false) &&
+      !ZombieRegionRetentionPolicy.CanRecycleRegion(
+          trackedByPlugin: false, isNetworked: false, playerCount: 0,
+          hasLiveZombieInsideProtectionRadius: false) &&
+      !ZombieRegionRetentionPolicy.CanRecycleRegion(
+          trackedByPlugin: true, isNetworked: true, playerCount: 0,
+          hasLiveZombieInsideProtectionRadius: false) &&
+      !ZombieRegionRetentionPolicy.CanRecycleRegion(
+          trackedByPlugin: true, isNetworked: false, playerCount: 1,
+          hasLiveZombieInsideProtectionRadius: false) &&
+      !ZombieRegionRetentionPolicy.CanRecycleRegion(
+          trackedByPlugin: true, isNetworked: false, playerCount: 0,
+          hasLiveZombieInsideProtectionRadius: true),
+    "Cleanup may only recycle plugin-retained, inactive, unoccupied regions outside radar protection.");
+Check(ZombieRegionRetentionPolicy.ResolveFarRecycleCount(6) == 0 &&
+      ZombieRegionRetentionPolicy.ResolveFarRecycleCount(10) == 2 &&
+      ZombieRegionRetentionPolicy.ResolveFarRecycleCount(3, 0) == 3,
+    "Far retained regions must use the documented bounded LRU recycle budget.");
+string zombieRetentionPatchSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Patches", "ZombieRegionRetentionPatch.cs"));
+string runtimeContextSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Services", "PluginRuntimeContext.cs"));
+Check(zombieRetentionPatchSource.Contains("onBoundUpdated", StringComparison.Ordinal) &&
+      zombieRetentionPatchSource.Contains("ShouldSuppressBoundExitDestroy", StringComparison.Ordinal) &&
+      zombieRetentionPatchSource.Contains("ShouldReuseExistingRegion", StringComparison.Ordinal) &&
+      zombieRetentionPatchSource.Contains("HasLiveZombieInsideProtectionRadius", StringComparison.Ordinal) &&
+      zombieRetentionPatchSource.Contains("ResolveFarRecycleCount", StringComparison.Ordinal) &&
+      zombieRetentionPatchSource.Contains("region.destroy();", StringComparison.Ordinal) &&
+      runtimeContextSource.Contains("ZombieRegionRetentionPatch.Install(_harmony, _log);", StringComparison.Ordinal) &&
+      runtimeContextSource.Contains("ZombieRegionRetentionPatch.Maintain();", StringComparison.Ordinal) &&
+      runtimeContextSource.Contains("ZombieRegionRetentionPatch.ReleaseAll", StringComparison.Ordinal) &&
+      runtimeContextSource.Contains("ZombieRegionRetentionPatch.ResetForSceneTransition();", StringComparison.Ordinal),
+    "The tested retention, bounded cleanup, scene reset, and teardown paths must remain wired into the live lifecycle.");
+
 MinimapSettings defaults = new MinimapSettings().Normalize();
-Check(!defaults.Enabled && !defaults.ShowItems,
-    "The minimap and item radar must remain opt-in on first launch.");
+Check(!defaults.Enabled && !defaults.ShowItems && !defaults.RotateWithView,
+    "The minimap, item radar, and optional view rotation must remain opt-in on first launch.");
+
+MinimapLayoutInputState layoutInput = new();
+Check(!layoutInput.ShouldBlockGameKeyQueries(9),
+    "Native game input must remain available outside minimap layout editing.");
+layoutInput.SetEditing(active: true, frame: 10);
+Check(layoutInput.ShouldBlockGameKeyQueries(10) && layoutInput.ShouldBlockGameKeyQueries(11),
+    "Native InputEx queries must remain blocked for the complete layout-edit session.");
+layoutInput.SuppressUntilRelease(MinimapLayoutReservedKey.Return, frame: 11);
+layoutInput.SetEditing(active: false, frame: 11);
+Check(layoutInput.ShouldBlockGameKeyQueries(11) && !layoutInput.ShouldBlockGameKeyQueries(12),
+    "Finishing layout editing must still block native key-down handling for the completion frame.");
+Check(layoutInput.ShouldBlockChatAction(frame: 12) && !layoutInput.ShouldBlockChatAction(frame: 13),
+	"The Return key-up tail must block native chat exactly once after applying layout changes.");
+layoutInput.SetEditing(active: true, frame: 20);
+Check(layoutInput.ShouldBlockGameKeyQueries(20) && layoutInput.ShouldBlockGameKeyQueries(21),
+	"End and every other InputEx-driven menu or interaction key must remain blocked while layout editing is active.");
+layoutInput.Reset();
+Check(!layoutInput.IsEditing && !layoutInput.ShouldBlockGameKeyQueries(21),
+    "Layout input interception must reset completely during plugin teardown.");
 Check(defaults.Shape == MinimapShape.Circle && defaults.BackgroundMode == MinimapBackgroundMode.AutoNativeFirst,
     "The first-launch minimap must use a circular, native-map-first background.");
 Check(defaults.Size == 260f && defaults.VisibleRadiusMeters == 100f,
@@ -85,6 +182,19 @@ clone.Shape = MinimapShape.Square;
 clone.ItemRarityMask = ItemRarityMask.Rare | ItemRarityMask.Mythical;
 Check(defaults.Shape == MinimapShape.Circle && defaults.ItemRarityMask == ItemRarityMask.All,
     "A settings clone must not mutate the active settings object.");
+MinimapSettings sharedLayout = new MinimapSettings
+{
+    Anchor = MinimapAnchor.BottomRight,
+    OffsetX = 73f,
+    OffsetY = 91f,
+    Size = 340f,
+    RotateWithView = false
+}.Normalize();
+sharedLayout.RotateWithView = true;
+sharedLayout.Normalize();
+Check(sharedLayout.Anchor == MinimapAnchor.BottomRight && sharedLayout.OffsetX == 73f &&
+      sharedLayout.OffsetY == 91f && sharedLayout.Size == 340f,
+    "Enabling view rotation must reuse the exact fixed-map anchor, offsets, and size.");
 
 MinimapProjectionContext circleProjection = new(
     center: new MinimapWorldPoint(0f, 10f, 0f),
@@ -117,6 +227,21 @@ Check(rotatedLeft.IsVisible && Math.Abs(rotatedLeft.X + 100f) < 0.001f && Math.A
     "A 90-degree CartographyVolume yaw must rotate world +Z onto the map's left edge.");
 Check(Math.Abs(MinimapProjection.ResolvePlayerMarkerRotation(135f, 90f) + 45f) < 0.001f,
     "Only the player marker should rotate relative to the fixed map orientation.");
+MinimapProjectionContext viewRotatedSquare = squareProjection.WithViewportRotation(45f);
+MinimapProjectedPoint newlyVisibleSquareCorner = MinimapProjection.Project(
+    new MinimapWorldPoint(0f, 10f, 120f), viewRotatedSquare);
+Check(!MinimapProjection.Project(new MinimapWorldPoint(0f, 10f, 120f), squareProjection).IsVisible &&
+      newlyVisibleSquareCorner.IsVisible,
+    "Square visibility must be evaluated after the heading-up viewport rotation.");
+Check(Math.Abs(MinimapProjection.ResolveMapContentRotation(false, 135f, 90f)) < 0.001f &&
+      Math.Abs(MinimapProjection.ResolveMapContentRotation(true, 135f, 90f) - 45f) < 0.001f &&
+      Math.Abs(MinimapProjection.ResolveMapContentRotation(true, 5f, 355f) - 10f) < 0.001f,
+    "Fixed north-up must remain unchanged while optional view-up rotation handles angle wraparound.");
+Check(Math.Abs(MinimapProjection.ResolvePlayerMarkerRotation(90f, 135f) - 45f) < 0.001f,
+    "The player pointer must show body heading relative to the rotating view-up map.");
+Check(Math.Abs(MinimapProjection.ResolveContentExtent(false, 100f) - 100f) < 0.001f &&
+      Math.Abs(MinimapProjection.ResolveContentExtent(true, 100f) - 141.42136f) < 0.001f,
+    "Fixed mode must keep its original extent while rotation mode uses diagonal overscan.");
 
 Check(!MinimapRenderPolicy.ShouldRender(needsCamera: false, stateChanged: true, now: 0f, nextRenderTime: 10f) &&
       MinimapRenderPolicy.ShouldRender(needsCamera: true, stateChanged: true, now: 0f, nextRenderTime: 10f) &&

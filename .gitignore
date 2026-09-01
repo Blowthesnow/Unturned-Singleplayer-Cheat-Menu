@@ -1,4 +1,5 @@
 .codebase-memory/
+.codex-build/
 .codex-dotnet-home/
 .tools/
 .vs/

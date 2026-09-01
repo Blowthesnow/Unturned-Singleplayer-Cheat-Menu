@@ -13,6 +13,8 @@ using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Services;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Controls;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
 using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
 using InputField = UnityEngine.UI.InputField;
 
@@ -51,6 +53,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		Error
 	}
 
+	private enum ColorPickerPurpose
+	{
+		TeleportMarker,
+		Accent
+	}
+
 	private sealed class ColorSwatchControl
 	{
 		public Color Color;
@@ -70,7 +78,8 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private const int OverlaySortingOrder = 29900;
 
-	private const float PreferredWindowWidth = 1120f;
+	private const float PreferredWindowWidth = 1280f;
+	private const float PreferredInfiniteStorageWindowWidth = 1120f;
 	private const float PreferredWindowHeight = 790f;
 	private const float MinimumWindowWidth = 900f;
 	private const float MinimumWindowHeight = 620f;
@@ -140,7 +149,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private static readonly string[] TeleportMarkerColorPresets = new string[18]
 	{
-		"#252525", "#F7F5EF", "#1E6BB8", "#4BA3DF", "#2D8036", "#9AC65A", "#C27B10", "#F1BF45", "#AF3030", "#E94A4A",
+		"#252525", "#F7F5EF", "#0078D4", "#4BA3DF", "#2D8036", "#9AC65A", "#C27B10", "#F1BF45", "#AF3030", "#E94A4A",
 		"#CB5A97", "#8659D4", "#D5D4CC", "#8C8D86", "#CDE5FA", "#F8ECD7", "#1C425A", "#4B3917"
 	};
 
@@ -158,6 +167,10 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private readonly MovementToolsPresenter _movementPresenter;
 	private readonly MinimapToolsPresenter _minimapPresenter;
 	private readonly TranslationToolsPresenter _translationPresenter;
+	private readonly LegacyFluentUiContext _fluentContext;
+	private readonly LegacyFluentHandleRegistry _fluentHandles;
+	private readonly LegacyFluentTooltipBridge _fluentTooltips;
+	private readonly LegacyFluentControlAdapter _fluentControls;
 
 	private ItemFilterState _itemFilter => _state.ItemFilter;
 
@@ -221,6 +234,20 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private Text _hoverExplanationText;
 
 	private RectTransform _panel;
+	private GameObject _shellBody;
+	private GameObject _narrowShellBody;
+	private GameObject _pageRegion;
+	private GameObject _navigationViewport;
+	private RectTransform _navigationContent;
+	private RectTransform _narrowNavigationContent;
+	private ScrollRect _navigationScroll;
+	private HorizontalLayoutGroup _wideBodyLayout;
+	private VerticalLayoutGroup _narrowBodyLayout;
+	private VerticalLayoutGroup _wideNavigationLayout;
+	private HorizontalLayoutGroup _narrowNavigationLayout;
+	private ContentSizeFitter _navigationFitter;
+	private ContentSizeFitter _narrowNavigationFitter;
+	private bool? _wideShellLayout;
 
 	private GameObject _contentHost;
 	private CheatMenuPageViewHost _pageViewHost;
@@ -252,7 +279,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private Text _timePreviewText;
 
-	private Slider _timeSlider;
+	private LegacyFluentTimeRingControl _timeRing;
 
 	private readonly List<InputField> _itemAmountInputs = new List<InputField>();
 
@@ -398,6 +425,10 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private Color _teleportColorDraft { get => _state.TeleportColorDraft; set => _state.TeleportColorDraft = value; }
 
+	private Color _accentColor { get => _state.AccentColor; set => _state.AccentColor = value; }
+
+	private ColorPickerPurpose _colorPickerPurpose;
+
 	private Image _teleportColorPreview;
 
 	private Text _teleportColorHexPreview;
@@ -438,6 +469,8 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private GameObject _autoPickupBlacklistPickerRoot;
 
 	private GameObject _autoPickupBlacklistPickerHost;
+
+	private GameObject _autoPickupRarityPickerRoot;
 
 	private GameObject _autoPickupRuleResultsHost;
 
@@ -517,6 +550,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	{
 		_uiRoot = uiRoot ?? throw new ArgumentNullException(nameof(uiRoot));
 		_state = new UiStateStore();
+		CheatMenuStyle.ApplyAccent(_state.AccentColor);
 		PluginUiFeatureAdapter features = new PluginUiFeatureAdapter(plugin);
 		_shellPresenter = new ShellPresenter(features);
 		_characterPresenter = new CharacterPagePresenter(plugin.Actions);
@@ -530,6 +564,10 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_movementPresenter = new MovementToolsPresenter(features);
 		_minimapPresenter = new MinimapToolsPresenter(features);
 		_translationPresenter = new TranslationToolsPresenter(features);
+		_fluentContext = new LegacyFluentUiContext(CheatMenuStyle.Theme, () => _font ?? _shellPresenter.ResolveFont());
+		_fluentHandles = new LegacyFluentHandleRegistry();
+		_fluentTooltips = new LegacyFluentTooltipBridge(ShowHoverExplanation, HideHoverExplanation);
+		_fluentControls = new LegacyFluentControlAdapter(_fluentContext, _fluentHandles, _fluentTooltips);
 		_activeTab = ParseMenuTab(plugin.LastMainTab);
 		_teleportView = ParseTeleportView(plugin.LastTeleportView);
 	}
@@ -564,6 +602,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	internal void CloseInfiniteStorage()
 	{
+		HideInfiniteStorageDecomposeScopeDrawer();
 		HideItemFilterPanel();
 		HideHoverExplanation();
 		if (_infiniteStorageRoot != null)
@@ -583,8 +622,10 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		HideInventoryPresetDrawer();
 		HideInventoryScopeDrawer();
 		HideWorkshopProtocolDrawer();
+		HideInfiniteStorageDecomposeScopeDrawer();
 		HideItemFilterPanel();
 		HideAutoPickupBlacklistPicker();
+		HideAutoPickupRarityPicker();
 		HideHoverExplanation();
 		HideVehicleThumbnailSettings();
 		if (_root != null)
@@ -744,13 +785,13 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	internal void HandleSceneChanged()
 	{
-		if (_panel != null)
+		if (_root != null)
 		{
-			RefreshWindowGeometry(restoreNormalizedPosition: true);
+			RebuildShellVisualTree(_root.activeSelf);
 		}
-		if (_infiniteStoragePanel != null)
+		if (_infiniteStorageRoot != null)
 		{
-			RefreshInfiniteStorageGeometry();
+			RebuildInfiniteStorageVisualTree(_infiniteStorageRoot.activeSelf);
 		}
 	}
 
@@ -771,6 +812,8 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 			new Vector2(PreferredWindowWidth, PreferredWindowHeight),
 			WindowMargin);
 		_panel.localScale = Vector3.one * scale;
+		Canvas.ForceUpdateCanvases();
+		RefreshShellLayout();
 		Canvas.ForceUpdateCanvases();
 		_panel.anchoredPosition = restoreNormalizedPosition
 			? WindowGeometry.RestoreNormalized(_shellPresenter.NormalizedWindowPosition, boundsSize, _panel.rect.size, scale)
@@ -805,7 +848,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 			boundsSize,
 			scale,
 			minimumSize,
-			new Vector2(PreferredWindowWidth, PreferredWindowHeight),
+			new Vector2(PreferredInfiniteStorageWindowWidth, PreferredWindowHeight),
 			WindowMargin);
 		_infiniteStoragePanel.localScale = Vector3.one * scale;
 		_lastInfiniteLayoutScreenWidth = Screen.width;
@@ -839,10 +882,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		DisposeSearchInputs();
 		PumpDeferredDestroy();
 		HideHoverExplanation();
-		_pageViewHost?.Dispose();
+		DisposeInfiniteStorageDecomposeScopeDrawer();
+		_pageViewHost?.DetachForAncestorDestroy();
 		_pageViewHost = null;
-		_toolsPageViewHost?.Dispose();
+		_toolsPageViewHost?.DetachForAncestorDestroy();
 		_toolsPageViewHost = null;
+		_fluentHandles.Clear();
 		if (_root != null)
 		{
 			UnityEngine.Object.Destroy(_root);
@@ -909,11 +954,29 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			UnityEngine.Object.Destroy(_autoPickupBlacklistPickerRoot);
 		}
+		if (_autoPickupRarityPickerRoot != null)
+		{
+			UnityEngine.Object.Destroy(_autoPickupRarityPickerRoot);
+		}
 		if (_teleportColorPickerRoot != null)
 		{
 			UnityEngine.Object.Destroy(_teleportColorPickerRoot);
 		}
 		_root = null;
+		_shellBody = null;
+		_narrowShellBody = null;
+		_pageRegion = null;
+		_navigationViewport = null;
+		_navigationContent = null;
+		_narrowNavigationContent = null;
+		_navigationScroll = null;
+		_wideBodyLayout = null;
+		_narrowBodyLayout = null;
+		_wideNavigationLayout = null;
+		_narrowNavigationLayout = null;
+		_navigationFitter = null;
+		_narrowNavigationFitter = null;
+		_wideShellLayout = null;
 		_infiniteStorageRoot = null;
 		_infiniteStoragePanel = null;
 		_infiniteStorageContentHost = null;
@@ -928,7 +991,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_teleportMapSurface = null;
 		_timeCurrentText = null;
 		_timePreviewText = null;
-		_timeSlider = null;
+		_timeRing = null;
 		_itemAmountInputs.Clear();
 		_vehicleAmountInputs.Clear();
 		_confirmRoot = null;
@@ -957,6 +1020,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_inventoryScopeTriggerButton = null;
 		_autoPickupBlacklistPickerRoot = null;
 		_autoPickupBlacklistPickerHost = null;
+		_autoPickupRarityPickerRoot = null;
 		_autoPickupRuleResultsHost = null;
 		_workshopLocalizationStateText = null;
 		_workshopLocalizationSummaryText = null;
@@ -1001,28 +1065,54 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 			_panel.sizeDelta = Vector2.zero;
 			_panel.anchoredPosition = Vector2.zero;
 			_panel.localScale = Vector3.one;
-			gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
+			Image panelImage = gameObject.GetComponent<Image>();
+			panelImage.color = CheatMenuStyle.Panel;
+			_fluentHandles.RegisterScope(gameObject);
+			_fluentControls.StyleSurface(gameObject, panelImage, FluentSurfaceRole.Panel, CheatMenuStyle.Theme.RadiusPanel);
 			VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-			verticalLayoutGroup.padding = new RectOffset(18, 18, 14, 14);
-			verticalLayoutGroup.spacing = 9f;
+			verticalLayoutGroup.padding = new RectOffset(16, 16, 12, 12);
+			verticalLayoutGroup.spacing = CheatMenuStyle.Theme.Space3;
 			verticalLayoutGroup.childControlWidth = true;
 			verticalLayoutGroup.childControlHeight = true;
 			verticalLayoutGroup.childForceExpandWidth = true;
 			verticalLayoutGroup.childForceExpandHeight = false;
 			BuildHeader(gameObject.transform);
-			BuildTabs(gameObject.transform);
+			_shellBody = CreateObject("ShellBody", gameObject.transform);
+			SetLayout(_shellBody, -1f, -1f, 1f, 1f);
+			_wideBodyLayout = _shellBody.AddComponent<HorizontalLayoutGroup>();
+			_wideBodyLayout.spacing = CheatMenuStyle.Theme.Space3;
+			_wideBodyLayout.childAlignment = TextAnchor.UpperLeft;
+			_wideBodyLayout.childControlWidth = true;
+			_wideBodyLayout.childControlHeight = true;
+			_wideBodyLayout.childForceExpandWidth = false;
+			_wideBodyLayout.childForceExpandHeight = true;
+			_narrowShellBody = CreateObject("NarrowShellBody", gameObject.transform);
+			SetLayout(_narrowShellBody, -1f, -1f, 1f, 1f);
+			_narrowBodyLayout = _narrowShellBody.AddComponent<VerticalLayoutGroup>();
+			_narrowBodyLayout.spacing = CheatMenuStyle.Theme.Space2;
+			_narrowBodyLayout.childAlignment = TextAnchor.UpperLeft;
+			_narrowBodyLayout.childControlWidth = true;
+			_narrowBodyLayout.childControlHeight = true;
+			_narrowBodyLayout.childForceExpandWidth = true;
+			_narrowBodyLayout.childForceExpandHeight = false;
+			_narrowShellBody.SetActive(value: false);
+			BuildTabs(_shellBody.transform);
+			_pageRegion = CreateObject("PageRegion", _shellBody.transform);
+			SetLayout(_pageRegion, -1f, -1f, 1f, 1f);
 			_pageViewHost = new CheatMenuPageViewHost(CreatePageView);
 			GameObject gameObject2 = CreateObject("Status", gameObject.transform, typeof(Image));
-			gameObject2.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+			Image statusImage = gameObject2.GetComponent<Image>();
+			statusImage.color = CheatMenuStyle.SurfaceInset;
 			Outline outline = gameObject2.AddComponent<Outline>();
 			outline.effectColor = CheatMenuStyle.StatusBorder;
 			outline.effectDistance = Vector2.one;
 			outline.useGraphicAlpha = false;
-			SetLayout(gameObject2, -1f, 34f, -1f, 0f);
-			gameObject2.GetComponent<LayoutElement>().minHeight = 34f;
+			SetLayout(gameObject2, -1f, CheatMenuStyle.Theme.ControlDefault, -1f, 0f);
+			gameObject2.GetComponent<LayoutElement>().minHeight = CheatMenuStyle.Theme.ControlDefault;
+			_fluentControls.StyleSurface(gameObject2, statusImage, FluentSurfaceRole.Muted, CheatMenuStyle.Theme.RadiusField);
 			HorizontalLayoutGroup horizontalLayoutGroup = gameObject2.AddComponent<HorizontalLayoutGroup>();
-			horizontalLayoutGroup.padding = new RectOffset(11, 11, 0, 0);
-			horizontalLayoutGroup.spacing = 9f;
+			horizontalLayoutGroup.padding = new RectOffset(12, 12, 0, 0);
+			horizontalLayoutGroup.spacing = CheatMenuStyle.Theme.Space3;
 			horizontalLayoutGroup.childAlignment = TextAnchor.MiddleLeft;
 			horizontalLayoutGroup.childControlWidth = true;
 			horizontalLayoutGroup.childControlHeight = true;
@@ -1066,10 +1156,13 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_infiniteStoragePanel.pivot = new Vector2(0.5f, 0.5f);
 		_infiniteStoragePanel.sizeDelta = Vector2.zero;
 		_infiniteStoragePanel.localScale = Vector3.one;
-		panel.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image panelImage = panel.GetComponent<Image>();
+		panelImage.color = CheatMenuStyle.Panel;
+		_fluentHandles.RegisterScope(panel);
+		_fluentControls.StyleSurface(panel, panelImage, FluentSurfaceRole.Panel, CheatMenuStyle.Theme.RadiusPanel);
 		VerticalLayoutGroup layout = panel.AddComponent<VerticalLayoutGroup>();
-		layout.padding = new RectOffset(18, 18, 14, 14);
-		layout.spacing = 9f;
+		layout.padding = new RectOffset(16, 16, 12, 12);
+		layout.spacing = CheatMenuStyle.Theme.Space3;
 		layout.childControlWidth = true;
 		layout.childControlHeight = true;
 		layout.childForceExpandWidth = true;
@@ -1079,9 +1172,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		CreateFlexibleSpacer(header.transform);
 		CreateWindowCloseButton(header.transform, _shellPresenter.CloseInfiniteStorage, "关闭无限储存窗口。");
 		_infiniteStorageContentHost = CreateObject("InfiniteStorageContentHost", panel.transform, typeof(Image));
-		_infiniteStorageContentHost.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
+		_fluentHandles.RegisterScope(_infiniteStorageContentHost);
+		Image contentImage = _infiniteStorageContentHost.GetComponent<Image>();
+		contentImage.color = CheatMenuStyle.Surface;
 		SetLayout(_infiniteStorageContentHost, -1f, -1f, -1f, 1f);
-		AddVerticalLayout(_infiniteStorageContentHost, 9f, new RectOffset(12, 12, 10, 10)).childForceExpandHeight = false;
+		_fluentControls.StyleSurface(_infiniteStorageContentHost, contentImage, FluentSurfaceRole.Surface, CheatMenuStyle.Theme.RadiusControl);
+		AddVerticalLayout(_infiniteStorageContentHost, CheatMenuStyle.Theme.Space2, new RectOffset(12, 12, 8, 8)).childForceExpandHeight = false;
 		_infiniteStorageRoot.SetActive(value: false);
 		RefreshInfiniteStorageGeometry();
 	}
@@ -1094,6 +1190,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		}
 		HideHoverExplanation();
 		HideItemFilterPanel();
+		HideInfiniteStorageDecomposeScopeDrawer();
 		if (_infiniteStorageContentHost != null)
 		{
 			QueueForDestroy(_infiniteStorageContentHost);
@@ -1104,9 +1201,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_infiniteStorageFilterButtonText = null;
 		_infiniteStorageSummaryText = null;
 		_infiniteStorageContentHost = CreateObject("InfiniteStorageContentHost", _infiniteStoragePanel, typeof(Image));
-		_infiniteStorageContentHost.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
+		_fluentHandles.RegisterScope(_infiniteStorageContentHost);
+		Image contentImage = _infiniteStorageContentHost.GetComponent<Image>();
+		contentImage.color = CheatMenuStyle.Surface;
 		SetLayout(_infiniteStorageContentHost, -1f, -1f, -1f, 1f);
-		AddVerticalLayout(_infiniteStorageContentHost, 9f, new RectOffset(12, 12, 10, 10)).childForceExpandHeight = false;
+		_fluentControls.StyleSurface(_infiniteStorageContentHost, contentImage, FluentSurfaceRole.Surface, CheatMenuStyle.Theme.RadiusControl);
+		AddVerticalLayout(_infiniteStorageContentHost, CheatMenuStyle.Theme.Space2, new RectOffset(12, 12, 8, 8)).childForceExpandHeight = false;
 		BuildInfiniteStoragePanel(_infiniteStorageContentHost.transform);
 	}
 
@@ -1120,6 +1220,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			RebuildInfiniteStoragePage();
 		}
+		MaintainInfiniteStorageDecomposeScopeDrawer();
 	}
 
 	private GameObject GetActiveOverlayRoot()
@@ -1133,9 +1234,9 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void BuildHeader(Transform parent)
 	{
-		GameObject gameObject = CreateRow(parent, 46f, 10f);
-		GameObject dragArea = CreateRow(gameObject.transform, 46f, 10f);
-		SetLayout(dragArea, -1f, 46f, 1f);
+		GameObject gameObject = CreateRow(parent, 56f, 10f);
+		GameObject dragArea = CreateRow(gameObject.transform, 56f, 10f);
+		SetLayout(dragArea, -1f, 56f, 1f);
 		Image dragSurface = dragArea.AddComponent<Image>();
 		dragSurface.color = new Color(0f, 0f, 0f, 0f);
 		dragSurface.raycastTarget = true;
@@ -1151,8 +1252,9 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			bool persisted = _shellPresenter.ToggleLanguage();
 			RebuildForLanguageChange(persisted);
-		}, "切换界面语言并立即重建当前菜单。", 58f, 36f, CheatMenuStyle.Accent);
-		CreateButton(gameObject.transform, "字体", ShowFontPicker, "选择此菜单使用的界面字体。", 58f, 36f, CheatMenuStyle.Surface);
+		}, "切换界面语言并立即重建当前菜单。", 58f, 40f, CheatMenuStyle.Accent);
+		CreateButton(gameObject.transform, "字体", ShowFontPicker, "选择此菜单使用的界面字体。", 58f, 40f, CheatMenuStyle.Surface);
+		CreateAccentPickerButton(gameObject.transform);
 		_mapAndShortcutText = CreateText(gameObject.transform, string.Empty, 13, CheatMenuStyle.Muted, TextAnchor.MiddleRight);
 		SetLayout(_mapAndShortcutText.gameObject, 220f);
 		CreateWindowCloseButton(gameObject.transform, delegate
@@ -1176,45 +1278,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void RebuildForLanguageChange(bool persisted)
 	{
-		GameObject root = _root;
-		_pageViewHost?.Dispose();
-		_pageViewHost = null;
-		_toolsPageViewHost?.Dispose();
-		_toolsPageViewHost = null;
-		_root = null;
-		_panel = null;
-		_contentHost = null;
-		_itemResultsHost = null;
-		_vehicleResultsHost = null;
-		_favoriteResultsHost = null;
-		_mapAndShortcutText = null;
-		_statusText = null;
-		_statusAccent = null;
-		_aboutRoot = null;
-		_fontPickerRoot = null;
-		_shortcutRoot = null;
-		_shortcutScrollRect = null;
-		_shortcutScrollContent = null;
-		_workshopLocalizationScrollRect = null;
-		_workshopLocalizationScrollContent = null;
-		_shortcutCaptureText = null;
-		_shortcutCaptureModifiers.Clear();
-		_shortcutCaptureActive = false;
-		_lastHeaderMap = string.Empty;
-		_lastHeaderShortcut = string.Empty;
-		_tabButtons.Clear();
-		if (root != null)
-		{
-			QueueForDestroy(root);
-		}
-		EnsureShell();
-		RefreshHeader();
-		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
-		{
-			RefreshWorkshopLocalizationPageValues();
-		}
-		_root.SetActive(value: true);
-		ShowTab(_activeTab);
+		RebuildVisualTreesPreservingVisibility();
 		SetStatus(PluginLocalization.LanguageChangedMessage(persisted), 5f, persisted ? StatusKind.Success : StatusKind.Warning);
 	}
 
@@ -1229,87 +1293,6 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 				_lastHeaderMap = text;
 				_lastHeaderShortcut = shortcutLabel;
 				_mapAndShortcutText.text = text + "  ·  " + shortcutLabel;
-			}
-		}
-	}
-
-	private void BuildTabs(Transform parent)
-	{
-		GameObject viewport = CreateObject("MainTabScroll", parent, typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-		SetLayout(viewport, -1f, 43f, 1f, 0f);
-		viewport.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
-		RectTransform viewportRect = viewport.GetComponent<RectTransform>();
-		GameObject content = CreateObject("MainTabContent", viewport.transform);
-		RectTransform contentRect = content.GetComponent<RectTransform>();
-		contentRect.anchorMin = new Vector2(0f, 0f);
-		contentRect.anchorMax = new Vector2(0f, 1f);
-		contentRect.pivot = new Vector2(0f, 0.5f);
-		contentRect.offsetMin = Vector2.zero;
-		contentRect.offsetMax = Vector2.zero;
-		LayoutElement contentLayout = content.AddComponent<LayoutElement>();
-		contentLayout.minWidth = PreferredWindowWidth - 36f;
-		HorizontalLayoutGroup layout = content.AddComponent<HorizontalLayoutGroup>();
-		layout.spacing = 7f;
-		layout.childAlignment = TextAnchor.MiddleCenter;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = false;
-		layout.childForceExpandHeight = false;
-		ContentSizeFitter fitter = content.AddComponent<ContentSizeFitter>();
-		fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-		ScrollRect scroll = viewport.GetComponent<ScrollRect>();
-		scroll.viewport = viewportRect;
-		scroll.content = contentRect;
-		scroll.horizontal = true;
-		scroll.vertical = false;
-		scroll.movementType = ScrollRect.MovementType.Clamped;
-		scroll.scrollSensitivity = 32f;
-		AddTab(content.transform, MenuTab.Character, "角色");
-		AddTab(content.transform, MenuTab.Items, "物品");
-		AddTab(content.transform, MenuTab.Vehicles, "载具");
-		AddTab(content.transform, MenuTab.Favorites, "收藏");
-		AddTab(content.transform, MenuTab.Teleports, "传送");
-		AddTab(content.transform, MenuTab.Tools, "工具");
-		AddTab(content.transform, MenuTab.Other, "其他");
-	}
-
-	private void AddTab(Transform parent, MenuTab tab, string label)
-	{
-		Button button = CreateButton(parent, label, delegate
-		{
-			ShowTab(tab, invalidate: false);
-		}, string.Format(PluginLocalization.Translate("切换到“{0}”主页面。"), PluginLocalization.Translate(label)), 140f, 40f, CheatMenuStyle.Surface, 15);
-		SetLayout(button.gameObject, 140f, 40f, 0f, 0f);
-		_tabButtons[tab] = button;
-	}
-
-	private void ShowTab(MenuTab tab, bool invalidate = true)
-	{
-		bool replacingView = invalidate || _activeTab != tab;
-		_activeTab = tab;
-		_shellPresenter.SetLastMainTab(tab.ToString());
-		HideHoverExplanation();
-		HidePointToolModeDrawer();
-		HideInventoryPresetDrawer();
-		HideInventoryScopeDrawer();
-		HideWorkshopProtocolDrawer();
-		HideAutoPickupBlacklistPicker();
-		if (replacingView)
-		{
-			ResetCatalogPageViewReferences();
-		}
-		_contentHost = _pageViewHost.Activate(tab, invalidate);
-		foreach (KeyValuePair<MenuTab, Button> tabButton in _tabButtons)
-		{
-			Color color = ((tabButton.Key == tab) ? CheatMenuStyle.Accent : CheatMenuStyle.Surface);
-			OverlaySelectableVisual component = tabButton.Value.GetComponent<OverlaySelectableVisual>();
-			if (component != null)
-			{
-				component.SetBaseColor(color);
-			}
-			else
-			{
-				tabButton.Value.GetComponent<Image>().color = color;
 			}
 		}
 	}
@@ -1357,10 +1340,13 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private GameObject CreatePageHost(MenuTab tab)
 	{
-		GameObject host = CreateObject(tab + "PageView", _panel, typeof(Image));
-		host.transform.SetSiblingIndex(2);
-		host.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
-		SetLayout(host, -1f, -1f, -1f, 1f);
+		GameObject host = CreateObject(tab + "PageView", _pageRegion.transform, typeof(Image));
+		RectTransform hostRect = host.GetComponent<RectTransform>();
+		Stretch(hostRect);
+		Image hostImage = host.GetComponent<Image>();
+		hostImage.color = CheatMenuStyle.Surface;
+		_fluentHandles.RegisterScope(host);
+		_fluentControls.StyleSurface(host, hostImage, FluentSurfaceRole.Surface, CheatMenuStyle.Theme.RadiusControl);
 		return host;
 	}
 
@@ -1382,11 +1368,13 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	{
 		GameObject gameObject = CreateObject("Toggle", parent, typeof(Image), typeof(Toggle));
 		Image component = gameObject.GetComponent<Image>();
-		component.color = (current ? CheatMenuStyle.Accent : CheatMenuStyle.Surface);
+		Color baseColor = current ? CheatMenuStyle.Accent : CheatMenuStyle.Surface;
+		component.color = baseColor;
 		Outline outline = gameObject.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.ToggleBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		Toggle component2 = gameObject.GetComponent<Toggle>();
 		component2.targetGraphic = component;
 		ColorBlock colors = component2.colors;
@@ -1402,8 +1390,9 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		text.rectTransform.sizeDelta = new Vector2(30f, 0f);
 		text.rectTransform.anchoredPosition = new Vector2(7f, 0f);
 		component2.graphic = text;
-		Text text2 = CreateText(gameObject.transform, label + "  " + (current ? "ON" : "OFF"), 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-		SetOffsets(text2.rectTransform, 43f, 8f, 2f, 2f);
+		string localizedLabel = PluginLocalization.Translate(label);
+		Text text2 = CreateText(gameObject.transform, localizedLabel + "  " + (current ? "ON" : "OFF"), 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold, localize: false);
+		SetOffsets(text2.rectTransform, 12f, 64f, 2f, 2f);
 		GameObject gameObject2 = CreateObject("FocusIndicator", gameObject.transform, typeof(Image));
 		Image component3 = gameObject2.GetComponent<Image>();
 		component3.color = CheatMenuStyle.AccentBright;
@@ -1415,16 +1404,15 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component4.anchoredPosition = Vector2.zero;
 		component4.sizeDelta = new Vector2(0f, 3f);
 		gameObject2.SetActive(value: false);
-		OverlaySelectableVisual toggleVisual = gameObject.AddComponent<OverlaySelectableVisual>();
-		toggleVisual.Initialize(component2, component, text2, gameObject2, outline, component.color);
-		toggleVisual.SetHoverExplanation(tooltip, ShowHoverExplanation, HideHoverExplanation);
 		component2.isOn = current;
-		component2.onValueChanged.AddListener(delegate(bool value)
+		OverlaySelectableVisual toggleVisual = null;
+		_fluentControls.AdaptToggle(gameObject, component2, component, text2, text.gameObject, gameObject2, outline, baseColor, delegate(bool value)
 		{
-			toggleVisual.SetBaseColor(value ? CheatMenuStyle.Accent : CheatMenuStyle.Surface);
+			toggleVisual?.SetBaseColor(value ? CheatMenuStyle.Accent : CheatMenuStyle.Surface);
 			text2.text = PluginLocalization.Translate(label) + "  " + (value ? "ON" : "OFF");
-			change(value);
-		});
+			change?.Invoke(value);
+		}, tooltip);
+		toggleVisual = gameObject.GetComponent<OverlaySelectableVisual>();
 		SetLayout(gameObject, -1f, 40f, 1f);
 	}
 
@@ -1440,11 +1428,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void CreateSection(Transform parent, string text)
 	{
-		GameObject gameObject = CreateRow(parent, 30f, 8f);
+		GameObject gameObject = CreateRow(parent, CheatMenuStyle.Theme.ControlCompact, CheatMenuStyle.Theme.Space2);
 		GameObject gameObject2 = CreateObject("SectionMarker", gameObject.transform, typeof(Image));
 		Image component = gameObject2.GetComponent<Image>();
 		component.color = CheatMenuStyle.Accent;
 		component.raycastTarget = false;
+		_fluentControls.StyleSurface(gameObject2, component, FluentSurfaceRole.Accent, CheatMenuStyle.Theme.RadiusField);
 		SetLayout(gameObject2, 4f, 18f, 0f);
 		SetLayout(CreateText(gameObject.transform, text, 17, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold).gameObject, -1f, -1f, 1f);
 	}
@@ -1452,35 +1441,40 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private void CreateSummaryPanel(Transform parent, string text)
 	{
 		GameObject gameObject = CreateObject("Summary", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.SurfaceRaised;
+		Image image = gameObject.GetComponent<Image>();
+		image.color = CheatMenuStyle.SurfaceRaised;
 		Outline outline = gameObject.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.SummaryBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
-		SetLayout(gameObject, -1f, 42f);
+		outline.enabled = false;
+		_fluentControls.StyleSurface(gameObject, image, FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
+		SetLayout(gameObject, -1f, CheatMenuStyle.Theme.ControlDefault);
 		SetOffsets(CreateText(gameObject.transform, text, 14, CheatMenuStyle.Text, TextAnchor.MiddleCenter, FontStyle.Bold).rectTransform, 12f, 12f, 4f, 4f);
 	}
 
 	private void CreateEmptyState(Transform parent, string title, string hint)
 	{
 		GameObject gameObject = CreateObject("EmptyState", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.SurfaceRaised;
-		AddVerticalLayout(gameObject, 4f, new RectOffset(18, 18, 14, 14)).childAlignment = TextAnchor.MiddleCenter;
+		Image image = gameObject.GetComponent<Image>();
+		image.color = CheatMenuStyle.SurfaceRaised;
+		_fluentControls.StyleSurface(gameObject, image, FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
+		AddVerticalLayout(gameObject, CheatMenuStyle.Theme.Space1, new RectOffset(16, 16, 12, 12)).childAlignment = TextAnchor.MiddleCenter;
 		SetLayout(gameObject, -1f, 92f, 1f);
 		SetLayout(CreateText(gameObject.transform, title, 16, CheatMenuStyle.Text, TextAnchor.MiddleCenter, FontStyle.Bold).gameObject, -1f, 28f);
 		SetLayout(CreateText(gameObject.transform, hint, 12, CheatMenuStyle.Muted, TextAnchor.MiddleCenter).gameObject, -1f, 24f);
 	}
 
-	private Text CreateLabel(Transform parent, string text, int size, Color? color = null, float width = 0f, TextAnchor alignment = TextAnchor.MiddleLeft)
+	private Text CreateLabel(Transform parent, string text, int size, Color? color = null, float width = 0f, TextAnchor alignment = TextAnchor.MiddleLeft, bool localize = true)
 	{
-		Text text2 = CreateText(parent, text, size, color ?? CheatMenuStyle.Text, alignment);
+		Text text2 = CreateText(parent, text, size, color ?? CheatMenuStyle.Text, alignment, FontStyle.Normal, localize);
 		SetLayout(text2.gameObject, (width > 0f) ? width : (-1f), 27f);
 		return text2;
 	}
 
 	private void CreateLabeledInput(Transform parent, string label, string value, Action<string> changed, float width = 120f, bool password = false, bool commitOnEndEdit = false, float labelWidth = 0f, string tooltip = null)
 	{
-		GameObject gameObject = CreateRow(parent, 38f, 6f);
+		GameObject gameObject = CreateRow(parent, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		SetLayout(gameObject, width, -1f, (width <= 0f) ? 1f : 0f);
 		string text = PluginLocalization.Translate(label);
 		float width2 = ((labelWidth > 0f) ? labelWidth : Mathf.Clamp((float)text.Length * 12f + 12f, 86f, 150f));
@@ -1515,14 +1509,6 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		Text text2 = CreateText(gameObject.transform, "输入…", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Italic);
 		SetOffsets(text2.rectTransform, 9f, 9f, 2f, 2f);
 		component2.placeholder = text2;
-		if (changed != null && commitOnEndEdit)
-		{
-			component2.onEndEdit.AddListener(changed.Invoke);
-		}
-		else if (changed != null)
-		{
-			component2.onValueChanged.AddListener(changed.Invoke);
-		}
 		GameObject gameObject2 = CreateObject("FocusIndicator", gameObject.transform, typeof(Image));
 		Image component3 = gameObject2.GetComponent<Image>();
 		component3.color = CheatMenuStyle.AccentBright;
@@ -1534,9 +1520,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component4.anchoredPosition = Vector2.zero;
 		component4.sizeDelta = new Vector2(3f, 0f);
 		gameObject2.SetActive(value: false);
-		OverlaySelectableVisual overlaySelectableVisual = gameObject.AddComponent<OverlaySelectableVisual>();
-		overlaySelectableVisual.Initialize(component2, component, text, gameObject2, outline, component.color);
-		overlaySelectableVisual.SetHoverExplanation(hoverExplanation, ShowHoverExplanation, HideHoverExplanation);
+		_fluentControls.AdaptInput(gameObject, component2, component, text, gameObject2, outline, changed, commitOnEndEdit, hoverExplanation);
 		SetLayout(gameObject, (width > 0f) ? width : (-1f), 34f, flexibleWidth);
 		return component2;
 	}
@@ -1544,7 +1528,9 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private InputField CreateSearchInput(Transform parent, string value, Action<string> changed, float width = 0f, float flexibleWidth = 0f, string hoverExplanation = null)
 	{
 		InputField input = CreateInput(parent, value, null, width, flexibleWidth, password: false, commitOnEndEdit: false, hoverExplanation: hoverExplanation);
-		_searchInputs.Add(new UiSearchInputController(input, changed));
+		UiSearchInputController controller = new UiSearchInputController(input, changed);
+		_searchInputs.Add(controller);
+		_fluentControls.TrackLifetime(input.gameObject, controller);
 		return input;
 	}
 
@@ -1561,10 +1547,11 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component.maxValue = 1f;
 		component.value = Mathf.Clamp01(normalized);
 		component.direction = Slider.Direction.LeftToRight;
-		SetLayout(gameObject, 170f, 22f, 0f, 0f);
+		SetLayout(gameObject, 170f, CheatMenuStyle.Theme.ControlCompact, 0f, 0f);
 		GameObject gameObject2 = CreateObject("FillArea", gameObject.transform, typeof(Image));
 		RectTransform component2 = gameObject2.GetComponent<RectTransform>();
-		gameObject2.GetComponent<Image>().color = CheatMenuStyle.SliderTrack;
+		Image trackImage = gameObject2.GetComponent<Image>();
+		trackImage.color = CheatMenuStyle.SliderTrack;
 		Outline outline2 = gameObject2.AddComponent<Outline>();
 		outline2.effectColor = CheatMenuStyle.InputBorder;
 		outline2.effectDistance = Vector2.one;
@@ -1574,7 +1561,8 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component2.offsetMin = new Vector2(7f, 0f);
 		component2.offsetMax = new Vector2(-7f, 0f);
 		GameObject gameObject3 = CreateObject("Fill", gameObject2.transform, typeof(Image));
-		gameObject3.GetComponent<Image>().color = CheatMenuStyle.Accent;
+		Image fillImage = gameObject3.GetComponent<Image>();
+		fillImage.color = CheatMenuStyle.Accent;
 		RectTransform component3 = gameObject3.GetComponent<RectTransform>();
 		component3.anchorMin = Vector2.zero;
 		component3.anchorMax = new Vector2(0f, 1f);
@@ -1596,7 +1584,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component5.anchorMax = new Vector2(0f, 0.5f);
 		component5.pivot = new Vector2(0.5f, 0.5f);
 		component.handleRect = component5;
-		component.onValueChanged.AddListener(changed.Invoke);
+		_fluentControls.AdaptSlider(gameObject, component, gameObject.GetComponent<Image>(), trackImage, fillImage, changed);
 		return component;
 	}
 
@@ -1609,12 +1597,9 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			_timeCurrentText.text = PluginLocalization.Translate($"当前时间：{snapshot.Time:N0} / {num:N0}（{num2:P0}）");
 		}
-		if (!(_timeSlider != null) || !Input.GetMouseButton(0) || !(EventSystem.current != null) || !(EventSystem.current.currentSelectedGameObject == _timeSlider.gameObject))
+		if (_timeRing != null && !_timeRing.IsInteracting && !_timeApplyDebouncer.HasPending)
 		{
-			if (_timeSlider != null)
-			{
-				_timeSlider.SetValueWithoutNotify(num2);
-			}
+			_timeRing.SetTime(WorldTimeClockMapping.GameNormalizedToClockHours(num2), notify: false);
 			UpdateTimePreview(num2, num);
 		}
 	}
@@ -1627,15 +1612,18 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
-	private void ApplyTimePercent(int percent, uint cycle)
+	private void ApplyTimeNormalized(float normalized, uint cycle)
 	{
-		percent = Mathf.Clamp(percent, 0, 99);
-		_worldPresenter.SetTime((uint)((float)cycle * ((float)percent / 100f)));
-		if (_timeSlider != null)
+		normalized = Mathf.Repeat(normalized, 1f);
+		int maximum = cycle > 0u ? Mathf.Max(0, (int)cycle - 1) : 0;
+		uint targetTime = (uint)Mathf.Clamp(Mathf.RoundToInt(cycle * normalized), 0, maximum);
+		_worldPresenter.SetTime(targetTime);
+		if (_timeRing != null)
 		{
-			_timeSlider.SetValueWithoutNotify((float)percent / 100f);
+			_timeRing.SetTime(WorldTimeClockMapping.GameNormalizedToClockHours(normalized), notify: false);
 		}
-		UpdateTimePreview((float)percent / 100f, cycle);
+		int percent = Mathf.Clamp(Mathf.RoundToInt(normalized * 100f), 0, 99);
+		UpdateTimePreview(normalized, cycle);
 		SetStatus($"时间已设置为周期的 {percent}% 。");
 	}
 
@@ -1758,22 +1746,26 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_vehicleThumbnailDraftWidth = vehicleThumbnailSettings?.Width ?? 128;
 		_vehicleThumbnailDraftFraming = vehicleThumbnailSettings?.Framing ?? 1f;
 		_vehicleThumbnailSettingsRoot = CreateObject("VehicleThumbnailSettingsOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_vehicleThumbnailSettingsRoot);
 		_uiRoot.RegisterModal(_vehicleThumbnailSettingsRoot, HideVehicleThumbnailSettings);
 		Stretch(_vehicleThumbnailSettingsRoot.GetComponent<RectTransform>());
 		_vehicleThumbnailSettingsRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
 		GameObject gameObject = CreateObject("VehicleThumbnailSettingsDialog", _vehicleThumbnailSettingsRoot.transform, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image dialogImage = gameObject.GetComponent<Image>();
+		dialogImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(gameObject, dialogImage, FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 		Outline outline = gameObject.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		RectTransform component = gameObject.GetComponent<RectTransform>();
 		Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 		component.anchorMin = anchorMin;
 		component.pivot = new Vector2(0.5f, 0.5f);
 		component.sizeDelta = new Vector2(680f, 560f);
 		VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(28, 28, 20, 20);
+		verticalLayoutGroup.padding = new RectOffset(24, 24, 16, 16);
 		verticalLayoutGroup.spacing = 12f;
 		verticalLayoutGroup.childControlWidth = true;
 		verticalLayoutGroup.childControlHeight = true;
@@ -1804,7 +1796,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 				for (int j = 0; j < resolutionButtons.Count; j++)
 				{
 					bool flag = resolutions[j] == _vehicleThumbnailDraftWidth;
-					resolutionButtons[j].targetGraphic.color = (flag ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover);
+					Color selectionColor = flag ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover;
+					OverlaySelectableVisual selectionVisual = resolutionButtons[j].GetComponent<OverlaySelectableVisual>();
+					if (selectionVisual != null)
+					{
+						selectionVisual.SetBaseColor(selectionColor);
+					}
 				}
 			}, resolutionTooltips[i], 0f, 34f, (capturedResolution == _vehicleThumbnailDraftWidth) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12);
 			SetLayout(button.gameObject, -1f, -1f, 1f);
@@ -1853,25 +1850,36 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void ShowTeleportColorPicker()
 	{
+		ShowColorPicker(ColorPickerPurpose.TeleportMarker);
+	}
+
+	private void ShowColorPicker(ColorPickerPurpose purpose)
+	{
 		HideTeleportColorPicker();
-		_teleportColorDraft = _teleportMarkerColor;
-		_teleportColorPickerRoot = CreateObject("TeleportColorPickerOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_colorPickerPurpose = purpose;
+		bool accentPicker = purpose == ColorPickerPurpose.Accent;
+		_teleportColorDraft = accentPicker ? _accentColor : _teleportMarkerColor;
+		_teleportColorPickerRoot = CreateObject("SharedColorPickerOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_teleportColorPickerRoot);
 		_uiRoot.RegisterModal(_teleportColorPickerRoot, HideTeleportColorPicker);
 		Stretch(_teleportColorPickerRoot.GetComponent<RectTransform>());
 		_teleportColorPickerRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
-		GameObject gameObject = CreateObject("TeleportColorPickerDialog", _teleportColorPickerRoot.transform, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		GameObject gameObject = CreateObject("SharedColorPickerDialog", _teleportColorPickerRoot.transform, typeof(Image));
+		Image dialogImage = gameObject.GetComponent<Image>();
+		dialogImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(gameObject, dialogImage, FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 		Outline outline = gameObject.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		RectTransform component = gameObject.GetComponent<RectTransform>();
 		Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 		component.anchorMin = anchorMin;
 		component.pivot = new Vector2(0.5f, 0.5f);
 		component.sizeDelta = new Vector2(780f, 620f);
 		VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(28, 28, 20, 20);
+		verticalLayoutGroup.padding = new RectOffset(24, 24, 16, 16);
 		verticalLayoutGroup.spacing = 12f;
 		verticalLayoutGroup.childControlWidth = true;
 		verticalLayoutGroup.childControlHeight = true;
@@ -1886,9 +1894,15 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		outline2.effectColor = Color.white;
 		outline2.effectDistance = Vector2.one;
 		outline2.useGraphicAlpha = false;
-		CreateText(gameObject2.transform, "选择颜色", 20, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+		string pickerTitle = accentPicker
+			? (PluginLocalization.CurrentLanguage == PluginLanguage.English ? "Accent Color" : "强调色")
+			: PluginLocalization.Translate("选择颜色");
+		CreateText(gameObject2.transform, pickerTitle, 20, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold, localize: false);
 		CreateFlexibleSpacer(gameObject2.transform);
-		CreateButton(gameObject2.transform, "×", HideTeleportColorPicker, "关闭颜色选择器并放弃本次颜色更改。", 44f, 42f, CheatMenuStyle.Surface, 23);
+		string closePickerTooltip = accentPicker && PluginLocalization.CurrentLanguage == PluginLanguage.English
+			? "Close the accent picker and discard this draft."
+			: accentPicker ? "关闭强调色选择器并放弃本次更改。" : "关闭颜色选择器并放弃本次颜色更改。";
+		CreateButton(gameObject2.transform, "×", HideTeleportColorPicker, closePickerTooltip, 44f, 42f, CheatMenuStyle.Surface, 23);
 		GameObject gameObject4 = CreateRow(gameObject.transform, 0f, 26f);
 		SetLayout(gameObject4, -1f, -1f, -1f, 1f);
 		GameObject gameObject5 = CreateObject("PreviewColumn", gameObject4.transform, typeof(Image));
@@ -1896,6 +1910,14 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		AddVerticalLayout(gameObject5, 8f, new RectOffset(0, 0, 0, 0));
 		SetLayout(gameObject5, 326f, -1f, 0f, 1f);
 		CreateLabel(gameObject5.transform, "预览", 16, CheatMenuStyle.Text);
+		if (accentPicker)
+		{
+			CreateLabel(gameObject5.transform,
+				PluginLocalization.CurrentLanguage == PluginLanguage.English
+					? "Session only · teleport marker color stays independent"
+					: "仅本次游戏会话生效 · 不影响传送点颜色",
+				12, CheatMenuStyle.Muted);
+		}
 		GameObject gameObject6 = CreateObject("Preview", gameObject5.transform, typeof(Image));
 		_teleportColorPreview = gameObject6.GetComponent<Image>();
 		_teleportColorPreview.raycastTarget = false;
@@ -1918,7 +1940,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		GridLayoutGroup gridLayoutGroup = gameObject8.AddComponent<GridLayoutGroup>();
 		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		gridLayoutGroup.constraintCount = 6;
-		gridLayoutGroup.cellSize = new Vector2(48f, 42f);
+		gridLayoutGroup.cellSize = new Vector2(48f, CheatMenuStyle.Theme.ControlDefault);
 		gridLayoutGroup.spacing = new Vector2(10f, 8f);
 		gridLayoutGroup.childAlignment = TextAnchor.UpperLeft;
 		SetLayout(gameObject8, -1f, 142f, 1f);
@@ -1940,39 +1962,65 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			TryUpdateTeleportDraftFromHex(value);
 		}, 0f, 1f);
-		SetLayout(_teleportColorHexInput.gameObject, -1f, 38f, 1f);
-		_teleportColorHexInput.onEndEdit.AddListener(TryUpdateTeleportDraftFromHex);
+		SetLayout(_teleportColorHexInput.gameObject, -1f, CheatMenuStyle.Theme.ControlDefault, 1f);
+		_fluentControls.TrackInputEndEdit(_teleportColorHexInput.gameObject, _teleportColorHexInput, TryUpdateTeleportDraftFromHex);
 		CreateLabel(gameObject9.transform, "通道", 16, CheatMenuStyle.Text);
 		GameObject gameObject10 = CreateRow(gameObject9.transform, 36f, 8f);
-		CreateLabel(gameObject10.transform, "红", 13, CheatMenuStyle.Text, 32f);
+		CreateLabel(gameObject10.transform, "红", 13, CheatMenuStyle.Text, CheatMenuStyle.ColorChannelLabelWidth);
 		_teleportColorRedSlider = CreateColorChannelSlider(gameObject10.transform, _teleportColorDraft.r * 255f, new Color(0.75f, 0.24f, 0.24f, 1f), delegate(int value)
 		{
 			_state.TeleportColorDraft.r = (float)value / 255f;
 			UpdateTeleportColorPickerControls();
 		}, out _teleportColorRedValue);
 		GameObject gameObject11 = CreateRow(gameObject9.transform, 36f, 8f);
-		CreateLabel(gameObject11.transform, "绿", 13, CheatMenuStyle.Text, 32f);
+		CreateLabel(gameObject11.transform, "绿", 13, CheatMenuStyle.Text, CheatMenuStyle.ColorChannelLabelWidth);
 		_teleportColorGreenSlider = CreateColorChannelSlider(gameObject11.transform, _teleportColorDraft.g * 255f, new Color(0.25f, 0.68f, 0.3f, 1f), delegate(int value)
 		{
 			_state.TeleportColorDraft.g = (float)value / 255f;
 			UpdateTeleportColorPickerControls();
 		}, out _teleportColorGreenValue);
 		GameObject gameObject12 = CreateRow(gameObject9.transform, 36f, 8f);
-		CreateLabel(gameObject12.transform, "蓝", 13, CheatMenuStyle.Text, 32f);
+		CreateLabel(gameObject12.transform, "蓝", 13, CheatMenuStyle.Text, CheatMenuStyle.ColorChannelLabelWidth);
 		_teleportColorBlueSlider = CreateColorChannelSlider(gameObject12.transform, _teleportColorDraft.b * 255f, new Color(0.22f, 0.5f, 0.78f, 1f), delegate(int value)
 		{
 			_state.TeleportColorDraft.b = (float)value / 255f;
 			UpdateTeleportColorPickerControls();
 		}, out _teleportColorBlueValue);
 		GameObject gameObject13 = CreateRow(gameObject.transform, 48f, 10f);
+		if (accentPicker)
+		{
+			CreateButton(gameObject13.transform,
+				PluginLocalization.CurrentLanguage == PluginLanguage.English ? "Default Blue" : "默认蓝色",
+				delegate
+				{
+					_teleportColorDraft = CheatMenuStyle.DefaultAccent;
+					UpdateTeleportColorPickerControls();
+				},
+				PluginLocalization.CurrentLanguage == PluginLanguage.English
+					? "Restore the Fluent blue accent draft."
+					: "把强调色草稿恢复为默认 Fluent 蓝。",
+				120f, 38f, CheatMenuStyle.Surface);
+		}
 		CreateFlexibleSpacer(gameObject13.transform);
-		CreateButton(gameObject13.transform, "取消", HideTeleportColorPicker, "放弃本次传送标记颜色更改。", 110f, 38f, CheatMenuStyle.Surface);
+		string cancelPickerTooltip = accentPicker && PluginLocalization.CurrentLanguage == PluginLanguage.English
+			? "Discard this session accent draft."
+			: accentPicker ? "放弃本次强调色更改。" : "放弃本次传送标记颜色更改。";
+		CreateButton(gameObject13.transform, "取消", HideTeleportColorPicker, cancelPickerTooltip, 110f, 38f, CheatMenuStyle.Surface);
 		CreateButton(gameObject13.transform, "确定", delegate
 		{
-			_teleportMarkerColor = _teleportColorDraft;
-			HideTeleportColorPicker();
-			ShowTab(MenuTab.Teleports);
-		}, "将当前预览颜色用于传送标记。", 110f, 38f, CheatMenuStyle.Accent);
+			if (accentPicker)
+			{
+				ApplyAccentColorDraft();
+			}
+			else
+			{
+				ApplyTeleportMarkerColorDraft();
+			}
+		}, accentPicker
+			? (PluginLocalization.CurrentLanguage == PluginLanguage.English
+				? "Apply this color to accent, focus, navigation selection, and sliders for this session."
+				: "把当前颜色用于本次会话的强调、焦点、导航选中和滑块。")
+			: "将当前预览颜色用于传送标记。", 110f, 38f, CheatMenuStyle.Accent);
 		UpdateTeleportColorPickerControls();
 		if (EventSystem.current != null && _teleportColorHexInput != null)
 		{
@@ -1982,9 +2030,14 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void HideTeleportColorPicker()
 	{
-		if (_teleportColorPickerRoot != null)
+		GameObject pickerRoot = _teleportColorPickerRoot;
+		if (pickerRoot != null)
 		{
-			QueueForDestroy(_teleportColorPickerRoot);
+			if (EventSystem.current != null && SelectionBelongsToRoot(EventSystem.current.currentSelectedGameObject, pickerRoot))
+			{
+				EventSystem.current.SetSelectedGameObject(null);
+			}
+			QueueForDestroy(pickerRoot);
 		}
 		_teleportColorPickerRoot = null;
 		_teleportColorPreview = null;
@@ -2066,11 +2119,16 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void CreateColorSwatchButton(Transform parent, Color color)
 	{
+		string tooltip = _colorPickerPurpose == ColorPickerPurpose.Accent
+			? (PluginLocalization.CurrentLanguage == PluginLanguage.English
+				? "Load this preset into the session accent preview."
+				: "把此预设颜色载入强调色预览。")
+			: "将此预设颜色载入当前传送标记颜色预览。";
 		Button button = CreateButton(parent, string.Empty, delegate
 		{
 			_teleportColorDraft = color;
 			UpdateTeleportColorPickerControls();
-		}, "将此预设颜色载入当前传送标记颜色预览。", 48f, 42f, CheatMenuStyle.SurfaceHover, 10);
+		}, tooltip, 48f, 42f, CheatMenuStyle.SurfaceHover, 10);
 		Text componentInChildren = button.GetComponentInChildren<Text>(includeInactive: true);
 		if (componentInChildren != null)
 		{
@@ -2114,7 +2172,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		outline.effectColor = CheatMenuStyle.SliderBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
-		SetLayout(gameObject, -1f, 30f, 1f);
+		SetLayout(gameObject, -1f, CheatMenuStyle.Theme.ControlCompact, 1f);
 		Slider component2 = gameObject.GetComponent<Slider>();
 		component2.minValue = 0f;
 		component2.maxValue = 255f;
@@ -2153,11 +2211,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component8.pivot = new Vector2(0.5f, 0.5f);
 		component2.handleRect = component8;
 		valueText = CreateText(parent, "0", 12, CheatMenuStyle.Muted, TextAnchor.MiddleRight, FontStyle.Normal, localize: false);
-		SetLayout(valueText.gameObject, 30f, 30f);
-		component2.onValueChanged.AddListener(delegate(float channelValue)
+		SetLayout(valueText.gameObject, 30f, CheatMenuStyle.Theme.ControlCompact);
+		_fluentControls.AdaptSlider(gameObject, component2, component, component3, component5, delegate(float channelValue)
 		{
-			changed(Mathf.RoundToInt(channelValue));
+			changed?.Invoke(Mathf.RoundToInt(channelValue));
 		});
+		component5.color = fillColor;
 		return component2;
 	}
 
@@ -2225,20 +2284,6 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		return color;
 	}
 
-	private static void CreateHoverExplanationBorderEdge(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
-	{
-		GameObject gameObject = new GameObject(name, typeof(RectTransform), typeof(Image));
-		gameObject.transform.SetParent(parent, worldPositionStays: false);
-		RectTransform component = gameObject.GetComponent<RectTransform>();
-		component.anchorMin = anchorMin;
-		component.anchorMax = anchorMax;
-		component.offsetMin = offsetMin;
-		component.offsetMax = offsetMax;
-		Image component2 = gameObject.GetComponent<Image>();
-		component2.color = CheatMenuStyle.Accent;
-		component2.raycastTarget = false;
-	}
-
 	private void EnsureHoverExplanation()
 	{
 		GameObject activeRoot = GetActiveOverlayRoot();
@@ -2255,31 +2300,17 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		if (!(_hoverExplanationRoot != null))
 		{
 			_hoverExplanationRoot = CreateObject("OverlayHoverExplanation", _uiRoot.TooltipLayer, typeof(Image));
+			_fluentHandles.RegisterScope(_hoverExplanationRoot);
 			_uiRoot.AttachTooltip(_hoverExplanationRoot);
 			RectTransform component = _hoverExplanationRoot.GetComponent<RectTransform>();
 			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 			component.anchorMin = anchorMin;
 			component.pivot = new Vector2(0.5f, 0.5f);
 			Image component2 = _hoverExplanationRoot.GetComponent<Image>();
-			component2.color = Color.clear;
+			component2.color = CheatMenuStyle.SurfaceRaised;
 			component2.raycastTarget = false;
-		Canvas component3 = _uiRoot.Canvas;
-			float num = ((component3 != null) ? Mathf.Max(0.01f, component3.scaleFactor) : 1f);
-			float num2 = 3f / num;
-			CreateHoverExplanationBorderEdge(_hoverExplanationRoot.transform, "BorderTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f - num2), Vector2.zero);
-			CreateHoverExplanationBorderEdge(_hoverExplanationRoot.transform, "BorderBottom", Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, num2));
-			CreateHoverExplanationBorderEdge(_hoverExplanationRoot.transform, "BorderLeft", Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(num2, 0f));
-			CreateHoverExplanationBorderEdge(_hoverExplanationRoot.transform, "BorderRight", new Vector2(1f, 0f), Vector2.one, new Vector2(0f - num2, 0f), Vector2.zero);
-			GameObject gameObject = CreateObject("Background", _hoverExplanationRoot.transform, typeof(Image));
-			RectTransform component4 = gameObject.GetComponent<RectTransform>();
-			component4.anchorMin = Vector2.zero;
-			component4.anchorMax = Vector2.one;
-			component4.offsetMin = new Vector2(num2, num2);
-			component4.offsetMax = new Vector2(0f - num2, 0f - num2);
-			Image component5 = gameObject.GetComponent<Image>();
-			component5.color = new Color(0f, 0f, 0f, 0.8f);
-			component5.raycastTarget = false;
-			_hoverExplanationText = CreateText(_hoverExplanationRoot.transform, string.Empty, 12, Color.white, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
+			_fluentControls.StyleTooltipSurface(_hoverExplanationRoot, component2, CheatMenuStyle.Theme.RadiusField);
+			_hoverExplanationText = CreateText(_hoverExplanationRoot.transform, string.Empty, 12, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
 			_hoverExplanationText.horizontalOverflow = HorizontalWrapMode.Wrap;
 			_hoverExplanationText.verticalOverflow = VerticalWrapMode.Overflow;
 			_hoverExplanationText.raycastTarget = false;
@@ -2382,9 +2413,11 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private Button CreateButton(Transform parent, string label, System.Action action, string tooltip, float width = 0f, float height = 36f, Color? color = null, int fontSize = 13, bool delayTooltip = false)
 	{
+		height = CheatMenuStyle.Theme.NormalizeControlHeight(height);
 		GameObject gameObject = CreateObject("Button", parent, typeof(Image), typeof(Button));
 		Image component = gameObject.GetComponent<Image>();
-		component.color = color ?? CheatMenuStyle.Surface;
+		Color baseColor = color ?? CheatMenuStyle.Surface;
+		component.color = baseColor;
 		Outline outline = gameObject.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.ButtonBorder;
 		outline.effectDistance = Vector2.one;
@@ -2397,10 +2430,6 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		colors.pressedColor = new Color(0.78f, 0.84f, 0.9f, 1f);
 		colors.disabledColor = new Color(0.42f, 0.45f, 0.49f, 0.55f);
 		component2.colors = colors;
-		if (action != null)
-		{
-			component2.onClick.AddListener(action.Invoke);
-		}
 		Text text = null;
 		switch (label)
 		{
@@ -2460,11 +2489,8 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component6.anchoredPosition = Vector2.zero;
 		component6.sizeDelta = new Vector2(0f, 3f);
 		gameObject3.SetActive(value: false);
-		component2.transition = Selectable.Transition.None;
-		OverlaySelectableVisual overlaySelectableVisual = gameObject.AddComponent<OverlaySelectableVisual>();
-		overlaySelectableVisual.Initialize(component2, component, text, gameObject3, outline, component.color);
 		tooltip = ButtonTooltipText.Require(tooltip);
-		overlaySelectableVisual.SetHoverExplanation(tooltip, ShowHoverExplanation, HideHoverExplanation, delayTooltip);
+		_fluentControls.AdaptButton(gameObject, component2, component, text, gameObject3, outline, baseColor, action, tooltip, delayTooltip);
 		SetLayout(gameObject, (width > 0f) ? width : (-1f), height);
 		return component2;
 	}
@@ -2487,6 +2513,8 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private GameObject CreateRow(Transform parent, float height, float spacing)
 	{
+		height = CheatMenuStyle.Theme.NormalizeControlHeight(height);
+		spacing = CheatMenuStyle.Theme.NormalizeSpacing(spacing);
 		GameObject gameObject = CreateObject("Row", parent);
 		HorizontalLayoutGroup horizontalLayoutGroup = gameObject.AddComponent<HorizontalLayoutGroup>();
 		horizontalLayoutGroup.spacing = spacing;
@@ -2505,8 +2533,8 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private VerticalLayoutGroup AddVerticalLayout(GameObject target, float spacing, RectOffset padding)
 	{
 		VerticalLayoutGroup verticalLayoutGroup = target.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = padding;
-		verticalLayoutGroup.spacing = spacing;
+		verticalLayoutGroup.padding = CheatMenuStyle.Theme.NormalizePadding(padding);
+		verticalLayoutGroup.spacing = CheatMenuStyle.Theme.NormalizeSpacing(spacing);
 		verticalLayoutGroup.childAlignment = TextAnchor.UpperLeft;
 		verticalLayoutGroup.childControlWidth = true;
 		verticalLayoutGroup.childControlHeight = true;
@@ -2579,6 +2607,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	{
 		if (!(target == null))
 		{
+			_fluentHandles.DisposeSubtree(target);
 			_uiRoot.UnregisterLayerSurface(target);
 			_deferredDestroy.Enqueue(target, Time.frameCount, item => item.SetActive(value: false));
 		}

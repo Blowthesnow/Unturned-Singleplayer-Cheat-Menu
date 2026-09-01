@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Runtime;
 using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
@@ -22,6 +24,10 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 	private Outline _outline;
 
 	private Color _baseColor;
+
+	private LegacyFluentSurface _fluentSurface;
+
+	private Func<Color, FluentSelectablePalette> _paletteResolver;
 
 	private bool _hovered;
 
@@ -47,7 +53,15 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 
 	private Action _hideHoverExplanation;
 
-	public void Initialize(Selectable selectable, Image background, Text label, GameObject focusIndicator, Outline outline, Color baseColor)
+	public void Initialize(
+		Selectable selectable,
+		Image background,
+		Text label,
+		GameObject focusIndicator,
+		Outline outline,
+		Color baseColor,
+		LegacyFluentSurface fluentSurface = null,
+		Func<Color, FluentSelectablePalette> paletteResolver = null)
 	{
 		_selectable = selectable;
 		_background = background;
@@ -55,7 +69,15 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		_focusIndicator = focusIndicator;
 		_outline = outline;
 		_baseColor = baseColor;
+		_fluentSurface = fluentSurface;
+		_paletteResolver = paletteResolver;
 		_lastInteractable = null;
+		Refresh();
+	}
+
+	internal void SetPaletteResolver(Func<Color, FluentSelectablePalette> paletteResolver)
+	{
+		_paletteResolver = paletteResolver;
 		Refresh();
 	}
 
@@ -193,6 +215,11 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 			return;
 		}
 		_lastInteractable = _selectable.interactable;
+		if (_fluentSurface != null && _paletteResolver != null)
+		{
+			RefreshFluent();
+			return;
+		}
 		if (!_selectable.interactable)
 		{
 			_background.color = CheatMenuStyle.DisabledSurface;
@@ -248,6 +275,65 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 			if (_outline != null)
 			{
 				_outline.effectColor = (_showOutline ? CheatMenuStyle.ButtonBorder : Color.clear);
+			}
+		}
+	}
+
+	private void RefreshFluent()
+	{
+		FluentSelectablePalette palette = _paletteResolver(_baseColor);
+		_background.color = Color.clear;
+		if (_outline != null)
+		{
+			_outline.enabled = false;
+		}
+
+		Color fill;
+		Color border;
+		Color textColor;
+		if (!_selectable.interactable)
+		{
+			fill = palette.DisabledFill.ToUnity();
+			border = palette.DisabledBorder.ToUnity();
+			textColor = palette.DisabledText.ToUnity();
+		}
+		else if (_pressed)
+		{
+			fill = palette.PressedFill.ToUnity();
+			border = palette.PressedBorder.ToUnity();
+			textColor = palette.NormalText.ToUnity();
+		}
+		else if (_hovered)
+		{
+			fill = palette.HoverFill.ToUnity();
+			border = palette.HoverBorder.ToUnity();
+			textColor = palette.NormalText.ToUnity();
+		}
+		else if (_selected)
+		{
+			fill = palette.FocusedFill.ToUnity();
+			border = palette.FocusedBorder.ToUnity();
+			textColor = palette.NormalText.ToUnity();
+		}
+		else
+		{
+			fill = palette.NormalFill.ToUnity();
+			border = palette.NormalBorder.ToUnity();
+			textColor = palette.NormalText.ToUnity();
+		}
+
+		_fluentSurface.SetColors(fill, _showOutline ? border : Color.clear);
+		if (_label != null)
+		{
+			_label.color = textColor;
+		}
+		if (_focusIndicator != null)
+		{
+			bool visible = _selectable.interactable && _showFocusIndicator && _selected;
+			_focusIndicator.SetActive(visible);
+			if (visible)
+			{
+				_focusIndicator.transform.SetAsLastSibling();
 			}
 		}
 	}

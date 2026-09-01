@@ -22,7 +22,7 @@ internal sealed partial class CheatMenuOverlayUi
 {
 	private void BuildItemsTab()
 	{
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
+		AddVerticalLayout(_contentHost, CheatMenuStyle.Theme.Space2, new RectOffset(12, 12, 8, 8));
 		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 7f);
 		CreateLabel(gameObject.transform, "搜索", 13, CheatMenuStyle.Text, 48f);
 		CreateSearchInput(gameObject.transform, _itemFilter.SearchQuery, delegate(string value)
@@ -30,7 +30,7 @@ internal sealed partial class CheatMenuOverlayUi
 			_itemFilter.SearchQuery = value;
 			RefreshItemResultsRegion();
 		}, 280f);
-		CreateLabel(gameObject.transform, "数量", 13, CheatMenuStyle.Text, 48f);
+		CreateLabel(gameObject.transform, "数量", 13, CheatMenuStyle.Text, CheatMenuStyle.ToolbarFieldLabelWidth);
 		CreateButton(gameObject.transform, "−", delegate
 		{
 			_giveAmount = (byte)Math.Max(1, ParseClamped(_itemAmountText, 1, 255, _giveAmount) - 1);
@@ -78,7 +78,7 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private void BuildVehiclesTab()
 	{
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
+		AddVerticalLayout(_contentHost, CheatMenuStyle.Theme.Space2, new RectOffset(12, 12, 8, 8));
 		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 7f);
 		CreateLabel(gameObject.transform, "搜索", 13, CheatMenuStyle.Text, 48f);
 		CreateSearchInput(gameObject.transform, _vehicleQuery, delegate(string value)
@@ -86,7 +86,7 @@ internal sealed partial class CheatMenuOverlayUi
 			_vehicleQuery = value;
 			RefreshVehicleResultsRegion();
 		}, 280f);
-		CreateLabel(gameObject.transform, "数量", 13, CheatMenuStyle.Text, 48f);
+		CreateLabel(gameObject.transform, "数量", 13, CheatMenuStyle.Text, CheatMenuStyle.ToolbarFieldLabelWidth);
 		CreateButton(gameObject.transform, "−", delegate
 		{
 			_spawnVehicleAmount = Math.Max(1, ParseClamped(_vehicleAmountText, 1, 20, _spawnVehicleAmount) - 1);
@@ -129,7 +129,7 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private void BuildFavoritesTab()
 	{
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
+		AddVerticalLayout(_contentHost, CheatMenuStyle.Theme.Space2, new RectOffset(12, 12, 8, 8));
 		int num = _catalogPresenter.Items.Count(_catalogPresenter.IsItemFavorite);
 		int num2 = _catalogPresenter.Vehicles.Count(_catalogPresenter.IsVehicleFavorite);
 		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 8f);
@@ -168,7 +168,7 @@ internal sealed partial class CheatMenuOverlayUi
 			}
 			RefreshFavoriteResultsRegion();
 		}, 280f);
-		CreateLabel(gameObject2.transform, "数量", 13, CheatMenuStyle.Text, 48f);
+		CreateLabel(gameObject2.transform, "数量", 13, CheatMenuStyle.Text, CheatMenuStyle.ToolbarFieldLabelWidth);
 		if (_favoriteKind == FavoriteKind.Items)
 		{
 			CreateButton(gameObject2.transform, "−", delegate
@@ -306,9 +306,14 @@ internal sealed partial class CheatMenuOverlayUi
 	private void BuildCategorySidebar(Transform parent, string title, IEnumerable<string> categories, string selected, Action<string> select)
 	{
 		GameObject gameObject = CreateObject("Categories", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Surface;
-		AddVerticalLayout(gameObject, 5f, new RectOffset(7, 7, 7, 7));
-		SetLayout(gameObject, 165f, -1f, 0f);
+		Image categoryImage = gameObject.GetComponent<Image>();
+		categoryImage.color = CheatMenuStyle.Surface;
+		_fluentControls.StyleSurface(gameObject, categoryImage, ControlLibrary.Core.FluentSurfaceRole.Navigation, CheatMenuStyle.Theme.RadiusControl);
+		AddVerticalLayout(gameObject, CheatMenuStyle.Theme.Space1, new RectOffset(8, 8, 8, 8));
+		SetLayout(gameObject, CheatMenuStyle.CategorySidebarWidth, -1f, 0f);
+		LayoutElement categoryLayout = gameObject.GetComponent<LayoutElement>();
+		categoryLayout.minWidth = CheatMenuStyle.CategorySidebarWidth;
+		categoryLayout.preferredWidth = CheatMenuStyle.CategorySidebarWidth;
 		CreateLabel(gameObject.transform, title, 16, CheatMenuStyle.Text);
 		foreach (string category in categories)
 		{
@@ -317,16 +322,21 @@ internal sealed partial class CheatMenuOverlayUi
 			{
 				select(captured);
 			}, string.Format(PluginLocalization.Translate("只显示“{0}”分类中的车辆。"), PluginLocalization.Translate(category)),
-				0f, 34f, (category == selected) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover);
+				0f, CheatMenuStyle.CategoryButtonHeight, (category == selected) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 13);
 		}
 	}
 
 	private GameObject BuildItemCategorySidebar(Transform parent, string title, ItemFilterState filter, Action<ItemPrimaryCategory> select, Func<ItemAsset, bool> includeItem = null)
 	{
 		GameObject gameObject = CreateObject("Categories", parent, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Surface;
-		AddVerticalLayout(gameObject, 5f, new RectOffset(7, 7, 7, 7));
-		SetLayout(gameObject, 165f, -1f, 0f);
+		Image categoryImage = gameObject.GetComponent<Image>();
+		categoryImage.color = CheatMenuStyle.Surface;
+		_fluentControls.StyleSurface(gameObject, categoryImage, ControlLibrary.Core.FluentSurfaceRole.Navigation, CheatMenuStyle.Theme.RadiusControl);
+		AddVerticalLayout(gameObject, CheatMenuStyle.Theme.Space1, new RectOffset(8, 8, 8, 8));
+		SetLayout(gameObject, CheatMenuStyle.CategorySidebarWidth, -1f, 0f);
+		LayoutElement categoryLayout = gameObject.GetComponent<LayoutElement>();
+		categoryLayout.minWidth = CheatMenuStyle.CategorySidebarWidth;
+		categoryLayout.preferredWidth = CheatMenuStyle.CategorySidebarWidth;
 		CreateLabel(gameObject.transform, title, 16, CheatMenuStyle.Text);
 		foreach (ItemPrimaryCategory category in ItemFilterService.Categories)
 		{
@@ -341,7 +351,7 @@ internal sealed partial class CheatMenuOverlayUi
 			{
 				select(captured);
 			}, string.Format(PluginLocalization.Translate("只显示“{0}”分类中的物品。"), categoryLabel),
-				0f, 34f, (category == filter.Category) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 12);
+				0f, CheatMenuStyle.CategoryButtonHeight, (category == filter.Category) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 13);
 		}
 		return gameObject;
 	}
@@ -442,22 +452,26 @@ internal sealed partial class CheatMenuOverlayUi
 			return;
 		}
 		_itemFilterRoot = CreateObject("ItemFilterOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_itemFilterRoot);
 		_uiRoot.RegisterModal(_itemFilterRoot, HideItemFilterPanel);
 		Stretch(_itemFilterRoot.GetComponent<RectTransform>());
 		_itemFilterRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.56f);
 		GameObject gameObject = CreateObject("ItemFilterDialog", _itemFilterRoot.transform, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image dialogImage = gameObject.GetComponent<Image>();
+		dialogImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(gameObject, dialogImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 		Outline outline = gameObject.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		RectTransform component = gameObject.GetComponent<RectTransform>();
 		Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 		component.anchorMin = anchorMin;
 		component.pivot = new Vector2(0.5f, 0.5f);
 		component.sizeDelta = new Vector2(860f, 610f);
 		VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(24, 24, 18, 18);
+		verticalLayoutGroup.padding = new RectOffset(24, 24, 16, 16);
 		verticalLayoutGroup.spacing = 8f;
 		verticalLayoutGroup.childControlWidth = true;
 		verticalLayoutGroup.childControlHeight = true;
@@ -565,11 +579,11 @@ internal sealed partial class CheatMenuOverlayUi
 		float num2 = Mathf.Min(112f, (812f - 4f * (float)(num - 1)) / (float)num);
 		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		gridLayoutGroup.constraintCount = num;
-		gridLayoutGroup.cellSize = new Vector2(num2, 32f);
+		gridLayoutGroup.cellSize = new Vector2(num2, CheatMenuStyle.Theme.ControlCompact);
 		gridLayoutGroup.spacing = new Vector2(4f, 5f);
 		gridLayoutGroup.childAlignment = TextAnchor.UpperLeft;
 		int num3 = Mathf.CeilToInt((float)labels.Count / (float)num);
-		SetLayout(gameObject, -1f, (float)num3 * 37f - 5f);
+		SetLayout(gameObject, -1f, (float)num3 * (CheatMenuStyle.Theme.ControlCompact + CheatMenuStyle.Theme.Space1) - CheatMenuStyle.Theme.Space1);
 		for (int i = 0; i < labels.Count; i++)
 		{
 			int captured = i;
@@ -814,8 +828,19 @@ internal sealed partial class CheatMenuOverlayUi
 	private int GetResponsiveCardColumnCount()
 	{
 		float windowWidth = _panel != null && _panel.rect.width > 0f ? _panel.rect.width : PreferredWindowWidth;
-		float availableGridWidth = Mathf.Max(0f, windowWidth - 235f);
-		return Mathf.Clamp(Mathf.FloorToInt((availableGridWidth + 8f) / 163f), 3, 6);
+		float shellChrome = 32f;
+		if (_wideShellLayout == true)
+		{
+			shellChrome += CheatMenuStyle.MainNavigationWidth + CheatMenuStyle.Theme.Space3;
+		}
+		float pagePadding = CheatMenuStyle.Theme.Space3 * 2f;
+		float catalogSpacing = CheatMenuStyle.Theme.Space2;
+		float availableGridWidth = Mathf.Max(0f,
+			windowWidth - shellChrome - pagePadding - CheatMenuStyle.CategorySidebarWidth - catalogSpacing);
+		float gridHorizontalPadding = 8f;
+		float cardStride = CheatMenuStyle.CardWidth + CheatMenuStyle.RowSpacing;
+		return Mathf.Clamp(Mathf.FloorToInt(
+			(availableGridWidth - gridHorizontalPadding + CheatMenuStyle.RowSpacing) / cardStride), 3, 6);
 	}
 
 	private int GetResponsiveCardRowCount()
@@ -826,13 +851,15 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private static float GetCardGridHeight(int rowCount)
 	{
-		return rowCount * 158f + Mathf.Max(0, rowCount - 1) * 8f + 8f;
+		return rowCount * CheatMenuStyle.CardHeight
+			+ Mathf.Max(0, rowCount - 1) * CheatMenuStyle.RowSpacing
+			+ 8f;
 	}
 
 	private void BuildItemGrid(Transform parent)
 	{
 		_itemGridHost = CreateObject("ItemGridColumn", parent);
-		AddVerticalLayout(_itemGridHost, 7f, new RectOffset(0, 0, 0, 0));
+		AddVerticalLayout(_itemGridHost, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
 		SetLayout(_itemGridHost, -1f, -1f, 1f, 1f);
 		PopulateItemGrid();
 	}
@@ -864,8 +891,8 @@ internal sealed partial class CheatMenuOverlayUi
 		SetLayout(gameObject2, -1f, GetCardGridHeight(rowCount), -1f, 1f);
 		GridLayoutGroup gridLayoutGroup = gameObject2.AddComponent<GridLayoutGroup>();
 		gridLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		gridLayoutGroup.spacing = new Vector2(8f, 8f);
-		gridLayoutGroup.cellSize = new Vector2(155f, 158f);
+		gridLayoutGroup.spacing = new Vector2(CheatMenuStyle.RowSpacing, CheatMenuStyle.RowSpacing);
+		gridLayoutGroup.cellSize = new Vector2(CheatMenuStyle.CardWidth, CheatMenuStyle.CardHeight);
 		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		gridLayoutGroup.constraintCount = columnCount;
 		int num2 = _itemPage * pageSize;
@@ -879,7 +906,7 @@ internal sealed partial class CheatMenuOverlayUi
 	private void BuildVehicleGrid(Transform parent)
 	{
 		_vehicleGridHost = CreateObject("VehicleGridColumn", parent);
-		AddVerticalLayout(_vehicleGridHost, 7f, new RectOffset(0, 0, 0, 0));
+		AddVerticalLayout(_vehicleGridHost, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
 		SetLayout(_vehicleGridHost, -1f, -1f, 1f, 1f);
 		PopulateVehicleGrid();
 	}
@@ -911,8 +938,8 @@ internal sealed partial class CheatMenuOverlayUi
 		SetLayout(gameObject2, -1f, GetCardGridHeight(rowCount), -1f, 1f);
 		GridLayoutGroup gridLayoutGroup = gameObject2.AddComponent<GridLayoutGroup>();
 		gridLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		gridLayoutGroup.spacing = new Vector2(8f, 8f);
-		gridLayoutGroup.cellSize = new Vector2(155f, 158f);
+		gridLayoutGroup.spacing = new Vector2(CheatMenuStyle.RowSpacing, CheatMenuStyle.RowSpacing);
+		gridLayoutGroup.cellSize = new Vector2(CheatMenuStyle.CardWidth, CheatMenuStyle.CardHeight);
 		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		gridLayoutGroup.constraintCount = columnCount;
 		int num2 = _vehiclePage * pageSize;
@@ -927,7 +954,7 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		int num = ((_favoriteKind == FavoriteKind.Items) ? _favoriteItemResults.Count : _favoriteVehicleResults.Count);
 		_favoriteGridHost = CreateObject("FavoriteGridColumn", parent);
-		AddVerticalLayout(_favoriteGridHost, 7f, new RectOffset(0, 0, 0, 0));
+		AddVerticalLayout(_favoriteGridHost, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
 		SetLayout(_favoriteGridHost, -1f, -1f, 1f, 1f);
 		PopulateFavoriteGrid(num);
 	}
@@ -959,8 +986,8 @@ internal sealed partial class CheatMenuOverlayUi
 		SetLayout(gameObject2, -1f, GetCardGridHeight(rowCount), -1f, 1f);
 		GridLayoutGroup gridLayoutGroup = gameObject2.AddComponent<GridLayoutGroup>();
 		gridLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
-		gridLayoutGroup.spacing = new Vector2(8f, 8f);
-		gridLayoutGroup.cellSize = new Vector2(155f, 158f);
+		gridLayoutGroup.spacing = new Vector2(CheatMenuStyle.RowSpacing, CheatMenuStyle.RowSpacing);
+		gridLayoutGroup.cellSize = new Vector2(CheatMenuStyle.CardWidth, CheatMenuStyle.CardHeight);
 		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		gridLayoutGroup.constraintCount = columnCount;
 		int num3 = _favoritePage * pageSize;

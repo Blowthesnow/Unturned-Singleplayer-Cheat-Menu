@@ -6,7 +6,6 @@ namespace UnturnedSingleplayerCheatMenu.Minimap;
 
 internal sealed class NearbyWorldScanner
 {
-	private readonly List<Zombie> _zombies = new List<Zombie>();
 	private readonly List<Animal> _animals = new List<Animal>();
 	private readonly List<MinimapWorldMarker> _markers = new List<MinimapWorldMarker>();
 	private int _used;
@@ -18,16 +17,22 @@ internal sealed class NearbyWorldScanner
 		float squaredRadius = radius * radius;
 		if (includeZombies)
 		{
-			_zombies.Clear();
-			ZombieManager.getZombiesInRadius(center, squaredRadius, _zombies);
-			for (int index = 0; index < _zombies.Count; index++)
+			List<Zombie> zombies = ZombieManager.AllZombies;
+			for (int index = 0; zombies != null && index < zombies.Count; index++)
 			{
-				Zombie zombie = _zombies[index];
-				if (zombie != null && !zombie.isDead)
+				Zombie zombie = zombies[index];
+				if (zombie == null || zombie.isDead)
 				{
-					SetMarker(Acquire(), zombie.GetInstanceID(), MinimapWorldMarkerKind.Zombie,
-						zombie.transform.position, Color.red, string.Empty, zombie.transform);
+					continue;
 				}
+				Vector3 position = zombie.transform.position;
+				Vector3 delta = position - center;
+				if (delta.x * delta.x + delta.z * delta.z > squaredRadius)
+				{
+					continue;
+				}
+				SetMarker(Acquire(), zombie.GetInstanceID(), MinimapWorldMarkerKind.Zombie,
+					position, Color.red, string.Empty, zombie.transform);
 			}
 		}
 

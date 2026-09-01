@@ -16,6 +16,7 @@ internal sealed class UiSearchInputController : IDisposable
 	private bool _wasFocused;
 	private bool _wasComposing;
 	private bool _suppress;
+	private bool _disposed;
 
 	internal UiSearchInputController(InputField input, Action<string> apply, float delaySeconds = 0.15f)
 	{
@@ -28,12 +29,12 @@ internal sealed class UiSearchInputController : IDisposable
 		_input.onValueChanged.AddListener(_valueChanged);
 	}
 
-	internal bool IsAlive => _input != null;
-	internal bool IsFocused => _input != null && _input.isFocused;
+	internal bool IsAlive => !_disposed && _input != null;
+	internal bool IsFocused => !_disposed && _input != null && _input.isFocused;
 
 	internal bool Pump()
 	{
-		if (_input == null)
+		if (_disposed || _input == null)
 		{
 			return false;
 		}
@@ -116,6 +117,11 @@ internal sealed class UiSearchInputController : IDisposable
 
 	public void Dispose()
 	{
+		if (_disposed)
+		{
+			return;
+		}
+		_disposed = true;
 		_input?.onValueChanged.RemoveListener(_valueChanged);
 		_debouncer.Dispose();
 	}

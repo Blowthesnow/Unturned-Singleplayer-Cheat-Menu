@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [更新日志](CHANGELOG.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.95.0`，包含 v1.9 `tooltip-feature` 阶段的自动拾取、无限储存、生物生命条、悬停详情、视角飞行和全局快捷键，并在 v1.95 完成可编辑小地图、运行时与 uGUI 生命周期重构、Workshop 双 API Key 并发、物品/载具缩略图自适应显示，以及载具缩略图统一相机渲染。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.98.0`；v1.98 新增 Fluent Legacy uGUI 控件库与响应式界面、无限储存分解、自动拾取稀有度过滤，并扩展了小地图朝向、编辑输入隔离、稀有度视觉和跨区域丧尸保留。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
@@ -120,7 +120,7 @@
 
 ## 兼容环境
 
-当前 `1.95.0` 源码已针对以下环境构建；版本归属、构建记录与验证边界见 [更新日志](CHANGELOG.md)：
+当前 `1.98.0` 源码已针对以下环境构建；版本归属、构建记录与验证边界见 [更新日志](CHANGELOG.md)：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -128,7 +128,7 @@
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.95.0` |
+| 插件 | `1.98.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
@@ -213,7 +213,7 @@ Get-ChildItem .\tests -Recurse -Filter '*Smoke.csproj' | Sort-Object FullName | 
 
 ## 验证
 
-`v1.95` 当前源码与 `v1.9` `tooltip-feature` 阶段的变更、构建和 Smoke 记录见 [主更新日志](CHANGELOG.md)；v1.8 的逆向恢复边界单独记录在 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md)。这些源码阶段均未创建正式版、标签或发布包；`v1.7.0` Plugin-Only 包仍是当前最后一个正式发布资产。
+`v1.98` 当前源码与早期源码阶段的变更、构建和 Smoke 记录见 [主更新日志](CHANGELOG.md)；v1.8 的逆向恢复边界单独记录在 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md)。v1.98 只推送源码与文档，不创建正式版、标签或发布包；`v1.7.0` Plugin-Only 包仍是当前最后一个正式发布资产。
 
 已发布插件 DLL：
 

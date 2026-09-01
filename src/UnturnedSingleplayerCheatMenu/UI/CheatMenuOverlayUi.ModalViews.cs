@@ -28,22 +28,26 @@ internal sealed partial class CheatMenuOverlayUi
 		if (!(_root == null))
 		{
 			_aboutRoot = CreateObject("AboutOverlay", _uiRoot.ModalLayer, typeof(Image));
+			_fluentHandles.RegisterScope(_aboutRoot);
 			Stretch(_aboutRoot.GetComponent<RectTransform>());
 			_aboutRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.64f);
 			GameObject gameObject = CreateObject("AboutDialog", _aboutRoot.transform, typeof(Image));
-			gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
+			Image dialogImage = gameObject.GetComponent<Image>();
+			dialogImage.color = CheatMenuStyle.Panel;
+			_fluentControls.StyleSurface(gameObject, dialogImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 			Outline outline = gameObject.AddComponent<Outline>();
 			outline.effectColor = CheatMenuStyle.InputBorder;
 			outline.effectDistance = Vector2.one;
 			outline.useGraphicAlpha = false;
+			outline.enabled = false;
 			RectTransform component = gameObject.GetComponent<RectTransform>();
 			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 			component.anchorMin = anchorMin;
 			component.pivot = new Vector2(0.5f, 0.5f);
 			component.sizeDelta = new Vector2(760f, 390f);
 			VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-			verticalLayoutGroup.padding = new RectOffset(26, 26, 20, 20);
-			verticalLayoutGroup.spacing = 9f;
+			verticalLayoutGroup.padding = new RectOffset(24, 24, 16, 16);
+			verticalLayoutGroup.spacing = CheatMenuStyle.Theme.Space3;
 			verticalLayoutGroup.childControlWidth = true;
 			verticalLayoutGroup.childControlHeight = true;
 			verticalLayoutGroup.childForceExpandWidth = true;
@@ -90,15 +94,19 @@ internal sealed partial class CheatMenuOverlayUi
 
 		IReadOnlyList<SystemFontFamilyOption> fontFamilies = _shellPresenter.GetInstalledChineseFontFamilies();
 		_fontPickerRoot = CreateObject("FontPickerOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_fontPickerRoot);
 		Stretch(_fontPickerRoot.GetComponent<RectTransform>());
 		_fontPickerRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.64f);
 
 		GameObject dialog = CreateObject("FontPickerDialog", _fontPickerRoot.transform, typeof(Image));
-		dialog.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image dialogImage = dialog.GetComponent<Image>();
+		dialogImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(dialog, dialogImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 		Outline outline = dialog.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		RectTransform dialogRect = dialog.GetComponent<RectTransform>();
 		Vector2 center = dialogRect.anchorMax = new Vector2(0.5f, 0.5f);
 		dialogRect.anchorMin = center;
@@ -106,8 +114,8 @@ internal sealed partial class CheatMenuOverlayUi
 		dialogRect.sizeDelta = new Vector2(760f, 680f);
 
 		VerticalLayoutGroup dialogLayout = dialog.AddComponent<VerticalLayoutGroup>();
-		dialogLayout.padding = new RectOffset(24, 24, 18, 18);
-		dialogLayout.spacing = 10f;
+		dialogLayout.padding = new RectOffset(24, 24, 16, 16);
+		dialogLayout.spacing = CheatMenuStyle.Theme.Space3;
 		dialogLayout.childControlWidth = true;
 		dialogLayout.childControlHeight = true;
 		dialogLayout.childForceExpandWidth = true;
@@ -128,13 +136,15 @@ internal sealed partial class CheatMenuOverlayUi
 			CheatMenuStyle.Muted, TextAnchor.MiddleLeft);
 
 		GameObject listPanel = CreateObject("FontListPanel", dialog.transform, typeof(Image));
-		listPanel.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+		Image listPanelImage = listPanel.GetComponent<Image>();
+		listPanelImage.color = CheatMenuStyle.SurfaceInset;
+		_fluentControls.StyleSurface(listPanel, listPanelImage, ControlLibrary.Core.FluentSurfaceRole.Muted, CheatMenuStyle.Theme.RadiusControl);
 		SetLayout(listPanel, -1f, -1f, 1f, 1f);
 		RectTransform content = CreateShortcutScroll(listPanel.transform);
 		ScrollRect scrollRect = content.GetComponentInParent<ScrollRect>();
 		scrollRect.scrollSensitivity = 44f;
 		AddShortcutScrollbar(scrollRect);
-		AddShortcutScrollLayout(content.gameObject, 8f, new RectOffset(10, 18, 10, 10));
+		AddShortcutScrollLayout(content.gameObject, CheatMenuStyle.Theme.Space2, new RectOffset(12, 16, 12, 12));
 
 		GameObject preferredSelection = closeButton.gameObject;
 		if (fontFamilies.Count == 0)
@@ -192,6 +202,7 @@ internal sealed partial class CheatMenuOverlayUi
 		string message = persisted
 			? "界面字体已切换为：" + displayName
 			: (string.IsNullOrWhiteSpace(error) ? "界面字体已切换，但配置文件保存失败。" : error);
+		RebuildVisualTreesPreservingVisibility();
 		SetStatus(message, 6f, persisted ? StatusKind.Success : StatusKind.Warning);
 	}
 
@@ -212,22 +223,26 @@ internal sealed partial class CheatMenuOverlayUi
 		if (!(_root == null))
 		{
 			_shortcutRoot = CreateObject("ShortcutOverlay", _uiRoot.ModalLayer, typeof(Image));
+			_fluentHandles.RegisterScope(_shortcutRoot);
 			Stretch(_shortcutRoot.GetComponent<RectTransform>());
 			_shortcutRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.64f);
 			GameObject gameObject = CreateObject("ShortcutDialog", _shortcutRoot.transform, typeof(Image));
-			gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
+			Image dialogImage = gameObject.GetComponent<Image>();
+			dialogImage.color = CheatMenuStyle.Panel;
+			_fluentControls.StyleSurface(gameObject, dialogImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 			Outline outline = gameObject.AddComponent<Outline>();
 			outline.effectColor = CheatMenuStyle.InputBorder;
 			outline.effectDistance = Vector2.one;
 			outline.useGraphicAlpha = false;
+			outline.enabled = false;
 			RectTransform component = gameObject.GetComponent<RectTransform>();
 			Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 			component.anchorMin = anchorMin;
 			component.pivot = new Vector2(0.5f, 0.5f);
 			component.sizeDelta = new Vector2(930f, 780f);
 			VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-			verticalLayoutGroup.padding = new RectOffset(24, 24, 18, 18);
-			verticalLayoutGroup.spacing = 10f;
+			verticalLayoutGroup.padding = new RectOffset(24, 24, 16, 16);
+			verticalLayoutGroup.spacing = CheatMenuStyle.Theme.Space3;
 			verticalLayoutGroup.childControlWidth = true;
 			verticalLayoutGroup.childControlHeight = true;
 			verticalLayoutGroup.childForceExpandWidth = true;
@@ -239,15 +254,19 @@ internal sealed partial class CheatMenuOverlayUi
 			GameObject gameObject3 = CreateObject("ShortcutBody", gameObject.transform);
 			SetLayout(gameObject3, -1f, -1f, 1f, 1f);
 			GameObject gameObject4 = CreateObject("ShortcutNavigation", gameObject3.transform, typeof(Image));
-			gameObject4.GetComponent<Image>().color = CheatMenuStyle.Surface;
-			AddVerticalLayout(gameObject4, 6f, new RectOffset(8, 8, 8, 8));
+			Image navigationImage = gameObject4.GetComponent<Image>();
+			navigationImage.color = CheatMenuStyle.Surface;
+			_fluentControls.StyleSurface(gameObject4, navigationImage, ControlLibrary.Core.FluentSurfaceRole.Navigation, CheatMenuStyle.Theme.RadiusControl);
+			AddVerticalLayout(gameObject4, CheatMenuStyle.Theme.Space2, new RectOffset(8, 8, 8, 8));
 			RectTransform component2 = gameObject4.GetComponent<RectTransform>();
 			component2.anchorMin = new Vector2(0f, 0f);
 			component2.anchorMax = new Vector2(0f, 1f);
 			component2.offsetMin = Vector2.zero;
 			component2.offsetMax = new Vector2(142f, 0f);
 			GameObject gameObject5 = CreateObject("ShortcutContentPanel", gameObject3.transform, typeof(Image));
-			gameObject5.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+			Image contentPanelImage = gameObject5.GetComponent<Image>();
+			contentPanelImage.color = CheatMenuStyle.SurfaceInset;
+			_fluentControls.StyleSurface(gameObject5, contentPanelImage, ControlLibrary.Core.FluentSurfaceRole.Muted, CheatMenuStyle.Theme.RadiusControl);
 			RectTransform component3 = gameObject5.GetComponent<RectTransform>();
 			component3.anchorMin = new Vector2(0f, 0f);
 			component3.anchorMax = new Vector2(1f, 1f);
@@ -257,7 +276,7 @@ internal sealed partial class CheatMenuOverlayUi
 			_shortcutScrollRect = _shortcutScrollContent.GetComponentInParent<ScrollRect>();
 			_shortcutScrollRect.scrollSensitivity = 48f;
 			AddShortcutScrollbar(_shortcutScrollRect);
-			AddShortcutScrollLayout(_shortcutScrollContent.gameObject, 10f, new RectOffset(12, 18, 10, 10));
+			AddShortcutScrollLayout(_shortcutScrollContent.gameObject, CheatMenuStyle.Theme.Space3, new RectOffset(12, 16, 12, 12));
 			RectTransform pluginHeader = CreateShortcutSectionHeader(_shortcutScrollContent, "插件窗口");
 			CreateShortcutNavigationButton(gameObject4.transform, "插件窗口", pluginHeader);
 			BuildShortcutActionRow(_shortcutScrollContent, "menu.toggle");
@@ -310,7 +329,7 @@ internal sealed partial class CheatMenuOverlayUi
 			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.DisableWeather);
 			BuildShortcutActionRow(_shortcutScrollContent, GlobalShortcutActions.CallAirdrop);
 			_shortcutCaptureText = CreateText(gameObject.transform, "点击某一行的设置后按下键盘键、鼠标中键或鼠标侧键；Escape 取消。", 13, CheatMenuStyle.Muted, TextAnchor.MiddleLeft);
-			SetLayout(_shortcutCaptureText.gameObject, -1f, 42f);
+			SetLayout(_shortcutCaptureText.gameObject, -1f, CheatMenuStyle.Theme.ControlDefault);
 			GameObject gameObject6 = CreateRow(gameObject.transform, 38f, 8f);
 			CreateFlexibleSpacer(gameObject6.transform);
 			CreateButton(gameObject6.transform, "关闭", HideShortcutDialog, "关闭快捷键设置窗口。", 104f, 34f, CheatMenuStyle.Surface);
@@ -381,8 +400,8 @@ internal sealed partial class CheatMenuOverlayUi
 	private static VerticalLayoutGroup AddShortcutScrollLayout(GameObject target, float spacing, RectOffset padding)
 	{
 		VerticalLayoutGroup layout = target.AddComponent<VerticalLayoutGroup>();
-		layout.padding = padding;
-		layout.spacing = spacing;
+		layout.padding = CheatMenuStyle.Theme.NormalizePadding(padding);
+		layout.spacing = CheatMenuStyle.Theme.NormalizeSpacing(spacing);
 		layout.childAlignment = TextAnchor.UpperLeft;
 		layout.childControlWidth = true;
 		layout.childControlHeight = true;
@@ -391,11 +410,20 @@ internal sealed partial class CheatMenuOverlayUi
 		return layout;
 	}
 
-	private static RectTransform CreateShortcutScroll(Transform parent)
+	private RectTransform CreateShortcutScroll(Transform parent, bool styleSurface = true)
 	{
 		GameObject scrollObject = CreateObject("ShortcutScroll", parent, typeof(Image), typeof(ScrollRect));
 		Stretch(scrollObject.GetComponent<RectTransform>());
-		scrollObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
+		Image scrollImage = scrollObject.GetComponent<Image>();
+		scrollImage.color = CheatMenuStyle.SurfaceInset;
+		if (styleSurface)
+		{
+			_fluentControls.StyleSurface(scrollObject, scrollImage, ControlLibrary.Core.FluentSurfaceRole.Muted, CheatMenuStyle.Theme.RadiusField);
+		}
+		else
+		{
+			scrollImage.color = Color.clear;
+		}
 		SetLayout(scrollObject, -1f, -1f, 1f, 1f);
 		LayoutElement layoutElement = scrollObject.GetComponent<LayoutElement>();
 		layoutElement.minWidth = 1f;
@@ -422,7 +450,7 @@ internal sealed partial class CheatMenuOverlayUi
 		return content;
 	}
 
-	private static void AddShortcutScrollbar(ScrollRect scrollRect)
+	private void AddShortcutScrollbar(ScrollRect scrollRect)
 	{
 		if (scrollRect == null || scrollRect.viewport == null)
 		{
@@ -436,7 +464,9 @@ internal sealed partial class CheatMenuOverlayUi
 		scrollbarRect.pivot = new Vector2(1f, 0.5f);
 		scrollbarRect.offsetMin = new Vector2(-14f, 4f);
 		scrollbarRect.offsetMax = new Vector2(-2f, -4f);
-		scrollbarObject.GetComponent<Image>().color = CheatMenuStyle.InputBorder;
+		Image trackImage = scrollbarObject.GetComponent<Image>();
+		trackImage.color = CheatMenuStyle.InputBorder;
+		_fluentControls.StyleSurface(scrollbarObject, trackImage, ControlLibrary.Core.FluentSurfaceRole.Muted, CheatMenuStyle.Theme.RadiusField);
 		GameObject slidingArea = CreateObject("SlidingArea", scrollbarRect);
 		RectTransform slidingRect = slidingArea.GetComponent<RectTransform>();
 		Stretch(slidingRect);
@@ -447,9 +477,11 @@ internal sealed partial class CheatMenuOverlayUi
 		Stretch(handleRect);
 		Image handleImage = handleObject.GetComponent<Image>();
 		handleImage.color = CheatMenuStyle.Accent;
+		_fluentControls.StyleSurface(handleObject, handleImage, ControlLibrary.Core.FluentSurfaceRole.Accent, CheatMenuStyle.Theme.RadiusField);
 		Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
 		scrollbar.handleRect = handleRect;
 		scrollbar.targetGraphic = handleImage;
+		scrollbar.transition = Selectable.Transition.None;
 		scrollbar.direction = Scrollbar.Direction.BottomToTop;
 		scrollRect.verticalScrollbar = scrollbar;
 		scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;

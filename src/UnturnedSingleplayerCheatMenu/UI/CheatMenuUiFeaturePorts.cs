@@ -101,6 +101,8 @@ internal interface IInfiniteStorageUiFeature
 	bool TryExportLegacyAmbiguousEntries();
 	int StoreAllCarried();
 	long Withdraw(string entryId, long amount);
+	bool CanDecompose(string entryId);
+	InfiniteStorageDecomposeResult Decompose(string entryId, InfiniteStorageDecomposeScope scope);
 }
 
 internal interface ITranslationUiFeature
@@ -178,6 +180,7 @@ internal interface IAutoPickupUiFeature
 	void SetDropBlockMinutes(int value);
 	void SetQualityFilterEnabled(bool value);
 	void SetMinimumQuality(int value);
+	void SetAllowedRarityMask(int value);
 	void SetPauseWhenMenuOpen(bool value);
 	void SetPauseWhenDead(bool value);
 	void SetDiagnostics(AutoPickupDiagnosticsLevel value);
@@ -344,6 +347,9 @@ internal sealed class PluginUiFeatureAdapter :
 	bool IInfiniteStorageUiFeature.TryExportLegacyAmbiguousEntries() => _plugin.InfiniteStorage?.TryExportLegacyAmbiguousEntries(out _, out _) ?? false;
 	int IInfiniteStorageUiFeature.StoreAllCarried() => _plugin.InfiniteStorage?.StoreAllCarried() ?? 0;
 	long IInfiniteStorageUiFeature.Withdraw(string entryId, long amount) => _plugin.InfiniteStorage?.Withdraw(entryId, amount) ?? 0;
+	bool IInfiniteStorageUiFeature.CanDecompose(string entryId) => _plugin.InfiniteStorage?.CanDecompose(entryId) ?? false;
+	InfiniteStorageDecomposeResult IInfiniteStorageUiFeature.Decompose(string entryId, InfiniteStorageDecomposeScope scope) =>
+		_plugin.InfiniteStorage?.Decompose(entryId, scope) ?? InfiniteStorageDecomposeResult.Failed(InfiniteStorageDecomposeFailure.StorageUnavailable);
 
 	private WorkshopLocalizationService Translation => _plugin.WorkshopLocalization;
 	string ITranslationUiFeature.ApiProtocol => Translation?.Settings?.ApiProtocol ?? string.Empty;
@@ -422,6 +428,7 @@ internal sealed class PluginUiFeatureAdapter :
 	void IAutoPickupUiFeature.SetDropBlockMinutes(int value) => _plugin.SetAutoPickupDropBlockMinutes(value);
 	void IAutoPickupUiFeature.SetQualityFilterEnabled(bool value) => _plugin.SetAutoPickupQualityFilterEnabled(value);
 	void IAutoPickupUiFeature.SetMinimumQuality(int value) => _plugin.SetAutoPickupMinimumQuality(value);
+	void IAutoPickupUiFeature.SetAllowedRarityMask(int value) => _plugin.SetAutoPickupAllowedRarityMask(value);
 	void IAutoPickupUiFeature.SetPauseWhenMenuOpen(bool value) => _plugin.SetAutoPickupPauseWhenMenuOpen(value);
 	void IAutoPickupUiFeature.SetPauseWhenDead(bool value) => _plugin.SetAutoPickupPauseWhenDead(value);
 	void IAutoPickupUiFeature.SetDiagnostics(AutoPickupDiagnosticsLevel value) => _plugin.SetAutoPickupDiagnostics(value);

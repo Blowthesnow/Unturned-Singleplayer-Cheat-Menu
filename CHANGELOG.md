@@ -4,7 +4,49 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-## [1.95.0] - 2026-08-30 (current source; unreleased)
+## [1.98.0] - 2026-09-01 (current source; unreleased)
+
+### Added
+
+- Added a Fluent-inspired Legacy uGUI control layer with shared theme tokens, rounded surfaces, selectable-state palettes, tooltip and lifetime bridges, HUD primitives, and a dedicated control-library Smoke project.
+- Added persistent interface accent-color customization and applied it across the shell, controls, HUD surfaces, teleport markers, and minimap visuals.
+- Added transactional Infinite Storage decomposition with single-item, matching-asset, and full-stack scopes; native salvage recipe resolution; transferred item-state handling; overflow and persistence rollback; eligibility diagnostics; and an in-page destructive-action mode.
+- Added a persistent six-level automatic-pickup rarity mask with a modal Common-through-Mythical picker. Rarity filtering now runs before quality, allow/block-list, scheduling, and native pickup execution.
+- Added optional view-relative minimap rotation with north-up compatibility, rotation-aware projection extent, upright compass labels, and separate player/map heading treatment.
+- Added minimap layout-input isolation for native key and chat paths, preventing `End`, `Escape`, and Enter releases used by layout editing from leaking back into gameplay UI.
+- Added bounded cross-region zombie retention for the minimap: existing non-networked regions can be reused across native bound updates, while an eight-region LRU cap and protected-radius checks reclaim only plugin-tracked, unoccupied far regions.
+
+### Changed
+
+- Reworked the overlay into responsive wide and narrow shells with separate navigation/layout groups, scroll handling, larger working geometry, consistent toolbar metrics, and explicit page/view cleanup.
+- Replaced the world-time slider with a Chinese/English 12-hour time ring mapped to the game's dawn/noon/dusk/midnight cycle, including wrapped drag accumulation, wheel/keyboard adjustment, and parent-scroll ownership.
+- Expanded Infinite Storage to a five-column, 15-entry page layout with clearer search, withdrawal, scope, status, and destructive-action affordances.
+- Standardized Fluent styling and four-edge HUD frames across the main window, cards, tooltips, toasts, Point Tool, creature health bars, minimap, and modal surfaces; dynamic accent/font revisions refresh long-lived controls in place.
+- Refined catalog, character, inventory, movement, teleport, translation, world, and minimap views for consistent field widths, localization, responsive columns, focus state, and compact control density.
+- Minimap item markers now use rarity-colored high-contrast fills, black outlines, star geometry, and dynamic Mythical coloring without per-frame Unity object or texture allocation. Cross-floor alpha differences remain while floor-direction arrows are removed.
+- Minimap scanning now reads `ZombieManager.AllZombies`, and projection/background/compass text refreshes correctly when orientation or language changes.
+
+### Fixed
+
+- Prevented mixed horizontal/vertical layout groups from being attached to the same shell object during responsive transitions.
+- Prevented minimap layout editing from reopening chat or toggling game actions on the same or immediately following frame.
+- Prevented retained zombie regions from growing without bound or recycling networked, occupied, protected, or non-plugin-tracked regions.
+- Kept Infinite Storage decomposition inside the existing transaction and persistence boundary, including exact rollback on invalid recipes, missing output assets, arithmetic overflow, or save failure.
+- Filled localization gaps for formatted catalog counts, minimap values and suffixes, tooltips, transient summaries, and long-lived compass/background labels.
+
+### Documentation
+
+- Added implementation plans for the Legacy uGUI control-library redesign, minimap rarity visuals, native-framework localization, the future Other-page world-maintenance workflow, and UI motion optimization.
+- Updated Chinese/English README version and verification language while retaining `v1.7.0` as the latest formal release asset.
+
+### Verification
+
+- Release solution build completed with zero warnings and zero errors.
+- All 20 recursively discovered `*Smoke.csproj` projects were rebuilt and passed serially, including the new `UiControlLibrarySmoke` project and expanded automatic-pickup, Infinite Storage, minimap, localization, and UI-architecture gates.
+- The locally built `1.98.0.0` source artifact is `941,568` bytes with SHA-256 `555A99CB46FB55BB6BDBC8F0F993BD20B7C212319342A85995F980CECFE4B288`.
+- This is a source-and-documentation push only: no package, deployment, tag, or GitHub Release is created, and the combined v1.98 behavior is not represented as fresh in-game acceptance.
+
+## [1.95.0] - 2026-08-30 (source checkpoint; unreleased)
 
 ### Added
 

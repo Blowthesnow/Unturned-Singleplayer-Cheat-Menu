@@ -22,6 +22,17 @@ Assert(maximum.Range == AutoPickupSettings.MaxRange, "Pickup range must clamp to
 AutoPickupSettings linkDefaults = new AutoPickupSettings();
 Assert(!linkDefaults.UseMinimapRange && !linkDefaults.UseMinimapRarityFilter,
     "Minimap range/rarity links must remain explicit opt-ins.");
+Assert(linkDefaults.AllowedRarityMask == AutoPickupSettings.AllRaritiesMask,
+    "Every item rarity must be enabled by default for auto pickup.");
+for (int rarity = 0; rarity < AutoPickupSettings.RarityCount; rarity++)
+    Assert(linkDefaults.AllowsRarity(rarity), $"Default auto-pickup rarity mask must allow rarity index {rarity}.");
+linkDefaults.AllowedRarityMask = AutoPickupSettings.SetRarityEnabled(linkDefaults.AllowedRarityMask, rarity: 2, enabled: false);
+Assert(!linkDefaults.AllowsRarity(2) && linkDefaults.AllowsRarity(1) && linkDefaults.AllowsRarity(3),
+    "Disabling one rarity must reject only that rarity.");
+linkDefaults.AllowedRarityMask = AutoPickupSettings.AllRaritiesMask | (1 << 12);
+linkDefaults.Normalize();
+Assert(linkDefaults.AllowedRarityMask == AutoPickupSettings.AllRaritiesMask && linkDefaults.AllowsRarity(99),
+    "Rarity-mask normalization must discard unsupported bits while unknown future rarities fail open.");
 AutoPickupSettings dropBlock = new AutoPickupSettings { DropBlockMinutes = 0 }.Normalize();
 Assert(dropBlock.DropBlockMinutes == AutoPickupSettings.MinDropBlockMinutes, "Drop block duration must clamp to the 1-minute minimum.");
 dropBlock.DropBlockMinutes = 9999;
@@ -211,11 +222,16 @@ Assert(runtimeSource.Contains("plugin?.IsInfiniteStoragePickupPriorityEnabled ==
     "Pickup priority must require both its setting and an operational infinite-storage runtime.");
 Assert(runtimeSource.Contains("!_settings.AllowsQuality(candidate.Quality)", StringComparison.Ordinal),
     "Enabled quality filtering must reject candidates below the persisted minimum before pickup execution.");
+Assert(runtimeSource.Contains("!_settings.AllowsRarity(candidate.Rarity)", StringComparison.Ordinal),
+    "Disabled item rarities must be rejected before native pickup execution.");
 Assert(pluginSource.Contains("Config.Bind(\"AutoPickup\", \"QualityFilterEnabled\"", StringComparison.Ordinal)
     && pluginSource.Contains("Config.Bind(\"AutoPickup\", \"MinimumQuality\"", StringComparison.Ordinal)
     && pluginSource.Contains("PersistInterfaceState(_autoPickupQualityFilterEnabled", StringComparison.Ordinal)
     && pluginSource.Contains("PersistInterfaceState(_autoPickupMinimumQuality", StringComparison.Ordinal),
     "The quality-filter toggle and minimum threshold must both persist through BepInEx configuration.");
+Assert(pluginSource.Contains("Config.Bind(\"AutoPickup\", \"AllowedRarityMask\", AutoPickupSettings.AllRaritiesMask", StringComparison.Ordinal)
+    && pluginSource.Contains("PersistInterfaceState(_autoPickupAllowedRarityMask", StringComparison.Ordinal),
+    "The auto-pickup rarity mask must persist with every rarity enabled by default.");
 Assert(runtimeSource.Contains("onDropItemRequested", StringComparison.Ordinal) && runtimeSource.Contains("onItemDropAdded", StringComparison.Ordinal)
     && runtimeSource.Contains("onItemDropRemoved", StringComparison.Ordinal) && runtimeSource.Contains("IsSuppressed", StringComparison.Ordinal),
     "Player-dropped item instances must be suppressed until their world drop is removed.");
@@ -239,6 +255,15 @@ Assert(uiSource.Contains("丢弃后禁拾时长", StringComparison.Ordinal) && u
 Assert(uiSource.Contains("启用品质过滤", StringComparison.Ordinal) && uiSource.Contains("SetAutoPickupQualityFilterEnabled", StringComparison.Ordinal)
     && uiSource.Contains("SetAutoPickupMinimumQuality", StringComparison.Ordinal),
     "The auto-pickup settings page must expose a persistent quality-filter toggle and 0-100 threshold input.");
+Assert(uiSource.Contains("ShowAutoPickupRarityPicker", StringComparison.Ordinal)
+    && uiSource.Contains("SetAllowedRarityMask", StringComparison.Ordinal)
+    && uiSource.Contains("普通", StringComparison.Ordinal)
+    && uiSource.Contains("罕见", StringComparison.Ordinal)
+    && uiSource.Contains("稀有", StringComparison.Ordinal)
+    && uiSource.Contains("史诗", StringComparison.Ordinal)
+    && uiSource.Contains("传奇", StringComparison.Ordinal)
+    && uiSource.Contains("神话", StringComparison.Ordinal),
+    "The auto-pickup settings page must open a six-rarity toggle popup.");
 Assert(!uiSource.Contains("自动拾取（实验性）", StringComparison.Ordinal), "The auto-pickup UI must not retain the experimental label.");
 int autoPickupUiStart = uiSource.IndexOf("private void BuildAutoPickupPanel", StringComparison.Ordinal);
 int autoPickupUiEnd = uiSource.IndexOf("private static string AutoPickupDiagnosticsLabel", autoPickupUiStart, StringComparison.Ordinal);

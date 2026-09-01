@@ -19,6 +19,16 @@ internal sealed class UiPageView<TPage> : IDisposable where TPage : struct, Enum
 	internal TPage Page { get; }
 	internal GameObject Root { get; private set; }
 
+	internal void DetachForAncestorDestroy()
+	{
+		if (_disposed)
+		{
+			return;
+		}
+		_disposed = true;
+		Root = null;
+	}
+
 	public void Dispose()
 	{
 		if (_disposed)

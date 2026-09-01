@@ -16,6 +16,8 @@ internal sealed class UiDebouncer : IDisposable
 		_delaySeconds = Mathf.Clamp(delaySeconds, 0.1f, 0.2f);
 	}
 
+	internal bool HasPending => _pending != null;
+
 	internal void Schedule(Action action)
 	{
 		_pending = action;

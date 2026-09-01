@@ -106,11 +106,13 @@ public sealed class PluginRuntimeContext : IDisposable
 		}
 		_harmony = new Harmony(CheatMenuPlugin.PluginGuid);
 		RuntimeUpdatePatch.Install(_harmony, _log, this);
+		MinimapLayoutInputPatch.Install(_harmony, _log);
 		MovementSimulationPatch.Install(_harmony, _log);
 		InventoryArrangePatch.Install(_harmony, _log, _inventoryArrange);
 		PointToolInteractionPatch.Install(_harmony, _log);
 		WorkshopLocalizationPatch.Install(_harmony, _log);
 		InfiniteStorageCraftingPatch.Install(_harmony, _log);
+		ZombieRegionRetentionPatch.Install(_harmony, _log);
 		try
 		{
 			MethodInfo target = (from method in AccessTools.GetDeclaredMethods(typeof(PlayerLife))
@@ -245,6 +247,7 @@ public sealed class PluginRuntimeContext : IDisposable
 		if (Time.unscaledTime >= _nextMaintenanceTime)
 		{
 			_nextMaintenanceTime = Time.unscaledTime + 0.2f;
+			ZombieRegionRetentionPatch.Maintain();
 			_actions?.MaintainEnabledCheats();
 		}
 	}
@@ -358,6 +361,7 @@ public sealed class PluginRuntimeContext : IDisposable
 		}
 		_uiRoot?.HandleSceneChanged();
 		_ui?.HandleSceneChanged();
+		ZombieRegionRetentionPatch.ResetForSceneTransition();
 		_minimap?.HandleSceneChanged();
 		_sharedItemSnapshot = null;
 		_nextSharedItemScanTime = 0f;
@@ -378,8 +382,10 @@ public sealed class PluginRuntimeContext : IDisposable
 
 		RunTeardownStep("scene/assets events", RemoveSubscriptions);
 		RunTeardownStep("runtime Update bridge", () => RuntimeUpdatePatch.Reset(this));
+		RunTeardownStep("minimap layout input", MinimapLayoutInputPatch.Reset);
 		RunTeardownStep("input capture", _inputCapture.Release);
 		RunTeardownStep("movement restore", () => _movement?.Restore());
+		RunTeardownStep("zombie retention cleanup", ZombieRegionRetentionPatch.ReleaseAll);
 		RunTeardownStep("ui", () => _ui?.Dispose());
 		_ui = null;
 		RunTeardownStep("minimap", () => _minimap?.Dispose());

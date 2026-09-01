@@ -161,6 +161,31 @@ internal sealed class InfiniteStorageRuntime : IDisposable
 		return moved;
 	}
 
+	internal bool CanDecompose(string entryId)
+	{
+		if (!IsOperational || string.IsNullOrWhiteSpace(entryId)) return false;
+		VirtualStorageEntry entry = Entries.FirstOrDefault(value => string.Equals(value.EntryId, entryId, StringComparison.Ordinal));
+		if (entry == null) return false;
+		return InfiniteStorageDecomposer.CanDecompose(entry, ResolveAsset(entry.AssetId));
+	}
+
+	internal InfiniteStorageDecomposeResult Decompose(string entryId, InfiniteStorageDecomposeScope scope)
+	{
+		if (!IsOperational)
+		{
+			return InfiniteStorageDecomposeResult.Failed(InfiniteStorageDecomposeFailure.StorageUnavailable);
+		}
+		try
+		{
+			return InfiniteStorageDecomposer.Execute(_storage, entryId, scope, ResolveAsset, Commit);
+		}
+		catch (Exception ex)
+		{
+			_log?.LogError("InfiniteStorage decomposition failed:\n" + ex);
+			return InfiniteStorageDecomposeResult.Failed(InfiniteStorageDecomposeFailure.UnexpectedFailure);
+		}
+	}
+
 	internal int StoreAllCarried()
 	{
 		if (!Enabled || !_loaded || Player.LocalPlayer?.inventory == null) return 0;

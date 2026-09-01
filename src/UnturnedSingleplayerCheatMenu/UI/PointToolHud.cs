@@ -3,6 +3,8 @@ using BepInEx.Logging;
 using SDG.Unturned;
 using UnityEngine;
 using UnityEngine.UI;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Runtime;
 using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
@@ -150,20 +152,6 @@ internal sealed class PointToolHud
 		}
 	}
 
-	private static void CreateHudBorderEdge(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
-	{
-		GameObject gameObject = new GameObject(name, typeof(RectTransform), typeof(Image));
-		gameObject.transform.SetParent(parent, worldPositionStays: false);
-		RectTransform component = gameObject.GetComponent<RectTransform>();
-		component.anchorMin = anchorMin;
-		component.anchorMax = anchorMax;
-		component.offsetMin = offsetMin;
-		component.offsetMax = offsetMax;
-		Image component2 = gameObject.GetComponent<Image>();
-		component2.color = CheatMenuStyle.Accent;
-		component2.raycastTarget = false;
-	}
-
 	private Text CreateLabel(string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 size, TextAnchor alignment, int fontSize, out GameObject container)
 	{
 		container = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -175,25 +163,8 @@ internal sealed class PointToolHud
 		component.anchoredPosition = anchoredPosition;
 		component.sizeDelta = size;
 		Image component2 = container.GetComponent<Image>();
-		component2.color = Color.clear;
-		component2.raycastTarget = false;
-		Canvas component3 = _uiRoot.Canvas;
-		float num = ((component3 != null) ? Mathf.Max(0.01f, component3.scaleFactor) : 1f);
-		float num2 = 3f / num;
-		CreateHudBorderEdge(container.transform, name + ".BorderTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f - num2), Vector2.zero);
-		CreateHudBorderEdge(container.transform, name + ".BorderBottom", Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, num2));
-		CreateHudBorderEdge(container.transform, name + ".BorderLeft", Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(num2, 0f));
-		CreateHudBorderEdge(container.transform, name + ".BorderRight", new Vector2(1f, 0f), Vector2.one, new Vector2(0f - num2, 0f), Vector2.zero);
-		GameObject gameObject = new GameObject(name + ".Background", typeof(RectTransform), typeof(Image));
-		gameObject.transform.SetParent(container.transform, worldPositionStays: false);
-		RectTransform component4 = gameObject.GetComponent<RectTransform>();
-		component4.anchorMin = Vector2.zero;
-		component4.anchorMax = Vector2.one;
-		component4.offsetMin = new Vector2(num2, num2);
-		component4.offsetMax = new Vector2(0f - num2, 0f - num2);
-		Image component5 = gameObject.GetComponent<Image>();
-		component5.color = new Color(0.02f, 0.025f, 0.035f, 0.5f);
-		component5.raycastTarget = false;
+		FluentTheme theme = FluentThemes.DarkInk;
+		HudFrameStyle.Apply(container, component2);
 		GameObject gameObject2 = new GameObject(name + ".Text", typeof(RectTransform), typeof(Text));
 		gameObject2.transform.SetParent(container.transform, worldPositionStays: false);
 		RectTransform component6 = gameObject2.GetComponent<RectTransform>();
@@ -204,7 +175,7 @@ internal sealed class PointToolHud
 		Text component7 = gameObject2.GetComponent<Text>();
 		component7.font = _font;
 		component7.fontSize = fontSize;
-		component7.color = Color.white;
+		component7.color = theme.HudText.ToUnity();
 		component7.alignment = alignment;
 		component7.horizontalOverflow = HorizontalWrapMode.Wrap;
 		component7.verticalOverflow = VerticalWrapMode.Truncate;

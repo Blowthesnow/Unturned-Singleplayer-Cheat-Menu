@@ -25,6 +25,7 @@ internal sealed class UiStateStore
 	internal TeleportMarkerKind TeleportMarkerKind;
 	internal Color TeleportMarkerColor = new Color(0.96f, 0.77f, 0.26f, 1f);
 	internal Color TeleportColorDraft;
+	internal Color AccentColor = CheatMenuStyle.DefaultAccent;
 
 	internal string VehicleQuery = string.Empty;
 	internal string VehicleCategory = "全部";

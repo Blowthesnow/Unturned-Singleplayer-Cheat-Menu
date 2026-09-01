@@ -67,7 +67,7 @@ internal sealed partial class CheatMenuOverlayUi
 		GameObject gameObject = CreateRow(parent, 40f, 8f);
 		CreateLabel(gameObject.transform, label, 13, CheatMenuStyle.Text, 92f);
 		Text valueText = CreateText(gameObject.transform, $"{value:0}x", 12, CheatMenuStyle.Muted, TextAnchor.MiddleRight, FontStyle.Normal, localize: false);
-		SetLayout(valueText.gameObject, 42f, 30f);
+		SetLayout(valueText.gameObject, 42f, CheatMenuStyle.Theme.ControlCompact);
 		SetLayout(CreateTimeSlider(gameObject.transform, Mathf.InverseLerp(1f, 10f, value), delegate(float normalized)
 		{
 			float num = Mathf.Clamp(Mathf.Round(Mathf.Lerp(1f, 10f, Mathf.Clamp01(normalized))), 1f, 10f);

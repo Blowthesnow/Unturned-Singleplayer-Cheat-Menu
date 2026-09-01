@@ -60,6 +60,8 @@ internal sealed class AutoPickupSettings
 	internal const int MaxDropBlockMinutes = 1440;
 	internal const int MinQuality = 0;
 	internal const int MaxQuality = 100;
+	internal const int RarityCount = 6;
+	internal const int AllRaritiesMask = (1 << RarityCount) - 1;
 
 	public bool Enabled { get; set; }
 
@@ -74,6 +76,8 @@ internal sealed class AutoPickupSettings
 	public bool QualityFilterEnabled { get; set; }
 
 	public int MinimumQuality { get; set; }
+
+	public int AllowedRarityMask { get; set; } = AllRaritiesMask;
 
 	public bool PauseWhenMenuOpen { get; set; } = true;
 
@@ -92,6 +96,7 @@ internal sealed class AutoPickupSettings
 		RequestsPerTick = Math.Max(MinRequestsPerTick, Math.Min(MaxRequestsPerTick, RequestsPerTick));
 		DropBlockMinutes = Math.Max(MinDropBlockMinutes, Math.Min(MaxDropBlockMinutes, DropBlockMinutes));
 		MinimumQuality = Math.Max(MinQuality, Math.Min(MaxQuality, MinimumQuality));
+		AllowedRarityMask &= AllRaritiesMask;
 		return this;
 	}
 
@@ -106,6 +111,7 @@ internal sealed class AutoPickupSettings
 			DropBlockMinutes = DropBlockMinutes,
 			QualityFilterEnabled = QualityFilterEnabled,
 			MinimumQuality = MinimumQuality,
+			AllowedRarityMask = AllowedRarityMask,
 			PauseWhenMenuOpen = PauseWhenMenuOpen,
 			PauseWhenDead = PauseWhenDead,
 			UseMinimapRange = UseMinimapRange,
@@ -117,6 +123,22 @@ internal sealed class AutoPickupSettings
 	public bool AllowsQuality(byte quality)
 	{
 		return !QualityFilterEnabled || quality >= MinimumQuality;
+	}
+
+	public bool AllowsRarity(int rarity)
+	{
+		return rarity < 0 || rarity >= RarityCount || (AllowedRarityMask & (1 << rarity)) != 0;
+	}
+
+	public static int SetRarityEnabled(int mask, int rarity, bool enabled)
+	{
+		mask &= AllRaritiesMask;
+		if (rarity < 0 || rarity >= RarityCount)
+		{
+			return mask;
+		}
+		int bit = 1 << rarity;
+		return enabled ? mask | bit : mask & ~bit;
 	}
 
 	private static float Clamp(float value, float min, float max)

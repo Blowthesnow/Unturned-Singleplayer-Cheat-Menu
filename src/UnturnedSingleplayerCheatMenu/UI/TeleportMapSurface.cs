@@ -308,8 +308,8 @@ internal sealed class TeleportMapSurface : MonoBehaviour, IPointerDownHandler, I
 			component.color = new Color(0.025f, 0.035f, 0.055f, 0.96f);
 			component.raycastTarget = false;
 			Outline outline = _tooltipRoot.AddComponent<Outline>();
-			outline.effectColor = CheatMenuStyle.Accent;
-			outline.effectDistance = Vector2.one;
+		outline.effectColor = CheatMenuStyle.TooltipBorder;
+		outline.effectDistance = new Vector2(2f, 2f);
 			outline.useGraphicAlpha = false;
 			RectTransform component2 = _tooltipRoot.GetComponent<RectTransform>();
 			Vector2 anchorMin = (component2.anchorMax = new Vector2(0.5f, 0.5f));

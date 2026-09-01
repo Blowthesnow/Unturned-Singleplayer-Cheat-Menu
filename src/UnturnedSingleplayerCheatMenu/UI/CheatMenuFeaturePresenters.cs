@@ -155,6 +155,8 @@ internal sealed class InfiniteStoragePagePresenter
 	internal bool TryExportLegacyAmbiguousEntries() => _feature.TryExportLegacyAmbiguousEntries();
 	internal int StoreAllCarried() => _feature.StoreAllCarried();
 	internal long Withdraw(string entryId, long amount) => _feature.Withdraw(entryId, amount);
+	internal bool CanDecompose(string entryId) => _feature.CanDecompose(entryId);
+	internal InfiniteStorageDecomposeResult Decompose(string entryId, InfiniteStorageDecomposeScope scope) => _feature.Decompose(entryId, scope);
 }
 
 internal sealed class TranslationSettingsSnapshot
@@ -313,6 +315,7 @@ internal sealed class AutoPickupToolsPresenter
 	internal void SetDropBlockMinutes(int value) => _feature.SetDropBlockMinutes(value);
 	internal void SetQualityFilterEnabled(bool value) => _feature.SetQualityFilterEnabled(value);
 	internal void SetMinimumQuality(int value) => _feature.SetMinimumQuality(value);
+	internal void SetAllowedRarityMask(int value) => _feature.SetAllowedRarityMask(value);
 	internal void SetPauseWhenMenuOpen(bool value) => _feature.SetPauseWhenMenuOpen(value);
 	internal void SetPauseWhenDead(bool value) => _feature.SetPauseWhenDead(value);
 	internal void SetDiagnostics(AutoPickupDiagnosticsLevel value) => _feature.SetDiagnostics(value);

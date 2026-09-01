@@ -34,6 +34,7 @@ internal sealed class MinimapSettings
 	public float Size { get; set; } = 260f;
 	public float VisibleRadiusMeters { get; set; } = 100f;
 	public MinimapBackgroundMode BackgroundMode { get; set; } = MinimapBackgroundMode.AutoNativeFirst;
+	public bool RotateWithView { get; set; }
 	public float BackgroundRenderHz { get; set; } = 5f;
 	public float WorldScanHz { get; set; } = 5f;
 	public bool ShowLoadedBuildings { get; set; } = true;

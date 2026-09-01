@@ -22,28 +22,38 @@ internal readonly struct MinimapProjectionContext
 	public float VisibleRadiusMeters { get; }
 	public float ViewportSizePixels { get; }
 	public float MapYawDegrees { get; }
+	public float ViewportRotationDegrees { get; }
 	public MinimapShape Shape { get; }
 	public float SameFloorTolerance { get; }
 
 	public MinimapProjectionContext(MinimapWorldPoint center, float visibleRadiusMeters, float viewportSizePixels,
-		float mapYawDegrees, MinimapShape shape, float sameFloorTolerance)
+		float mapYawDegrees, MinimapShape shape, float sameFloorTolerance, float viewportRotationDegrees = 0f)
 	{
 		Center = center;
 		VisibleRadiusMeters = Math.Max(0.001f, visibleRadiusMeters);
 		ViewportSizePixels = Math.Max(1f, viewportSizePixels);
 		MapYawDegrees = mapYawDegrees;
+		ViewportRotationDegrees = viewportRotationDegrees;
 		Shape = shape;
 		SameFloorTolerance = Math.Max(0f, sameFloorTolerance);
 	}
 
 	public MinimapProjectionContext WithShape(MinimapShape shape)
 	{
-		return new MinimapProjectionContext(Center, VisibleRadiusMeters, ViewportSizePixels, MapYawDegrees, shape, SameFloorTolerance);
+		return new MinimapProjectionContext(Center, VisibleRadiusMeters, ViewportSizePixels, MapYawDegrees,
+			shape, SameFloorTolerance, ViewportRotationDegrees);
 	}
 
 	public MinimapProjectionContext WithMapYaw(float mapYawDegrees)
 	{
-		return new MinimapProjectionContext(Center, VisibleRadiusMeters, ViewportSizePixels, mapYawDegrees, Shape, SameFloorTolerance);
+		return new MinimapProjectionContext(Center, VisibleRadiusMeters, ViewportSizePixels, mapYawDegrees,
+			Shape, SameFloorTolerance, ViewportRotationDegrees);
+	}
+
+	public MinimapProjectionContext WithViewportRotation(float viewportRotationDegrees)
+	{
+		return new MinimapProjectionContext(Center, VisibleRadiusMeters, ViewportSizePixels, MapYawDegrees,
+			Shape, SameFloorTolerance, viewportRotationDegrees);
 	}
 }
 
@@ -86,9 +96,16 @@ internal static class MinimapProjection
 		float mapZ = sine * deltaX + cosine * deltaZ;
 		float horizontalDistanceSquared = mapX * mapX + mapZ * mapZ;
 		float radius = context.VisibleRadiusMeters;
+		float viewportRadians = context.ViewportRotationDegrees * (float)(Math.PI / 180d);
+		float viewportCosine = (float)Math.Cos(viewportRadians);
+		float viewportSine = (float)Math.Sin(viewportRadians);
+		float viewportX = viewportCosine * mapX - viewportSine * mapZ;
+		float viewportY = viewportSine * mapX + viewportCosine * mapZ;
+		// The HUD rotates the shared content root, so clipping uses rotated coordinates while the
+		// returned marker coordinates remain in CartographyVolume-local map space.
 		bool visible = context.Shape == MinimapShape.Circle
 			? horizontalDistanceSquared <= radius * radius
-			: Math.Abs(mapX) <= radius && Math.Abs(mapZ) <= radius;
+			: Math.Abs(viewportX) <= radius && Math.Abs(viewportY) <= radius;
 		float pixelsPerMeter = context.ViewportSizePixels * 0.5f / radius;
 		float heightDelta = worldPoint.Y - context.Center.Y;
 		return new MinimapProjectedPoint(
@@ -103,6 +120,23 @@ internal static class MinimapProjection
 	public static float ResolvePlayerMarkerRotation(float playerYawDegrees, float mapYawDegrees)
 	{
 		return -NormalizeSignedDegrees(playerYawDegrees - mapYawDegrees);
+	}
+
+	public static float ResolveMapContentRotation(float viewYawDegrees, float mapYawDegrees)
+	{
+		return NormalizeSignedDegrees(viewYawDegrees - mapYawDegrees);
+	}
+
+	public static float ResolveMapContentRotation(bool rotateWithView, float viewYawDegrees, float mapYawDegrees)
+	{
+		return rotateWithView ? ResolveMapContentRotation(viewYawDegrees, mapYawDegrees) : 0f;
+	}
+
+	public static float ResolveContentExtent(bool rotateWithView, float visibleExtent)
+	{
+		if (float.IsNaN(visibleExtent) || float.IsInfinity(visibleExtent)) return 0f;
+		float extent = Math.Max(0f, visibleExtent);
+		return rotateWithView ? extent * (float)Math.Sqrt(2d) : extent;
 	}
 
 	private static float NormalizeSignedDegrees(float degrees)

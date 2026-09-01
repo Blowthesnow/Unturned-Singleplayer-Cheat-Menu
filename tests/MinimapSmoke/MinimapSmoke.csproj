@@ -12,6 +12,8 @@
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapProjection.cs" Link="MinimapProjection.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapRenderPolicy.cs" Link="MinimapRenderPolicy.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapZoomPolicy.cs" Link="MinimapZoomPolicy.cs" />
+	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapLayoutInputPolicy.cs" Link="MinimapLayoutInputPolicy.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\ZombieRegionRetentionPolicy.cs" Link="ZombieRegionRetentionPolicy.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapDisplayText.cs" Link="MinimapDisplayText.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapItemAggregator.cs" Link="MinimapItemAggregator.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\OverheadOcclusionModel.cs" Link="OverheadOcclusionModel.cs" />

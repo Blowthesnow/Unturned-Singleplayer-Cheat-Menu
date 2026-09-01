@@ -179,6 +179,7 @@ internal static class PluginLocalization
 	{
 		Dictionary<string, string> dictionary = new Dictionary<string, string>(StringComparer.Ordinal);
 		dictionary["全部"] = "All";
+		dictionary["无"] = "None";
 		dictionary["武器"] = "Weapons";
 		dictionary["弹药与配件"] = "Ammo & Attachments";
 		dictionary["衣物"] = "Clothing";
@@ -390,6 +391,7 @@ internal static class PluginLocalization
 		dictionary["圆形"] = "Circle";
 		dictionary["菱形"] = "Diamond";
 		dictionary["颜色"] = "Color";
+		dictionary["强调色"] = "Accent";
 		dictionary["选择颜色"] = "Choose Color";
 		dictionary["预览"] = "Preview";
 		dictionary["颜色值"] = "Color Value";
@@ -398,6 +400,15 @@ internal static class PluginLocalization
 		dictionary["红"] = "Red";
 		dictionary["绿"] = "Green";
 		dictionary["蓝"] = "Blue";
+		dictionary["选择仅在本次游戏会话生效的强调色；不会修改传送点颜色。"] = "Choose a session-only accent color without changing teleport marker colors.";
+		dictionary["强调色已应用；仅在本次游戏会话生效。"] = "Accent color applied for this game session.";
+		dictionary["关闭强调色选择器并放弃本次更改。"] = "Close the accent picker and discard this draft.";
+		dictionary["仅本次游戏会话生效 · 不影响传送点颜色"] = "Session only · teleport marker color stays independent";
+		dictionary["默认蓝色"] = "Default Blue";
+		dictionary["把强调色草稿恢复为默认 Fluent 蓝。"] = "Restore the Fluent blue accent draft.";
+		dictionary["放弃本次强调色更改。"] = "Discard this session accent draft.";
+		dictionary["把当前颜色用于本次会话的强调、焦点、导航选中和滑块。"] = "Apply this color to accent, focus, navigation selection, and sliders for this session.";
+		dictionary["把此预设颜色载入强调色预览。"] = "Load this preset into the session accent preview.";
 		dictionary["已切换到地图视图。"] = "Switched to map view.";
 		dictionary["已切换到传送点视图。"] = "Switched to teleport points view.";
 		dictionary["玩家状态尚未准备完成。"] = "Player state is not ready yet.";
@@ -843,6 +854,31 @@ internal static class PluginLocalization
 		dictionary["储存运行时尚未初始化。"] = "The storage runtime has not finished initializing.";
 		dictionary["启用无限储存"] = "Enable infinite storage";
 		dictionary["拾取优先存入无限储存"] = "Prioritize Infinite Storage for Pickup";
+		dictionary["分解模式"] = "Decomposition Mode";
+		dictionary["分解范围"] = "Decomposition Scope";
+		dictionary["单物品"] = "Single Item";
+		dictionary["堆叠"] = "Stack";
+		dictionary["分解模式已开启；只有可分解的非材料物品会在悬停时变红。"] = "Decomposition mode enabled; only decomposable non-material items turn red on hover.";
+		dictionary["分解模式已关闭。"] = "Decomposition mode disabled.";
+		dictionary["开启后只有带原生分解配方的非材料物品卡片会在悬停时变红；点击卡片按所选范围分解，分解产物直接存回无限储存。"] = "When enabled, only non-material item cards with a native salvage recipe turn red on hover. Click a card to store its salvage outputs directly in infinite storage.";
+		dictionary["选择分解范围：单物品只分解一个；ID 分解所有同 ID 物品；堆叠分解当前卡片的全部数量。"] = "Choose the salvage scope: Single Item salvages one, ID salvages every item with the same ID, and Stack salvages the full pointed card.";
+		dictionary["材料无法继续分解；关闭分解模式后可正常取出。"] = "Materials cannot be salvaged again; disable decomposition mode to withdraw them normally.";
+		dictionary["该物品没有可用的原生分解配方；分解模式不会处理它。"] = "This item has no supported native salvage recipe and is excluded from decomposition mode.";
+		dictionary["点击取出当前数量（{0}）。"] = "Click to withdraw the current amount ({0}).";
+		dictionary["点击按“{0}”范围分解；产物会直接存回无限储存。"] = "Click to salvage using the '{0}' scope; outputs are stored directly in infinite storage.";
+		dictionary["分解无限储存中所有同 ID 的可分解物品，包括不同品质或状态的卡片。"] = "Salvage every decomposable item with the same ID in infinite storage, including cards with different quality or state.";
+		dictionary["分解鼠标指向卡片中的全部数量；不会处理其他同 ID 卡片。"] = "Salvage the full quantity in the pointed card without affecting other cards sharing its ID.";
+		dictionary["只从鼠标指向的卡片分解一个物品。"] = "Salvage one item from the pointed card.";
+		dictionary["无限储存尚未启用或加载完成。"] = "Infinite storage is not enabled or has not finished loading.";
+		dictionary["物品卡片已经失效，请刷新后重试。"] = "The item card is stale; refresh and try again.";
+		dictionary["材料无法继续分解。"] = "Materials cannot be salvaged again.";
+		dictionary["无法解析该物品资产。"] = "The item asset could not be resolved.";
+		dictionary["该物品没有原生分解配方。"] = "This item has no native salvage recipe.";
+		dictionary["该物品的分解配方不是受支持的单物品分解配方。"] = "This item's salvage recipe is not a supported single-item salvage recipe.";
+		dictionary["分解产物中存在无法解析的物品。"] = "One or more salvage outputs could not be resolved.";
+		dictionary["分解结果保存失败，原物品和分解产物已回滚。"] = "Saving the salvage result failed; the original items and outputs were rolled back.";
+		dictionary["分解数量过大，操作已取消。"] = "The salvage quantity is too large; the operation was cancelled.";
+		dictionary["分解失败，原物品未被扣除。"] = "Salvage failed; no original items were removed.";
 		dictionary["存储当前携带物品"] = "Store Current Carried Items";
 		dictionary["没有可存储的物品，或无限储存未启用。"] = "No items can be stored, or infinite storage is disabled.";
 		dictionary["将当前背包中的物品存入无限储存。"] = "Store the current backpack items in infinite storage.";
@@ -1025,12 +1061,18 @@ internal static class PluginLocalization
 		dictionary["地下"] = "Underground";
 		dictionary["联动"] = "Links";
 		dictionary["启用小地图"] = "Enable minimap";
+		dictionary["随视角转动"] = "Rotate with view";
+		dictionary["北向固定"] = "North-up";
+		dictionary["关闭时保持当前固定北向；开启后地图、标记和指南针随玩家视角转动。"] = "Keep the existing north-up minimap when disabled; when enabled, rotate the map, markers, and compass with the player's view.";
 		dictionary["布局编辑"] = "Edit layout";
 		dictionary["进入后插件窗口会隐藏；拖动或缩放小地图，按回车键应用。正常状态不拦截鼠标。"] = "The plugin window hides during layout editing. Drag or resize the minimap, then press Enter to apply. Normal mode does not block the mouse.";
 		dictionary["跟随小地图范围"] = "Follow minimap range";
 		dictionary["默认关闭；开启后只由小地图可见半径单向约束自动拾取距离。"] = "Disabled by default; when enabled, only the minimap visible radius constrains auto-pickup range one way.";
 		dictionary["跟随小地图稀有度"] = "Follow minimap rarities";
 		dictionary["默认关闭；开启后小地图稀有度掩码会额外约束自动拾取，不会反向影响雷达显示。"] = "Disabled by default; when enabled, the minimap rarity mask additionally constrains auto pickup without affecting radar visibility.";
+		dictionary["打开自动拾取稀有度筛选窗口；关闭的稀有度不会被拾取。"] = "Open the auto-pickup rarity filter; disabled rarities will not be picked up.";
+		dictionary["关闭自动拾取稀有度筛选窗口。"] = "Close the auto-pickup rarity filter.";
+		dictionary["取消某个稀有度后，自动拾取会跳过该稀有度的地面物品；默认全部开启。"] = "Disable a rarity to make auto pickup skip ground items of that rarity; all rarities are enabled by default.";
 		dictionary[" 像素"] = " px";
 		dictionary[" 米"] = " m";
 		dictionary[" 次/秒"] = " Hz";
@@ -1039,6 +1081,23 @@ internal static class PluginLocalization
 		dictionary["锚点："] = "Anchor: ";
 		dictionary["背景："] = "Background: ";
 		dictionary["背景"] = "Background";
+		dictionary["左上"] = "Top Left";
+		dictionary["右上"] = "Top Right";
+		dictionary["左下"] = "Bottom Left";
+		dictionary["右下"] = "Bottom Right";
+		dictionary["仅原生地图"] = "Native Map Only";
+		dictionary["实时地表"] = "Realtime Surface";
+		dictionary["实时高度切片"] = "Realtime Height Slice";
+		dictionary["关闭背景"] = "Background Off";
+		dictionary["自动优先原生地图"] = "Prefer Native Map Automatically";
+		dictionary["备用网格"] = "Fallback Grid";
+		dictionary["背景已关闭"] = "Background Disabled";
+		dictionary["原生地图裁剪"] = "Native Map Crop";
+		dictionary["北"] = "N";
+		dictionary["东"] = "E";
+		dictionary["南"] = "S";
+		dictionary["西"] = "W";
+		dictionary["拖动小地图可调整位置，拖动右下角可缩放；按回车键应用，按 Esc 取消"] = "Drag the minimap to reposition it or drag the bottom-right corner to resize; press Enter to apply or Esc to cancel";
 		dictionary["扫描"] = "Scan";
 		dictionary["大小"] = "Size";
 		dictionary["可见半径"] = "Visible radius";
@@ -1064,7 +1123,7 @@ internal static class PluginLocalization
 		dictionary["合并"] = "Merge";
 		dictionary["同层"] = "Same floor";
 		dictionary["显示其他楼层"] = "Show other floors";
-		dictionary["默认显示全部楼层；淡化的三角图形表示目标在上方或下方。"] = "All floors are shown by default; dimmed triangle icons indicate targets above or below.";
+		dictionary["默认显示全部楼层；不同楼层的标记会以淡化颜色区分。"] = "All floors are shown by default; markers on other floors use dimmed colors.";
 		dictionary["5 点双向探针按连续厚度判定；薄楼板与楼层间空气不会累计。"] = "Five bidirectional probes use continuous thickness; thin floors and air gaps between floors are not accumulated.";
 		dictionary["探针"] = "Probe";
 		dictionary["合并间隙"] = "Merge gap";
@@ -1091,6 +1150,7 @@ internal static class PluginLocalization
 			new PatternTranslation("^显示 ([\\d,]+) 辆已加载收藏车辆。$", "Showing $1 loaded favorite vehicles."),
 			new PatternTranslation("^最大距离 ([\\d,.]+)m$", "Maximum range: $1m"),
 			new PatternTranslation("^状态：(.+?)  ·  默认关闭  ·  北向固定$", "State: $1  ·  disabled by default  ·  north-up"),
+			new PatternTranslation("^状态：(.+?)  ·  默认关闭  ·  随视角转动$", "State: $1  ·  disabled by default  ·  view-up"),
 			new PatternTranslation("^形状：(.+)$", "Shape: $1"),
 			new PatternTranslation("^锚点：(.+)$", "Anchor: $1"),
 			new PatternTranslation("^当前可见半径：(.+?) 米  ·  稀有度：(.+)$", "Visible radius: $1 m  ·  rarities: $2"),
@@ -1116,6 +1176,7 @@ internal static class PluginLocalization
 			new PatternTranslation("^撤销失败，无法恢复原始位置：(.+)$", "Undo failed because the original positions could not be restored: $1"),
 			new PatternTranslation("^飞行模式：世界轴$", "Flight mode: World Axis"),
 			new PatternTranslation("^飞行模式：视角指向$", "Flight mode: View Direction"),
+			new PatternTranslation("^横坐标 (.+?)  高度 (.+?)  纵坐标 (.+?)$", "X $1  Height $2  Z $3"),
 			new PatternTranslation("^飞行模式已切换为 世界轴。$", "Flight mode changed to World Axis."),
 			new PatternTranslation("^飞行模式已切换为 视角指向。$", "Flight mode changed to View Direction."),
 			new PatternTranslation("^状态：(.+?)；已扫描物品 (\\d+) / 载具 (\\d+)$", "State: $1; scanned items $2 / vehicles $3"),
@@ -1132,15 +1193,15 @@ internal static class PluginLocalization
 			new PatternTranslation("^已增加 (.+?) 经验。$", "Added $1 experience."),
 			new PatternTranslation("^已变更 (.+?) 声望。$", "Changed reputation by $1."),
 			new PatternTranslation("^技能已处理，实际变更 (\\d+) 项。$", "Skills processed; $1 levels changed."),
-			new PatternTranslation("^显示 (\\d+) / (\\d+)；模组物品 (\\d+)。搜索支持名称、ID、GUID 和来源。$", "Showing $1 / $2; mod items: $3. Search supports name, ID, GUID, and source."),
-			new PatternTranslation("^显示 (\\d+) / (\\d+)；搜索支持名称、ID、GUID 和来源。$", "Showing $1 / $2; search supports name, ID, GUID, and source."),
-			new PatternTranslation("^显示 (\\d+) / (\\d+)；模组车辆 (\\d+)。每次生成 1–20 辆。$", "Showing $1 / $2; mod vehicles: $3. Spawn 1–20 at a time."),
+			new PatternTranslation("^显示 ([\\d,]+) / ([\\d,]+)；模组物品 ([\\d,]+)。搜索支持名称、ID、GUID 和来源。$", "Showing $1 / $2; mod items: $3. Search supports name, ID, GUID, and source."),
+			new PatternTranslation("^显示 ([\\d,]+) / ([\\d,]+)；搜索支持名称、ID、GUID 和来源。$", "Showing $1 / $2; search supports name, ID, GUID, and source."),
+			new PatternTranslation("^显示 ([\\d,]+) / ([\\d,]+)；模组车辆 ([\\d,]+)。每次生成 1–20 辆。$", "Showing $1 / $2; mod vehicles: $3. Spawn 1–20 at a time."),
 			new PatternTranslation("^物品收藏  (\\d+)/(\\d+)$", "Item Favorites  $1/$2"),
 			new PatternTranslation("^车辆收藏  (\\d+)/(\\d+)$", "Vehicle Favorites  $1/$2"),
-			new PatternTranslation("^显示 (\\d+) 个已加载收藏物品；收藏记录 (\\d+) 个。搜索支持名称、ID、GUID 和来源。$", "Showing $1 loaded favorite items; $2 saved favorites. Search supports name, ID, GUID, and source."),
-			new PatternTranslation("^显示 (\\d+) 个已加载收藏物品。$", "Showing $1 loaded favorite items."),
+			new PatternTranslation("^显示 ([\\d,]+) 个已加载收藏物品；收藏记录 ([\\d,]+) 个。搜索支持名称、ID、GUID 和来源。$", "Showing $1 loaded favorite items; $2 saved favorites. Search supports name, ID, GUID, and source."),
+			new PatternTranslation("^显示 ([\\d,]+) 个已加载收藏物品。$", "Showing $1 loaded favorite items."),
 			new PatternTranslation("^当前分类：(.+)$", "Current category: $1"),
-			new PatternTranslation("^显示 (\\d+) 辆已加载收藏车辆；收藏记录 (\\d+) 辆。$", "Showing $1 loaded favorite vehicles; $2 saved favorites."),
+			new PatternTranslation("^显示 ([\\d,]+) 辆已加载收藏车辆；收藏记录 ([\\d,]+) 辆。$", "Showing $1 loaded favorite vehicles; $2 saved favorites."),
 			new PatternTranslation("^已给予 (\\d+) × (.+)。$", "Gave $1 × $2."),
 			new PatternTranslation("^无法给予 (.+)。$", "Could not give $1."),
 			new PatternTranslation("^已在玩家前方生成 (\\d+) × (.+)。$", "Spawned $1 × $2 in front of the player."),
@@ -1176,6 +1237,8 @@ internal static class PluginLocalization
 			new PatternTranslation("^已取消物品 ID (\\d+) 的黑名单。$", "Removed item ID $1 from the blacklist."),
 			new PatternTranslation("^当前背包去重后 (\\d+) 件  ·  第 (\\d+)/(\\d+) 页$", "$1 unique backpack items  ·  page $2/$3"),
 			new PatternTranslation("^已存储 (\\d+) 个背包格。$", "Stored $1 inventory slots."),
+			new PatternTranslation("^点击按“(.+)”范围分解；产物会直接存回无限储存。$", "Click to salvage using the '$1' scope; outputs are stored directly in infinite storage."),
+			new PatternTranslation("^已分解 ([\\d,]+) 个物品；([\\d,]+) 个产物单位（([\\d,]+) 种）已存入无限储存。$", "Salvaged $1 items; $2 output units across $3 types were stored in infinite storage."),
 			new PatternTranslation("^检测到 ([\\d,]+) 条待处理旧存档记录。$", "Detected $1 pending legacy records."),
 			new PatternTranslation("^显示 ([\\d,]+) / ([\\d,]+) 条目；资源 ([\\d,]+)，完整物品 ([\\d,]+) 个。$", "Showing $1 / $2 entries; resource units $3, complete items $4."),
 			new PatternTranslation("^库存 ([\\d,]+)$", "Stored $1"),

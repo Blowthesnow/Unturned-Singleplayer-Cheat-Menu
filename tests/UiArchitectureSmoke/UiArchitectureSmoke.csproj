@@ -12,5 +12,7 @@
 	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\SystemFontDisplayNameResolver.cs" Link="SystemFontDisplayNameResolver.cs" />
 	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\UiSearchEditState.cs" Link="UiSearchEditState.cs" />
 	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\DeferredUiDestroyQueue.cs" Link="DeferredUiDestroyQueue.cs" />
+	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\WorldTimeClockMapping.cs" Link="WorldTimeClockMapping.cs" />
+	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\UI\WorldTimeRingDragAccumulator.cs" Link="WorldTimeRingDragAccumulator.cs" />
   </ItemGroup>
 </Project>

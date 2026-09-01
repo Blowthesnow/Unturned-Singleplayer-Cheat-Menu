@@ -2,7 +2,7 @@
 
 [中文说明](README.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
-A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `1.95.0`. It retains the v1.9 `tooltip-feature` work on automatic pickup, infinite storage, creature health bars, hover details, view-direction flight, and global shortcuts, while v1.95 adds the editable minimap, runtime/uGUI lifecycle restructuring, two-key parallel Workshop translation, aspect-correct item/vehicle thumbnail presentation, and standardized generated-camera vehicle thumbnails.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `1.98.0`; v1.98 adds a Fluent Legacy uGUI control library and responsive shell, Infinite Storage decomposition, automatic-pickup rarity filtering, and expanded minimap orientation, layout-input isolation, rarity visuals, and cross-region zombie retention.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 
@@ -64,7 +64,7 @@ The map setup checkbox named **singleplayer cheats** is not required. It control
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `1.95.0` |
+| Plugin | `1.98.0` |
 
 ## Installation
 
@@ -123,7 +123,7 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-The v1.95 current-source changes and the v1.9 `tooltip-feature` stage are recorded in the [main changelog](CHANGELOG.md). The v1.8 reverse-recovery boundary is documented separately in the [v1.8 recovery log](docs/V1.8_RECOVERY_CHANGELOG.md). None of these source stages created a formal tag, package, or GitHub Release; the `v1.7.0` Plugin-Only package remains the latest formal release asset.
+The v1.98 current-source changes and earlier source stages are recorded in the [main changelog](CHANGELOG.md). The v1.8 reverse-recovery boundary is documented separately in the [v1.8 recovery log](docs/V1.8_RECOVERY_CHANGELOG.md). v1.98 is a source-and-documentation push only: it does not create a formal tag, package, or GitHub Release, and the `v1.7.0` Plugin-Only package remains the latest formal release asset.
 
 Published plugin DLL:
 

@@ -33,6 +33,7 @@ internal sealed class MinimapFeature : IDisposable
 	private OverheadOcclusionDiagnostics _occlusionDiagnostics;
 	private MinimapBackgroundState _state = MinimapBackgroundState.NativeMapCrop;
 	private float _mapYaw;
+	private float _viewYaw;
 	private float _nextWorldScanTime;
 	private float _nextMarkerProjectionTime;
 	private float _nextProbeTime;
@@ -94,13 +95,18 @@ internal sealed class MinimapFeature : IDisposable
 		if (!active) return;
 
 		Vector3 center = player.transform.position;
+		float playerYaw = player.transform.rotation.eulerAngles.y;
+		_viewYaw = ResolveViewYaw(player, playerYaw);
 		if (now >= _nextProbeTime)
 		{
 			_nextProbeTime = now + 1f / Mathf.Max(MinimapSettings.MinProbeHz, _settings.OcclusionProbeHz);
 			_occlusionDiagnostics = _occlusion.Probe(player, _settings);
 		}
 
-		_crop = _nativeMap.Capture(center, _settings.VisibleRadiusMeters);
+		// Rotation mode needs diagonal overscan; fixed north-up keeps the original crop and scale.
+		float contentRadius = MinimapProjection.ResolveContentExtent(
+			_settings.RotateWithView, _settings.VisibleRadiusMeters);
+		_crop = _nativeMap.Capture(center, contentRadius);
 		CartographyVolume volume = CartographyVolumeManager.Get().GetMainVolume();
 		_mapYaw = volume != null ? volume.transform.eulerAngles.y : 0f;
 		bool nativeAvailable = _crop.IsAvailable && _crop.CoversVisibleRadius;
@@ -119,7 +125,7 @@ internal sealed class MinimapFeature : IDisposable
 		if (MinimapRenderPolicy.ShouldRender(needsCamera, stateChanged, now, _nextRenderTime))
 		{
 			_nextRenderTime = now + 1f / Mathf.Max(MinimapSettings.MinRenderHz, _settings.BackgroundRenderHz);
-			if (!_sceneRenderer.Render(center, _settings.VisibleRadiusMeters, _mapYaw, _state,
+			if (!_sceneRenderer.Render(center, contentRadius, _mapYaw, _state,
 				_settings.ShowLoadedBuildings, _settings.UndergroundSliceAbove, _settings.UndergroundSliceBelow))
 			{
 				_state = nativeAvailable ? MinimapBackgroundState.NativeMapCrop : MinimapBackgroundState.FallbackGrid;
@@ -156,7 +162,9 @@ internal sealed class MinimapFeature : IDisposable
 		if (_disposed || !_settings.Enabled || !SingleplayerGuard.IsReady) return;
 		Player player = Player.LocalPlayer;
 		if (player == null) return;
-		_hud?.UpdatePose(player.transform.position, player.transform.rotation.eulerAngles.y, _mapYaw);
+		float playerYaw = player.transform.rotation.eulerAngles.y;
+		_viewYaw = ResolveViewYaw(player, playerYaw);
+		_hud?.UpdatePose(player.transform.position, playerYaw, _viewYaw, _mapYaw);
 	}
 
 	private void RefreshMarkerSources(Vector3 center, float candidateScanRadius, NearbyItemSnapshot itemSnapshot)
@@ -183,7 +191,8 @@ internal sealed class MinimapFeature : IDisposable
 		}
 		MinimapProjectionContext projection = new MinimapProjectionContext(
 			new MinimapWorldPoint(center.x, center.y, center.z), _settings.VisibleRadiusMeters,
-			_settings.Size, _mapYaw, _settings.Shape, _settings.SameFloorTolerance);
+			_settings.Size, _mapYaw, _settings.Shape, _settings.SameFloorTolerance,
+			MinimapProjection.ResolveMapContentRotation(_settings.RotateWithView, _viewYaw, _mapYaw));
 		_cachedItemMarkers = MinimapItemAggregator.Compose(_groundItems, projection,
 			_settings.ItemRarityMask, _settings.ItemMergePixels, _settings.ShowOtherFloors);
 	}
@@ -193,7 +202,8 @@ internal sealed class MinimapFeature : IDisposable
 		_hudMarkers.Clear();
 		MinimapProjectionContext projection = new MinimapProjectionContext(
 			new MinimapWorldPoint(center.x, center.y, center.z), _settings.VisibleRadiusMeters,
-			_settings.Size, _mapYaw, _settings.Shape, _settings.SameFloorTolerance);
+			_settings.Size, _mapYaw, _settings.Shape, _settings.SameFloorTolerance,
+			MinimapProjection.ResolveMapContentRotation(_settings.RotateWithView, _viewYaw, _mapYaw));
 		AddProjected(_cachedNativeMarkers, projection);
 		AddProjected(_cachedTeleportMarkers, projection);
 		AddProjected(_cachedWorldMarkers, projection);
@@ -239,6 +249,34 @@ internal sealed class MinimapFeature : IDisposable
 	private static int CombineStableId(MinimapWorldMarkerKind kind, int stableId)
 	{
 		unchecked { return ((int)kind + 1) * 397 ^ stableId; }
+	}
+
+	private static float ResolveViewYaw(Player player, float fallbackYaw)
+	{
+		Camera viewCamera = MainCamera.instance;
+		if (viewCamera != null && TryResolveHorizontalYaw(viewCamera.transform, out float cameraYaw))
+		{
+			return cameraYaw;
+		}
+		if (player?.look != null && TryResolveHorizontalYaw(player.look.transform, out float lookYaw))
+		{
+			return lookYaw;
+		}
+		return fallbackYaw;
+	}
+
+	private static bool TryResolveHorizontalYaw(Transform transform, out float yaw)
+	{
+		yaw = 0f;
+		if (transform == null) return false;
+		Vector3 forward = transform.forward;
+		float horizontalSquared = forward.x * forward.x + forward.z * forward.z;
+		if (float.IsNaN(horizontalSquared) || float.IsInfinity(horizontalSquared) || horizontalSquared < 0.000001f)
+		{
+			return false;
+		}
+		yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+		return !float.IsNaN(yaw) && !float.IsInfinity(yaw);
 	}
 
 	private void EnsureHud()

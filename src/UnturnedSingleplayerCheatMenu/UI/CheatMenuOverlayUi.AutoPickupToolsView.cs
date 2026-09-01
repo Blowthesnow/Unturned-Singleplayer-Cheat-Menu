@@ -35,6 +35,7 @@ internal sealed partial class CheatMenuOverlayUi
 			return;
 		}
 		HideAutoPickupBlacklistPicker();
+		HideAutoPickupRarityPicker();
 		ClearResultHost(_autoPickupContentHost);
 		PopulateAutoPickupPanel();
 	}
@@ -58,7 +59,7 @@ internal sealed partial class CheatMenuOverlayUi
 		SetLayout(pager, -1f, 510f, 1f, 0f);
 		GameObject pageBody = CreateObject("AutoPickupPageBody", pager.transform, typeof(Image));
 		pageBody.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-		AddVerticalLayout(pageBody, 8f, new RectOffset(14, 14, 12, 12));
+		AddVerticalLayout(pageBody, CheatMenuStyle.Theme.Space2, new RectOffset(16, 16, 12, 12));
 		SetLayout(pageBody, -1f, -1f, 1f, 1f);
 		AddPageScrollHandler(pageBody, _autoPickupPage, pageCount, delegate(int page)
 		{
@@ -87,7 +88,7 @@ internal sealed partial class CheatMenuOverlayUi
 		dots.GetComponent<Image>().color = Color.clear;
 		SetLayout(dots, 26f, -1f, 0f, 1f);
 		VerticalLayoutGroup layout = dots.AddComponent<VerticalLayoutGroup>();
-		layout.spacing = 2f;
+		layout.spacing = CheatMenuStyle.Theme.Space1;
 		layout.childAlignment = TextAnchor.MiddleCenter;
 		layout.childControlWidth = true;
 		layout.childControlHeight = true;
@@ -152,6 +153,9 @@ internal sealed partial class CheatMenuOverlayUi
 		qualityInput.contentType = InputField.ContentType.IntegerNumber;
 		qualityInput.characterLimit = 3;
 		CreateLabel(qualityFilterRow.transform, "品质（0-100）", 12, CheatMenuStyle.Muted, 100f);
+		CreateButton(qualityFilterRow.transform, "物品稀有度", ShowAutoPickupRarityPicker,
+			"打开自动拾取稀有度筛选窗口；关闭的稀有度不会被拾取。",
+			112f, 34f, CheatMenuStyle.SurfaceHover, 12);
 		CreateButton(scheduling.transform, $"每轮 {settings.RequestsPerTick} 个请求", delegate
 		{
 			int value = settings.RequestsPerTick >= AutoPickupSettings.MaxRequestsPerTick ? AutoPickupSettings.MinRequestsPerTick : settings.RequestsPerTick + 1;
@@ -214,7 +218,7 @@ internal sealed partial class CheatMenuOverlayUi
 		}, 0f, 1f);
 		_autoPickupRuleResultsHost = CreateObject("AutoPickupRuleResultsHost", page, typeof(Image));
 		_autoPickupRuleResultsHost.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
-		AddVerticalLayout(_autoPickupRuleResultsHost, 7f, new RectOffset(8, 8, 8, 8));
+		AddVerticalLayout(_autoPickupRuleResultsHost, CheatMenuStyle.Theme.Space2, new RectOffset(8, 8, 8, 8));
 		SetLayout(_autoPickupRuleResultsHost, -1f, 560f, 1f, 0f);
 		RefreshAutoPickupRuleResults(ruleAction);
 	}
@@ -406,6 +410,7 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 		HideHoverExplanation();
 		_autoPickupBlacklistPickerRoot = CreateObject("AutoPickupBlacklistPicker", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_autoPickupBlacklistPickerRoot);
 		_uiRoot.RegisterModal(_autoPickupBlacklistPickerRoot, HideAutoPickupBlacklistPicker);
 		_autoPickupBlacklistPickerRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.65f);
 		RectTransform rootRect = _autoPickupBlacklistPickerRoot.GetComponent<RectTransform>();
@@ -414,14 +419,16 @@ internal sealed partial class CheatMenuOverlayUi
 		rootRect.offsetMin = Vector2.zero;
 		rootRect.offsetMax = Vector2.zero;
 		GameObject popup = CreateObject("Popup", _autoPickupBlacklistPickerRoot.transform, typeof(Image));
-		popup.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image popupImage = popup.GetComponent<Image>();
+		popupImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(popup, popupImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 		RectTransform popupRect = popup.GetComponent<RectTransform>();
 		popupRect.anchorMin = new Vector2(0.5f, 0.5f);
 		popupRect.anchorMax = new Vector2(0.5f, 0.5f);
 		popupRect.pivot = new Vector2(0.5f, 0.5f);
 		popupRect.sizeDelta = new Vector2(980f, 760f);
 		VerticalLayoutGroup layout = popup.AddComponent<VerticalLayoutGroup>();
-		layout.padding = new RectOffset(18, 18, 16, 16);
+		layout.padding = new RectOffset(16, 16, 16, 16);
 		layout.spacing = 8f;
 		layout.childControlWidth = true;
 		layout.childControlHeight = true;
@@ -443,7 +450,9 @@ internal sealed partial class CheatMenuOverlayUi
 			BuildAutoPickupBlacklistPickerContents();
 		}, 0f, 1f);
 		_autoPickupBlacklistPickerHost = CreateObject("PickerHost", popup.transform, typeof(Image));
-		_autoPickupBlacklistPickerHost.GetComponent<Image>().color = CheatMenuStyle.SurfaceInset;
+		Image pickerHostImage = _autoPickupBlacklistPickerHost.GetComponent<Image>();
+		pickerHostImage.color = CheatMenuStyle.SurfaceInset;
+		_fluentControls.StyleSurface(_autoPickupBlacklistPickerHost, pickerHostImage, ControlLibrary.Core.FluentSurfaceRole.Muted, CheatMenuStyle.Theme.RadiusControl);
 		AddVerticalLayout(_autoPickupBlacklistPickerHost, 8f, new RectOffset(8, 8, 8, 8));
 		SetLayout(_autoPickupBlacklistPickerHost, -1f, 560f, 1f, 0f);
 		_autoPickupBlacklistPickerRoot.transform.SetAsLastSibling();
@@ -512,13 +521,85 @@ internal sealed partial class CheatMenuOverlayUi
 		_autoPickupBlacklistPickerHost = null;
 	}
 
+	private void ShowAutoPickupRarityPicker()
+	{
+		if (_autoPickupRarityPickerRoot != null)
+		{
+			_autoPickupRarityPickerRoot.SetActive(true);
+			_autoPickupRarityPickerRoot.transform.SetAsLastSibling();
+			return;
+		}
+		HideHoverExplanation();
+		_autoPickupRarityPickerRoot = CreateObject("AutoPickupRarityPicker", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_autoPickupRarityPickerRoot);
+		_uiRoot.RegisterModal(_autoPickupRarityPickerRoot, HideAutoPickupRarityPicker);
+		Image rootImage = _autoPickupRarityPickerRoot.GetComponent<Image>();
+		rootImage.color = new Color(0f, 0f, 0f, 0.65f);
+		Stretch(_autoPickupRarityPickerRoot.GetComponent<RectTransform>());
+
+		GameObject popup = CreateObject("Popup", _autoPickupRarityPickerRoot.transform, typeof(Image));
+		Image popupImage = popup.GetComponent<Image>();
+		popupImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(popup, popupImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
+		RectTransform popupRect = popup.GetComponent<RectTransform>();
+		Vector2 center = popupRect.anchorMax = new Vector2(0.5f, 0.5f);
+		popupRect.anchorMin = center;
+		popupRect.pivot = center;
+		popupRect.sizeDelta = new Vector2(560f, 320f);
+		VerticalLayoutGroup layout = popup.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(16, 16, 16, 16);
+		layout.spacing = CheatMenuStyle.Theme.Space2;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+
+		GameObject header = CreateRow(popup.transform, 38f, 8f);
+		CreateLabel(header.transform, "物品稀有度", 18, CheatMenuStyle.Text);
+		CreateFlexibleSpacer(header.transform);
+		CreateButton(header.transform, "×", HideAutoPickupRarityPicker,
+			"关闭自动拾取稀有度筛选窗口。", 42f, 36f, CheatMenuStyle.Surface, 22);
+		CreateLabel(popup.transform, "取消某个稀有度后，自动拾取会跳过该稀有度的地面物品；默认全部开启。", 12, CheatMenuStyle.Muted);
+
+		AutoPickupSettings settings = _autoPickupPresenter.CaptureSnapshot().Settings;
+		GameObject row1 = CreateRow(popup.transform, 40f, CheatMenuStyle.Theme.Space2);
+		CreateAutoPickupRarityToggle(row1.transform, "普通", 0, settings);
+		CreateAutoPickupRarityToggle(row1.transform, "罕见", 1, settings);
+		GameObject row2 = CreateRow(popup.transform, 40f, CheatMenuStyle.Theme.Space2);
+		CreateAutoPickupRarityToggle(row2.transform, "稀有", 2, settings);
+		CreateAutoPickupRarityToggle(row2.transform, "史诗", 3, settings);
+		GameObject row3 = CreateRow(popup.transform, 40f, CheatMenuStyle.Theme.Space2);
+		CreateAutoPickupRarityToggle(row3.transform, "传奇", 4, settings);
+		CreateAutoPickupRarityToggle(row3.transform, "神话", 5, settings);
+		_autoPickupRarityPickerRoot.transform.SetAsLastSibling();
+	}
+
+	private void CreateAutoPickupRarityToggle(Transform parent, string label, int rarity, AutoPickupSettings settings)
+	{
+		CreateToggleAction(parent, label, settings.AllowsRarity(rarity), delegate(bool enabled)
+		{
+			AutoPickupSettings current = _autoPickupPresenter.CaptureSnapshot().Settings;
+			int mask = AutoPickupSettings.SetRarityEnabled(current.AllowedRarityMask, rarity, enabled);
+			_autoPickupPresenter.SetAllowedRarityMask(mask);
+		});
+	}
+
+	private void HideAutoPickupRarityPicker()
+	{
+		if (_autoPickupRarityPickerRoot != null)
+		{
+			QueueForDestroy(_autoPickupRarityPickerRoot);
+		}
+		_autoPickupRarityPickerRoot = null;
+	}
+
 
 	private void CreateAutoPickupSlider(Transform parent, string label, float value, float min, float max, string suffix, UiDebouncer debouncer, Action<float> changed)
 	{
 		GameObject row = CreateRow(parent, 40f, 8f);
 		CreateLabel(row.transform, label, 13, CheatMenuStyle.Text, 92f);
 		Text valueText = CreateText(row.transform, $"{value:0}{suffix}", 12, CheatMenuStyle.Muted, TextAnchor.MiddleRight, FontStyle.Normal, localize: false);
-		SetLayout(valueText.gameObject, 68f, 30f);
+		SetLayout(valueText.gameObject, 68f, CheatMenuStyle.Theme.ControlCompact);
 		SetLayout(CreateTimeSlider(row.transform, Mathf.InverseLerp(min, max, value), delegate(float normalized)
 		{
 			float selected = Mathf.Clamp(Mathf.Round(Mathf.Lerp(min, max, Mathf.Clamp01(normalized))), min, max);

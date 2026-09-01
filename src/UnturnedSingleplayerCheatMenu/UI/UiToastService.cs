@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using BepInEx.Logging;
 using UnityEngine;
 using UnityEngine.UI;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
+using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Runtime;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
 
@@ -17,6 +19,7 @@ internal sealed class UiToastService : IDisposable
 	{
 		internal GameObject Root;
 		internal float ExpiresAt;
+		internal LegacyFluentSurface Surface;
 	}
 
 	internal UiToastService(RectTransform layer, ManualLogSource log)
@@ -46,7 +49,10 @@ internal sealed class UiToastService : IDisposable
 		GameObject root = new GameObject("Toast", typeof(RectTransform), typeof(Image), typeof(CanvasGroup), typeof(LayoutElement));
 		root.transform.SetParent(_layer, false);
 		Image background = root.GetComponent<Image>();
-		background.color = new Color(0.08f, 0.09f, 0.11f, 0.96f);
+		background.color = Color.clear;
+		background.raycastTarget = false;
+		FluentTheme theme = FluentThemes.DarkInk;
+		LegacyFluentSurface surface = LegacyFluentSurface.Attach(root, theme.HudBackdrop.ToUnity(), theme.HudBorder.ToUnity(), theme.RadiusControl);
 		CanvasGroup canvasGroup = root.GetComponent<CanvasGroup>();
 		canvasGroup.interactable = false;
 		canvasGroup.blocksRaycasts = false;
@@ -74,12 +80,12 @@ internal sealed class UiToastService : IDisposable
 		text.font = SystemFontProvider.Resolve(_log);
 		text.text = message;
 		text.fontSize = 13;
-		text.color = Color.white;
+		text.color = theme.HudText.ToUnity();
 		text.alignment = TextAnchor.MiddleLeft;
 		text.horizontalOverflow = HorizontalWrapMode.Wrap;
 		text.verticalOverflow = VerticalWrapMode.Truncate;
 		text.raycastTarget = false;
-		_entries.Add(new ToastEntry { Root = root, ExpiresAt = Time.unscaledTime + Mathf.Max(1f, seconds) });
+		_entries.Add(new ToastEntry { Root = root, ExpiresAt = Time.unscaledTime + Mathf.Max(1f, seconds), Surface = surface });
 	}
 
 	internal void Pump()
@@ -97,6 +103,7 @@ internal sealed class UiToastService : IDisposable
 	{
 		ToastEntry entry = _entries[index];
 		_entries.RemoveAt(index);
+		entry.Surface?.Dispose();
 		if (entry.Root != null)
 		{
 			UnityEngine.Object.Destroy(entry.Root);

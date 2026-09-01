@@ -23,7 +23,7 @@ internal sealed partial class CheatMenuOverlayUi
 	private void BuildTeleportsTab()
 	{
 		Transform transform = _contentHost.transform;
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(12, 12, 10, 10));
+		AddVerticalLayout(_contentHost, CheatMenuStyle.Theme.Space2, new RectOffset(12, 12, 8, 8));
 		GameObject gameObject = CreateRow(transform, 38f, 8f);
 		CreateButton(gameObject.transform, "地图", delegate
 		{
@@ -164,8 +164,8 @@ internal sealed partial class CheatMenuOverlayUi
 			outline.effectDistance = Vector2.one;
 			outline.useGraphicAlpha = false;
 			HorizontalLayoutGroup component = gameObject2.GetComponent<HorizontalLayoutGroup>();
-			component.padding = new RectOffset(13, 11, 7, 7);
-			component.spacing = 10f;
+		component.padding = new RectOffset(12, 12, 8, 8);
+		component.spacing = CheatMenuStyle.Theme.Space3;
 			CreateTeleportMarkerImage(gameObject2.transform, point.MarkerKind, 28f, compact: false, ParseMarkerColor(point.MarkerColorHex));
 			SetLayout(CreateText(gameObject2.transform, $"{point.Name}\n{point.Map}  ·  ({point.X:F1}, {point.Y:F1}, {point.Z:F1})", 13, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false).gameObject, -1f, -1f, 1f);
 			CreateButton(gameObject2.transform, "传送", delegate
@@ -220,11 +220,15 @@ internal sealed partial class CheatMenuOverlayUi
 		_teleportMarkerDrawerOpen = true;
 		_teleportMarkerDrawerRoot = CreateObject("TeleportMarkerDrawer", _uiRoot.PopupLayer, typeof(Image));
 		_uiRoot.RegisterPopup(_teleportMarkerDrawerRoot, HideTeleportMarkerDrawer);
-		_teleportMarkerDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image drawerImage = _teleportMarkerDrawerRoot.GetComponent<Image>();
+		drawerImage.color = CheatMenuStyle.Panel;
+		_fluentHandles.RegisterScope(_teleportMarkerDrawerRoot);
+		_fluentControls.StyleSurface(_teleportMarkerDrawerRoot, drawerImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
 		Outline outline = _teleportMarkerDrawerRoot.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		_teleportMarkerDrawerPopup = _teleportMarkerDrawerRoot.GetComponent<RectTransform>();
 		RectTransform teleportMarkerDrawerPopup = _teleportMarkerDrawerPopup;
 		Vector2 anchorMin = (_teleportMarkerDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
@@ -312,18 +316,21 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		HideConfirmDialog();
 		_confirmRoot = CreateObject("ConfirmOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_confirmRoot);
 		Stretch(_confirmRoot.GetComponent<RectTransform>());
 		_confirmRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.62f);
 		GameObject gameObject = CreateObject("ConfirmDialog", _confirmRoot.transform, typeof(Image));
-		gameObject.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image dialogImage = gameObject.GetComponent<Image>();
+		dialogImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(gameObject, dialogImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
 		RectTransform component = gameObject.GetComponent<RectTransform>();
 		Vector2 anchorMin = (component.anchorMax = new Vector2(0.5f, 0.5f));
 		component.anchorMin = anchorMin;
 		component.pivot = new Vector2(0.5f, 0.5f);
 		component.sizeDelta = new Vector2(470f, 190f);
 		VerticalLayoutGroup verticalLayoutGroup = gameObject.AddComponent<VerticalLayoutGroup>();
-		verticalLayoutGroup.padding = new RectOffset(22, 22, 18, 18);
-		verticalLayoutGroup.spacing = 10f;
+		verticalLayoutGroup.padding = new RectOffset(24, 24, 16, 16);
+		verticalLayoutGroup.spacing = CheatMenuStyle.Theme.Space3;
 		verticalLayoutGroup.childControlWidth = true;
 		verticalLayoutGroup.childControlHeight = true;
 		verticalLayoutGroup.childForceExpandWidth = true;

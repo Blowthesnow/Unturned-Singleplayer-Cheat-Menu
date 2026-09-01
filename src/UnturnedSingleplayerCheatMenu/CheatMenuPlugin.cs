@@ -18,7 +18,7 @@ using UnturnedSingleplayerCheatMenu.UI;
 
 namespace UnturnedSingleplayerCheatMenu;
 
-[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.95.0")]
+[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.98.0")]
 [BepInProcess("Unturned.exe")]
 public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
@@ -26,7 +26,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
-	public const string PluginVersion = "1.95.0";
+	public const string PluginVersion = "1.98.0";
 	private const int CurrentMinimapSchemaVersion = 3;
 
 	private ConfigEntry<string> _language;
@@ -147,6 +147,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private ConfigEntry<int> _autoPickupMinimumQuality;
 
+	private ConfigEntry<int> _autoPickupAllowedRarityMask;
+
 	private ConfigEntry<string> _autoPickupFilterMode;
 
 	private ConfigEntry<string> _autoPickupRulesPath;
@@ -171,6 +173,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private ConfigEntry<float> _minimapBackgroundRenderHz;
 	private ConfigEntry<float> _minimapWorldScanHz;
 	private ConfigEntry<bool> _minimapShowLoadedBuildings;
+	private ConfigEntry<bool> _minimapRotateWithView;
 	private ConfigEntry<float> _minimapOcclusionProbeHz;
 	private ConfigEntry<float> _minimapOcclusionEnterThickness;
 	private ConfigEntry<float> _minimapOcclusionExitThickness;
@@ -963,6 +966,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_autoPickupDropBlockMinutes = base.Config.Bind("AutoPickup", "DropBlockMinutes", 1, "Temporarily block automatic pickup for an item ID after the player drops it, clamped to 1-1440 minutes.");
 		_autoPickupQualityFilterEnabled = base.Config.Bind("AutoPickup", "QualityFilterEnabled", defaultValue: false, "Ignore automatically picked-up items below the configured minimum quality.");
 		_autoPickupMinimumQuality = base.Config.Bind("AutoPickup", "MinimumQuality", 0, "Minimum automatic-pickup item quality, clamped to 0-100 when quality filtering is enabled.");
+		_autoPickupAllowedRarityMask = base.Config.Bind("AutoPickup", "AllowedRarityMask", AutoPickupSettings.AllRaritiesMask, "Bit mask of item rarities allowed by automatic pickup; bits 0-5 map from Common through Mythical.");
 		_autoPickupFilterMode = base.Config.Bind("AutoPickup", "FilterMode", "BlacklistOnly", "BlacklistOnly or WhitelistThenBlacklist; whitelist state is also persisted in the rules document.");
 		_autoPickupRulesPath = base.Config.Bind("AutoPickup", "RulesPath", "AutoPickup.rules.json", "Relative paths are resolved under BepInEx/config.");
 		_autoPickupPauseWhenMenuOpen = base.Config.Bind("AutoPickup", "PauseWhenMenuOpen", defaultValue: true, "Pause new pickup scans while the cheat menu is open.");
@@ -982,6 +986,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_minimapBackgroundRenderHz = base.Config.Bind("Minimap", "BackgroundRenderHz", 5f, "Explicit minimap camera render frequency, clamped to 2-10 Hz.");
 		_minimapWorldScanHz = base.Config.Bind("Minimap", "WorldScanHz", 5f, "Radar scan frequency, clamped to 2-10 Hz.");
 		_minimapShowLoadedBuildings = base.Config.Bind("Minimap", "ShowLoadedBuildings", defaultValue: true, "Overlay client-loaded buildings in realtime camera backgrounds.");
+		_minimapRotateWithView = base.Config.Bind("Minimap", "RotateWithView", defaultValue: false, "Keep the existing north-up minimap when disabled; rotate map content and compass with the final camera heading when enabled.");
 		_minimapOcclusionProbeHz = base.Config.Bind("Minimap", "OcclusionProbeHz", 5f, "Overhead occlusion probe frequency.");
 		_minimapOcclusionEnterThickness = base.Config.Bind("Minimap", "OcclusionEnterThickness", 2.5f, "Continuous overhead thickness required to enter height-slice mode.");
 		_minimapOcclusionExitThickness = base.Config.Bind("Minimap", "OcclusionExitThickness", 1.5f, "Thickness threshold used to leave height-slice mode.");
@@ -989,7 +994,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_minimapOcclusionExitDelay = base.Config.Bind("Minimap", "OcclusionExitDelaySeconds", 0.25f, "Occlusion exit hysteresis delay.");
 		_minimapOcclusionMergeGap = base.Config.Bind("Minimap", "OcclusionMergeGap", 0.25f, "Maximum gap merged between adjacent solid intervals.");
 		_minimapFloorExclusionMaxThickness = base.Config.Bind("Minimap", "FloorExclusionMaxThickness", 1.25f, "Thin floors at or below this thickness do not count as cave roofs.");
-		_minimapShowCompass = base.Config.Bind("Minimap", "ShowCompass", defaultValue: true, "Show fixed north/east/south/west labels.");
+		_minimapShowCompass = base.Config.Bind("Minimap", "ShowCompass", defaultValue: true, "Show north/east/south/west labels for the selected orientation mode.");
 		_minimapShowCoordinates = base.Config.Bind("Minimap", "ShowCoordinates", defaultValue: true, "Show player XYZ below the clipped viewport.");
 		_minimapShowNativeMapMarkers = base.Config.Bind("Minimap", "ShowNativeMapMarkers", defaultValue: true, "Show local and same-group native map markers.");
 		_minimapShowTeleportMarkers = base.Config.Bind("Minimap", "ShowTeleportMarkers", defaultValue: true, "Show saved teleport points for the current map.");
@@ -1503,6 +1508,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		RefreshAutoPickupSettings();
 	}
 
+	internal void SetAutoPickupAllowedRarityMask(int value)
+	{
+		PersistInterfaceState(_autoPickupAllowedRarityMask, value & AutoPickupSettings.AllRaritiesMask);
+		RefreshAutoPickupSettings();
+	}
+
 	internal void SetAutoPickupPauseWhenMenuOpen(bool value)
 	{
 		PersistInterfaceState(_autoPickupPauseWhenMenuOpen, value);
@@ -1558,6 +1569,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			DropBlockMinutes = _autoPickupDropBlockMinutes?.Value ?? AutoPickupSettings.MinDropBlockMinutes,
 			QualityFilterEnabled = _autoPickupQualityFilterEnabled?.Value ?? false,
 			MinimumQuality = _autoPickupMinimumQuality?.Value ?? AutoPickupSettings.MinQuality,
+			AllowedRarityMask = _autoPickupAllowedRarityMask?.Value ?? AutoPickupSettings.AllRaritiesMask,
 			PauseWhenMenuOpen = _autoPickupPauseWhenMenuOpen?.Value ?? true,
 			PauseWhenDead = _autoPickupPauseWhenDead?.Value ?? true,
 			UseMinimapRange = _autoPickupUseMinimapRange?.Value ?? false,
@@ -1611,6 +1623,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			BackgroundRenderHz = _minimapBackgroundRenderHz?.Value ?? 5f,
 			WorldScanHz = _minimapWorldScanHz?.Value ?? 5f,
 			ShowLoadedBuildings = _minimapShowLoadedBuildings?.Value ?? true,
+			RotateWithView = _minimapRotateWithView?.Value ?? false,
 			OcclusionProbeHz = _minimapOcclusionProbeHz?.Value ?? 5f,
 			OcclusionEnterThickness = _minimapOcclusionEnterThickness?.Value ?? 2.5f,
 			OcclusionExitThickness = _minimapOcclusionExitThickness?.Value ?? 1.5f,
@@ -1690,6 +1703,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			_minimapBackgroundRenderHz.Value = settings.BackgroundRenderHz;
 			_minimapWorldScanHz.Value = settings.WorldScanHz;
 			_minimapShowLoadedBuildings.Value = settings.ShowLoadedBuildings;
+			_minimapRotateWithView.Value = settings.RotateWithView;
 			_minimapOcclusionProbeHz.Value = settings.OcclusionProbeHz;
 			_minimapOcclusionEnterThickness.Value = settings.OcclusionEnterThickness;
 			_minimapOcclusionExitThickness.Value = settings.OcclusionExitThickness;

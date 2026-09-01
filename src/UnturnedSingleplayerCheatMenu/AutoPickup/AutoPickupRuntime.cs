@@ -27,6 +27,8 @@ internal sealed class AutoPickupCandidate
 
 	public byte Quality { get; set; }
 
+	public int Rarity { get; set; }
+
 	public byte[] State { get; set; }
 
 	public int SnapshotVersion { get; set; }
@@ -70,6 +72,7 @@ internal sealed class AutoPickupCandidateAdapter
 				DistanceSquared = distanceSquared,
 				Amount = raw.Amount,
 				Quality = raw.Quality,
+				Rarity = (int)asset.rarity,
 				State = raw.State == null ? Array.Empty<byte>() : (byte[])raw.State.Clone(),
 				SnapshotVersion = snapshotVersion,
 				Drop = drop,
@@ -632,6 +635,11 @@ internal sealed class AutoPickupFeature
 			AutoPickupCandidate candidate = candidates[i];
 			if (_pending.ContainsKey(candidate.InstanceId))
 			{
+				continue;
+			}
+			if (!_settings.AllowsRarity(candidate.Rarity))
+			{
+				_filteredCount++;
 				continue;
 			}
 			if (!_settings.AllowsQuality(candidate.Quality))

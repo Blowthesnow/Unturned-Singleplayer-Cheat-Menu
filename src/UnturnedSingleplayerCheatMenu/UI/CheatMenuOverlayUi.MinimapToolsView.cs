@@ -15,7 +15,11 @@ internal sealed partial class CheatMenuOverlayUi
 	private void BuildMinimapPanel(Transform panel)
 	{
 		MinimapSettings settings = _minimapPresenter.CaptureSettings();
-		CreateSummaryPanel(panel, $"状态：{MinimapDisplayText.BackgroundState(_minimapPresenter.BackgroundState)}  ·  默认关闭  ·  北向固定");
+		string backgroundState = LocalizeMinimapValue(MinimapDisplayText.BackgroundState(_minimapPresenter.BackgroundState));
+		string summary = settings.RotateWithView
+			? $"状态：{backgroundState}  ·  默认关闭  ·  随视角转动"
+			: $"状态：{backgroundState}  ·  默认关闭  ·  北向固定";
+		CreateSummaryPanel(panel, summary);
 		GameObject pages = CreateRow(panel, 36f, 6f);
 		CreateMinimapPageButton(pages.transform, 0, "常规");
 		CreateMinimapPageButton(pages.transform, 1, "标记");
@@ -47,10 +51,13 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateToggleAction(toggles.transform, "启用小地图", settings.Enabled, value => ChangeMinimap(s => s.Enabled = value));
 		CreateToggleAction(toggles.transform, "布局编辑", settings.LayoutEditMode, SetMinimapLayoutEdit,
 			"进入后插件窗口会隐藏；拖动或缩放小地图，按回车键应用。正常状态不拦截鼠标。");
+		CreateToggleAction(toggles.transform, "随视角转动", settings.RotateWithView,
+			value => ChangeMinimap(s => s.RotateWithView = value),
+			"关闭时保持当前固定北向；开启后地图、标记和指南针随玩家视角转动。");
 		GameObject modes = CreateRow(panel, 40f, 7f);
-		CreateCycleButton(modes.transform, "形状：" + MinimapDisplayText.Shape(settings.Shape), () => ChangeMinimap(s => s.Shape = NextEnum(s.Shape)), "循环切换小地图视口形状。");
-		CreateCycleButton(modes.transform, "锚点：" + MinimapDisplayText.Anchor(settings.Anchor), () => ChangeMinimap(s => s.Anchor = NextEnum(s.Anchor)), "循环切换小地图在屏幕上的锚点位置。");
-		CreateCycleButton(modes.transform, "背景：" + MinimapDisplayText.BackgroundMode(settings.BackgroundMode), () => ChangeMinimap(s => s.BackgroundMode = NextEnum(s.BackgroundMode)), "循环切换小地图使用的背景来源。");
+		CreateCycleButton(modes.transform, "形状：" + LocalizeMinimapValue(MinimapDisplayText.Shape(settings.Shape)), () => ChangeMinimap(s => s.Shape = NextEnum(s.Shape)), "循环切换小地图视口形状。");
+		CreateCycleButton(modes.transform, "锚点：" + LocalizeMinimapValue(MinimapDisplayText.Anchor(settings.Anchor)), () => ChangeMinimap(s => s.Anchor = NextEnum(s.Anchor)), "循环切换小地图在屏幕上的锚点位置。");
+		CreateCycleButton(modes.transform, "背景：" + LocalizeMinimapValue(MinimapDisplayText.BackgroundMode(settings.BackgroundMode)), () => ChangeMinimap(s => s.BackgroundMode = NextEnum(s.BackgroundMode)), "循环切换小地图使用的背景来源。");
 		CreateMinimapSlider(panel, "大小", settings.Size, MinimapSettings.MinSize, MinimapSettings.MaxSize, 10f, " 像素", value => s => s.Size = value);
 		CreateMinimapSlider(panel, "可见半径", settings.VisibleRadiusMeters, MinimapSettings.MinVisibleRadiusMeters,
 			MinimapSettings.MaxVisibleRadiusMeters, 5f, " 米", value => s => s.VisibleRadiusMeters = value);
@@ -93,7 +100,7 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateMinimapCompactSlider(floor.transform, "同层", settings.SameFloorTolerance,
 			MinimapSettings.MinSameFloorTolerance, MinimapSettings.MaxSameFloorTolerance, 0.5f, " 米", value => s => s.SameFloorTolerance = value);
 		CreateToggleAction(panel, "显示其他楼层", settings.ShowOtherFloors, value => ChangeMinimap(s => s.ShowOtherFloors = value),
-			"默认显示全部楼层；淡化的三角图形表示目标在上方或下方。");
+			"默认显示全部楼层；不同楼层的标记会以淡化颜色区分。");
 	}
 
 	private void BuildMinimapUndergroundPage(Transform panel, MinimapSettings settings)
@@ -132,10 +139,15 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateToggleAction(links.transform, "拾取范围跟随小地图", autoSettings.UseMinimapRange, _autoPickupPresenter.SetUseMinimapRange);
 		CreateToggleAction(links.transform, "拾取稀有度跟随小地图", autoSettings.UseMinimapRarityFilter, _autoPickupPresenter.SetUseMinimapRarityFilter);
 		CreateLabel(panel, "小地图物品层始终读取原始地面物品快照；自动拾取关闭、品质、名单和丢弃抑制都不会隐藏物品图形。", 12, CheatMenuStyle.Text);
-		CreateLabel(panel, $"当前可见半径：{settings.VisibleRadiusMeters:0.#} 米  ·  稀有度：{MinimapDisplayText.Rarity(settings.ItemRarityMask)}", 12, CheatMenuStyle.Muted);
+		string rarity = LocalizeMinimapValue(MinimapDisplayText.Rarity(settings.ItemRarityMask));
+		string linkSummary = PluginLocalization.Translate($"当前可见半径：{settings.VisibleRadiusMeters:0.#} 米  ·  稀有度：{rarity}");
+		CreateLabel(panel, linkSummary, 12, CheatMenuStyle.Muted, localize: false);
 		OverheadOcclusionDiagnostics diagnostics = _minimapPresenter.OcclusionDiagnostics;
-		CreateLabel(panel, $"背景：{MinimapDisplayText.BackgroundState(_minimapPresenter.BackgroundState)}  ·  厚遮挡探针：{diagnostics.Summary.EnterProbeCount}/{diagnostics.Summary.ProbeCount}  ·  最大连续厚度：{diagnostics.Summary.MaximumEffectiveThickness:0.00} 米", 12, CheatMenuStyle.Muted);
-		CreateLabel(panel, "地下白名单辅助证据：" + (diagnostics.UndergroundAllowlistContainsPlayer ? "是" : "否"), 12, CheatMenuStyle.Muted);
+		string linkBackgroundState = LocalizeMinimapValue(MinimapDisplayText.BackgroundState(_minimapPresenter.BackgroundState));
+		string diagnosticsSummary = PluginLocalization.Translate($"背景：{linkBackgroundState}  ·  厚遮挡探针：{diagnostics.Summary.EnterProbeCount}/{diagnostics.Summary.ProbeCount}  ·  最大连续厚度：{diagnostics.Summary.MaximumEffectiveThickness:0.00} 米");
+		CreateLabel(panel, diagnosticsSummary, 12, CheatMenuStyle.Muted, localize: false);
+		string allowlistValue = PluginLocalization.Translate(diagnostics.UndergroundAllowlistContainsPlayer ? "是" : "否");
+		CreateLabel(panel, PluginLocalization.Translate("地下白名单辅助证据：") + allowlistValue, 12, CheatMenuStyle.Muted, localize: false);
 	}
 
 	private void CreateRarityToggle(Transform parent, string label, ItemRarityMask bit, MinimapSettings settings)
@@ -164,7 +176,7 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		GameObject host = CreateObject("MinimapSlider", parent);
 		HorizontalLayoutGroup layout = host.AddComponent<HorizontalLayoutGroup>();
-		layout.spacing = 6f;
+		layout.spacing = CheatMenuStyle.Theme.Space2;
 		layout.childAlignment = TextAnchor.MiddleLeft;
 		layout.childControlWidth = true;
 		layout.childControlHeight = true;
@@ -178,13 +190,14 @@ internal sealed partial class CheatMenuOverlayUi
 		float step, string suffix, Func<float, Action<MinimapSettings>> change)
 	{
 		CreateLabel(parent, label, 12, CheatMenuStyle.Text, 78f);
-		Text valueText = CreateText(parent, value.ToString("0.##") + suffix, 11, CheatMenuStyle.Muted,
+		string localizedSuffix = PluginLocalization.Translate(suffix);
+		Text valueText = CreateText(parent, value.ToString("0.##") + localizedSuffix, 11, CheatMenuStyle.Muted,
 			TextAnchor.MiddleRight, FontStyle.Normal, localize: false);
-		SetLayout(valueText.gameObject, 64f, 30f);
+		SetLayout(valueText.gameObject, 64f, CheatMenuStyle.Theme.ControlCompact);
 		Slider slider = CreateTimeSlider(parent, Mathf.InverseLerp(min, max, value), normalized =>
 		{
 			float selected = Mathf.Clamp(Mathf.Round(Mathf.Lerp(min, max, normalized) / step) * step, min, max);
-			valueText.text = selected.ToString("0.##") + suffix;
+			valueText.text = selected.ToString("0.##") + localizedSuffix;
 			_minimapSettingsDebouncer.Schedule(() => _minimapPresenter.UpdateSettings(change(selected)));
 		});
 		SetLayout(slider.gameObject, -1f, -1f, 1f);
@@ -216,5 +229,19 @@ internal sealed partial class CheatMenuOverlayUi
 		T[] values = (T[])Enum.GetValues(typeof(T));
 		int next = (Array.IndexOf(values, current) + 1) % values.Length;
 		return values[next];
+	}
+
+	private static string LocalizeMinimapValue(string value)
+	{
+		if (string.IsNullOrEmpty(value))
+		{
+			return string.Empty;
+		}
+		string[] parts = value.Split('、');
+		for (int index = 0; index < parts.Length; index++)
+		{
+			parts[index] = PluginLocalization.Translate(parts[index]);
+		}
+		return string.Join(PluginLocalization.CurrentLanguage == PluginLanguage.English ? ", " : "、", parts);
 	}
 }

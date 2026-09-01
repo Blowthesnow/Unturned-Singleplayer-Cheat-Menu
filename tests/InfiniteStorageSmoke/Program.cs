@@ -79,6 +79,35 @@ Assert(storage.Add(fuelA).Success && storage.Add(fuelB).Success && storage.Add(s
 Assert(storage.GetEntries(4).Count == 2 && storage.GetEntries(5).Single().NativeState.SequenceEqual(new byte[] { 17, 21, 99 }),
     "Fuel differences and complete storage-container state must remain isolated and intact.");
 
+IReadOnlyList<InfiniteStorageDecomposeTarget> singleTarget = InfiniteStorageDecomposeRangePolicy.Resolve(
+    storage.Entries, forty.EntryId, InfiniteStorageDecomposeScope.SingleItem);
+Assert(singleTarget.Count == 1 && singleTarget[0].EntryId == forty.EntryId && singleTarget[0].Units == 1,
+    "Single-item decomposition must consume exactly one unit from the pointed card.");
+IReadOnlyList<InfiniteStorageDecomposeTarget> stackTargets = InfiniteStorageDecomposeRangePolicy.Resolve(
+    storage.Entries, forty.EntryId, InfiniteStorageDecomposeScope.Stack);
+Assert(stackTargets.Count == 1 && stackTargets[0].EntryId == forty.EntryId && stackTargets[0].Units == 2,
+    "Stack decomposition must consume the full StoredUnitCount of the pointed card.");
+IReadOnlyList<InfiniteStorageDecomposeTarget> idTargets = InfiniteStorageDecomposeRangePolicy.Resolve(
+    storage.Entries, forty.EntryId, InfiniteStorageDecomposeScope.AssetId);
+Assert(idTargets.Count == 2 && idTargets.Sum(target => target.Units) == 3,
+    "ID decomposition must consume every quality/state card sharing the pointed AssetId.");
+Assert(InfiniteStorageDecomposeRangePolicy.Resolve(storage.Entries, "missing", InfiniteStorageDecomposeScope.AssetId).Count == 0,
+    "A stale card entry must not select any decomposition target.");
+Assert(!InfiniteStorageDecomposeEligibility.IsStorageCandidate(storage.GetEntries(1).Single()) &&
+       InfiniteStorageDecomposeEligibility.IsStorageCandidate(forty),
+    "Material/resource entries must never become decomposition candidates, while complete item cards may qualify.");
+VirtualStorageEntry strawHat = new()
+{
+    AssetId = 244,
+    NativeAmount = 1,
+    NativeQuality = 11,
+    NativeState = new byte[] { 4, 2, 1 }
+};
+NativeItemPayload transferredWheat = InfiniteStorageDecomposer.CreateTransferredPayload(344, strawHat);
+Assert(transferredWheat.AssetId == 344 && transferredWheat.Amount == 1 && transferredWheat.Quality == 11 &&
+       transferredWheat.State.SequenceEqual(strawHat.NativeState),
+    "StateTransfer salvage must allow Farmer Hat-style FOOD outputs and preserve source amount, quality, and state.");
+
 VirtualStorageTransaction failedTransaction = new(storage, "world", "player");
 Assert(failedTransaction.Add(Descriptor(6, "00000000-0000-0000-0000-000000000006", StackUnitKind.ResourceUnits, 4, 0, Array.Empty<byte>(), 10,
     AmountRole.StackCount, DisplayPolicy.ResourceTotal)), "Transaction add should stage in memory.");
@@ -87,6 +116,14 @@ VirtualStorageTransaction committedTransaction = new(storage, "world", "player")
 Assert(committedTransaction.Add(Descriptor(6, "00000000-0000-0000-0000-000000000006", StackUnitKind.ResourceUnits, 4, 0, Array.Empty<byte>(), 10,
     AmountRole.StackCount, DisplayPolicy.ResourceTotal)) && committedTransaction.Commit(() => true), "Successful transaction should commit.");
 Assert(storage.GetAvailableUnits(6) == 4, "Committed transaction should retain resource units.");
+
+VirtualStorageTransaction repeatedTransaction = new(storage, "world", "player");
+Assert(repeatedTransaction.Add(Descriptor(9, "00000000-0000-0000-0000-000000000009", StackUnitKind.ResourceUnits, 4, 0,
+        Array.Empty<byte>(), 10, AmountRole.StackCount, DisplayPolicy.ResourceTotal), occurrences: 3) &&
+    repeatedTransaction.Commit(() => true),
+    "Repeated transaction add should batch identical crafting outputs.");
+Assert(storage.GetAvailableUnits(9) == 12,
+    "Three crafted resource stacks containing four units each must store twelve resource units.");
 
 VirtualStorageDocument legacy = new()
 {

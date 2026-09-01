@@ -41,5 +41,15 @@ internal abstract class ActivePageViewHost<TPage> : IDisposable where TPage : st
 		_activePage = null;
 	}
 
+	internal void DetachForAncestorDestroy()
+	{
+		if (_activeView != null)
+		{
+			_activeView.DetachForAncestorDestroy();
+			_activeView = null;
+		}
+		_activePage = null;
+	}
+
 	public void Dispose() => DestroyActiveView();
 }

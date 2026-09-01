@@ -89,22 +89,31 @@ internal sealed class VirtualStorageService
 		};
 	}
 
-	internal VirtualStorageMutation Add(ItemStorageDescriptor descriptor)
+	internal VirtualStorageMutation Add(ItemStorageDescriptor descriptor) => Add(descriptor, 1);
+
+	internal VirtualStorageMutation Add(ItemStorageDescriptor descriptor, long occurrences)
 	{
-		if (descriptor == null || descriptor.AssetId == 0 || string.IsNullOrWhiteSpace(descriptor.AssetGuid))
+		if (descriptor == null || occurrences <= 0 || descriptor.AssetId == 0 || string.IsNullOrWhiteSpace(descriptor.AssetGuid))
 			return new VirtualStorageMutation { Error = "Invalid item storage descriptor." };
 		descriptor = descriptor.Clone();
 		if (descriptor.QualityPolicy == QualityPolicy.Ignore) descriptor.NativeQuality = 0;
 		if (descriptor.StatePolicy == StatePolicy.Ignore) descriptor.NativeState = Array.Empty<byte>();
-		long units = descriptor.UnitKind == StackUnitKind.ResourceUnits ? descriptor.NativeAmount : 1;
-		if (units <= 0) return new VirtualStorageMutation { Error = "Stored units must be greater than zero." };
+		long unitsPerOccurrence = descriptor.UnitKind == StackUnitKind.ResourceUnits ? descriptor.NativeAmount : 1;
+		if (unitsPerOccurrence <= 0) return new VirtualStorageMutation { Error = "Stored units must be greater than zero." };
+		long units;
+		try { units = checked(unitsPerOccurrence * occurrences); }
+		catch (OverflowException) { return new VirtualStorageMutation { Error = "Stored unit count overflow." }; }
 		StorageKey key = ItemInstanceSemantics.CreateKey(descriptor);
-		if (!_entries.TryGetValue(key, out VirtualStorageEntry entry))
+		_entries.TryGetValue(key, out VirtualStorageEntry entry);
+		long nextCount;
+		try { nextCount = checked((entry?.StoredUnitCount ?? 0) + units); }
+		catch (OverflowException) { return new VirtualStorageMutation { Error = "Stored unit count overflow." }; }
+		if (entry == null)
 		{
 			entry = CreateEntry(descriptor);
 			_entries.Add(key, entry);
 		}
-		entry.StoredUnitCount = checked(entry.StoredUnitCount + units);
+		entry.StoredUnitCount = nextCount;
 		return new VirtualStorageMutation { Success = true, Entry = entry.Clone() };
 	}
 

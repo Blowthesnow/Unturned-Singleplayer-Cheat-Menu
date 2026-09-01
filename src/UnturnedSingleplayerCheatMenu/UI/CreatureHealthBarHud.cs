@@ -58,7 +58,7 @@ internal sealed class CreatureHealthBarHud : IDisposable
 	private GameObject _root;
 	private RectTransform _rootRect;
 	private Font _font;
-	private bool _ownsFont;
+	private int _fontRevision = -1;
 	private float _nextCreateAttempt;
 	private bool _loggedCreation;
 
@@ -142,22 +142,18 @@ internal sealed class CreatureHealthBarHud : IDisposable
 		{
 			UnityEngine.Object.Destroy(_root);
 		}
-		if (_ownsFont && _font != null)
-		{
-			UnityEngine.Object.Destroy(_font);
-		}
 		_root = null;
 		_rootRect = null;
 		_pool.Clear();
 		_font = null;
-		_ownsFont = false;
+		_fontRevision = -1;
 	}
 
 	private bool EnsureCreated()
 	{
-		if (_root != null && _rootRect != null && _font != null)
+		if (_root != null && _rootRect != null)
 		{
-			return true;
+			return EnsureFontBinding();
 		}
 		if (Time.unscaledTime < _nextCreateAttempt || (MainCamera.instance ?? Camera.main) == null || PlayerUI.window == null)
 		{
@@ -166,14 +162,7 @@ internal sealed class CreatureHealthBarHud : IDisposable
 		_nextCreateAttempt = Time.unscaledTime + 1f;
 		try
 		{
-			_font = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Arial" }, 16);
-			_ownsFont = _font != null;
-			if (_font == null)
-			{
-				_font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-				_ownsFont = false;
-			}
-			if (_font == null)
+			if (!EnsureFontBinding())
 			{
 				return false;
 			}
@@ -206,6 +195,31 @@ internal sealed class CreatureHealthBarHud : IDisposable
 			Dispose();
 			return false;
 		}
+	}
+
+	private bool EnsureFontBinding()
+	{
+		int revision = SystemFontProvider.Revision;
+		if (_font != null && _fontRevision == revision)
+		{
+			return true;
+		}
+
+		Font font = SystemFontProvider.Resolve(_log);
+		if (font == null)
+		{
+			return false;
+		}
+		_font = font;
+		_fontRevision = SystemFontProvider.Revision;
+		foreach (Item item in _pool)
+		{
+			if (item.Label != null)
+			{
+				item.Label.font = _font;
+			}
+		}
+		return true;
 	}
 
 	private void EnsurePool(int count)
@@ -277,4 +291,5 @@ internal sealed class CreatureHealthBarHud : IDisposable
 		edge.color = Color.white;
 		edge.raycastTarget = false;
 	}
+
 }

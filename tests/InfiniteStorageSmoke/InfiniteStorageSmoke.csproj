@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\ItemInstanceSemantics.cs" Link="ItemInstanceSemantics.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\InfiniteStorageCardMetadata.cs" Link="InfiniteStorageCardMetadata.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\InfiniteStorageDecomposition.cs" Link="InfiniteStorageDecomposition.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\VirtualStorageContracts.cs" Link="VirtualStorageContracts.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\VirtualStorageService.cs" Link="VirtualStorageService.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\VirtualStoragePersistence.cs" Link="VirtualStoragePersistence.cs" />

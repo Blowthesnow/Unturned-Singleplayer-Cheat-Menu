@@ -47,7 +47,7 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateButton(gameObject.transform, "开始翻译（未缓存）", StartWorkshopTranslationFromUi, "扫描当前已加载资产后，翻译缓存中没有的文本；填写配置后点击这里开始。", 170f, 34f, CheatMenuStyle.Accent, 12);
 		CreateButton(gameObject.transform, "停止翻译", StopWorkshopTranslationFromUi, "停止当前翻译任务；已经写入缓存的译文会保留。", 105f, 34f, CheatMenuStyle.Danger, 12);
 		_workshopLocalizationSettingsHost = CreateObject("WorkshopLocalizationSettingsHost", panel);
-		AddVerticalLayout(_workshopLocalizationSettingsHost, 7f, new RectOffset(0, 0, 0, 0)).childForceExpandHeight = false;
+		AddVerticalLayout(_workshopLocalizationSettingsHost, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0)).childForceExpandHeight = false;
 		SetLayout(_workshopLocalizationSettingsHost, -1f, -1f, 1f);
 		ResetWorkshopApiKeyDrafts(workshopLocalization.Settings.ApiKeys);
 		BuildWorkshopLocalizationSettingsRegion();
@@ -173,7 +173,7 @@ internal sealed partial class CheatMenuOverlayUi
 			{
 				_workshopLocalizationApiKeyDrafts[capturedIndex] = value ?? string.Empty;
 			}, 0f, 1f, password: true, commitOnEndEdit: false, tooltip);
-			input.onEndEdit.AddListener(delegate
+			_fluentControls.TrackInputEndEdit(input.gameObject, input, delegate
 			{
 				CommitWorkshopApiKeyDrafts();
 			});
@@ -285,11 +285,15 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 		_workshopProtocolDrawerRoot = CreateObject("WorkshopProtocolDrawer", _uiRoot.PopupLayer, typeof(Image));
 		_uiRoot.RegisterPopup(_workshopProtocolDrawerRoot, HideWorkshopProtocolDrawer);
-		_workshopProtocolDrawerRoot.GetComponent<Image>().color = CheatMenuStyle.Panel;
+		Image drawerImage = _workshopProtocolDrawerRoot.GetComponent<Image>();
+		drawerImage.color = CheatMenuStyle.Panel;
+		_fluentHandles.RegisterScope(_workshopProtocolDrawerRoot);
+		_fluentControls.StyleSurface(_workshopProtocolDrawerRoot, drawerImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusControl);
 		Outline outline = _workshopProtocolDrawerRoot.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.InputBorder;
 		outline.effectDistance = Vector2.one;
 		outline.useGraphicAlpha = false;
+		outline.enabled = false;
 		_workshopProtocolDrawerPopup = _workshopProtocolDrawerRoot.GetComponent<RectTransform>();
 		RectTransform workshopProtocolDrawerPopup = _workshopProtocolDrawerPopup;
 		Vector2 anchorMin = (_workshopProtocolDrawerPopup.anchorMax = new Vector2(0.5f, 0.5f));
@@ -297,11 +301,11 @@ internal sealed partial class CheatMenuOverlayUi
 		_workshopProtocolDrawerPopup.pivot = new Vector2(0.5f, 1f);
 		string[] supportedProtocols = MachineTranslationSettings.SupportedProtocols;
 		int num = Mathf.CeilToInt((float)supportedProtocols.Length / 3f);
-		_workshopProtocolDrawerPopup.sizeDelta = new Vector2(356f, 12f + (float)num * 28f + (float)Math.Max(0, num - 1) * 4f);
+		_workshopProtocolDrawerPopup.sizeDelta = new Vector2(356f, CheatMenuStyle.Theme.Space4 + (float)num * CheatMenuStyle.Theme.ControlCompact + (float)Math.Max(0, num - 1) * CheatMenuStyle.Theme.Space1);
 		GridLayoutGroup gridLayoutGroup = _workshopProtocolDrawerRoot.AddComponent<GridLayoutGroup>();
-		gridLayoutGroup.padding = new RectOffset(6, 6, 6, 6);
+		gridLayoutGroup.padding = new RectOffset(8, 8, 8, 8);
 		gridLayoutGroup.spacing = new Vector2(4f, 4f);
-		gridLayoutGroup.cellSize = new Vector2(112f, 28f);
+		gridLayoutGroup.cellSize = new Vector2(112f, CheatMenuStyle.Theme.ControlCompact);
 		gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		gridLayoutGroup.constraintCount = 3;
 		gridLayoutGroup.childAlignment = TextAnchor.UpperLeft;
@@ -318,7 +322,7 @@ internal sealed partial class CheatMenuOverlayUi
 				RefreshWorkshopLocalizationSettingsRegion();
 				RefreshWorkshopLocalizationPageValues();
 			}, string.Format(PluginLocalization.Translate("使用“{0}”协议连接翻译服务。"), label),
-				0f, 28f, string.Equals(capturedProtocol, apiProtocol, StringComparison.OrdinalIgnoreCase) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 10).gameObject, -1f, 28f);
+				0f, CheatMenuStyle.Theme.ControlCompact, string.Equals(capturedProtocol, apiProtocol, StringComparison.OrdinalIgnoreCase) ? CheatMenuStyle.Accent : CheatMenuStyle.SurfaceHover, 10).gameObject, -1f, CheatMenuStyle.Theme.ControlCompact);
 		}
 		Canvas.ForceUpdateCanvases();
 		LayoutRebuilder.ForceRebuildLayoutImmediate(_workshopProtocolDrawerPopup);
@@ -429,14 +433,14 @@ internal sealed partial class CheatMenuOverlayUi
 			return;
 		}
 		WorkshopLocalizationProgress progress = workshopLocalization.Progress;
-		string arg = progress.State switch
+		string arg = PluginLocalization.Translate(progress.State switch
 		{
 			WorkshopLocalizationState.Scanning => "扫描中",
 			WorkshopLocalizationState.Translating => "翻译中",
 			WorkshopLocalizationState.Cancelled => "已取消",
 			WorkshopLocalizationState.Error => "错误",
 			_ => (!string.Equals(progress.Message, "translation complete", StringComparison.Ordinal)) ? ((!string.Equals(progress.Message, "no uncached text", StringComparison.Ordinal)) ? "空闲" : "完成") : "完成",
-		};
+		});
 		if (_workshopLocalizationStateText != null)
 		{
 			_workshopLocalizationStateText.text = PluginLocalization.Translate($"状态：{arg}；已扫描物品 {progress.ItemsScanned} / 载具 {progress.VehiclesScanned}");
@@ -466,8 +470,11 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 		if (_workshopLocalizationApiText != null)
 		{
-			string text = (workshopLocalization.ApiConfigured ? "已配置" : "未配置");
-			_workshopLocalizationApiText.text = PluginLocalization.Translate("翻译接口：" + text + "；供应商：" + MachineTranslationSettings.GetDisplayName(workshopLocalization.Settings.ApiProtocol) + "；密钥：" + workshopLocalization.Settings.ApiKeyCount + "/" + MachineTranslationSettings.MaxApiKeyCount + "；并行：" + workshopLocalization.Settings.ParallelWorkerCount + " 路；目标语言：" + workshopLocalization.Settings.TargetLanguage + "；模型：" + (string.IsNullOrWhiteSpace(workshopLocalization.Settings.Model) ? "未填写" : workshopLocalization.Settings.Model));
+			string text = PluginLocalization.Translate(workshopLocalization.ApiConfigured ? "已配置" : "未配置");
+			string model = string.IsNullOrWhiteSpace(workshopLocalization.Settings.Model)
+				? PluginLocalization.Translate("未填写")
+				: workshopLocalization.Settings.Model;
+			_workshopLocalizationApiText.text = PluginLocalization.Translate("翻译接口：" + text + "；供应商：" + MachineTranslationSettings.GetDisplayName(workshopLocalization.Settings.ApiProtocol) + "；密钥：" + workshopLocalization.Settings.ApiKeyCount + "/" + MachineTranslationSettings.MaxApiKeyCount + "；并行：" + workshopLocalization.Settings.ParallelWorkerCount + " 路；目标语言：" + workshopLocalization.Settings.TargetLanguage + "；模型：" + model);
 		}
 		if (_workshopLocalizationProtocolButtonText != null)
 		{

@@ -1,6 +1,7 @@
 using UnturnedSingleplayerCheatMenu.UI;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 string repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 string sourceRoot = Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu");
@@ -27,6 +28,8 @@ static void Check(bool condition, string message)
     if (!condition)
         throw new InvalidOperationException(message);
 }
+
+static bool Approximately(float left, float right) => Math.Abs(left - right) < 0.0001f;
 
 static void CheckButtonTooltipCoverage(string source, string overlay)
 {
@@ -76,6 +79,40 @@ static void CheckButtonTooltipCoverage(string source, string overlay)
         "Teleport delete Buttons are incorrectly described as window-close Buttons.");
 }
 
+static void CheckNoMixedLayoutGroupsOnSameCreation(IEnumerable<string> paths, string repositoryRoot)
+{
+    Regex creation = new(@"(?<target>[_A-Za-z][_A-Za-z0-9]*)\s*=\s*(?:new\s+GameObject\s*\(|Create[_A-Za-z0-9]*\s*\()",
+        RegexOptions.CultureInvariant);
+    Regex layout = new(@"(?<target>[_A-Za-z][_A-Za-z0-9]*)\.AddComponent<(?<kind>HorizontalLayoutGroup|VerticalLayoutGroup)>\s*\(\s*\)",
+        RegexOptions.CultureInvariant);
+
+    foreach (string path in paths)
+    {
+        string text = Read(path);
+        var events = creation.Matches(text)
+            .Cast<Match>()
+            .Select(match => (match.Index, IsCreation: true, Target: match.Groups["target"].Value, Kind: string.Empty))
+            .Concat(layout.Matches(text)
+                .Cast<Match>()
+                .Select(match => (match.Index, IsCreation: false, Target: match.Groups["target"].Value, Kind: match.Groups["kind"].Value)))
+            .OrderBy(item => item.Index);
+        Dictionary<string, HashSet<string>> groupsByCreation = new(StringComparer.Ordinal);
+        foreach (var item in events)
+        {
+            if (item.IsCreation)
+            {
+                groupsByCreation[item.Target] = new HashSet<string>(StringComparer.Ordinal);
+                continue;
+            }
+            if (!groupsByCreation.TryGetValue(item.Target, out HashSet<string> kinds))
+                continue;
+            kinds.Add(item.Kind);
+            Check(kinds.Count <= 1,
+                $"A single GameObject creation path adds both HorizontalLayoutGroup and VerticalLayoutGroup: {Path.GetRelativePath(repositoryRoot, path)} target={item.Target}");
+        }
+    }
+}
+
 IEnumerable<string> sourceFiles = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories);
 string creatureHealthBarHudPath = Path.Combine(sourceRoot, "UI", "CreatureHealthBarHud.cs");
 string source = string.Join("\n", sourceFiles.Select(Read));
@@ -93,12 +130,59 @@ if (args.Contains("--button-tooltips-only", StringComparer.Ordinal))
     return;
 }
 string project = Read(Path.Combine(sourceRoot, "UnturnedSingleplayerCheatMenu.csproj"));
+
+Check(Approximately(WorldTimeClockMapping.GameNormalizedToClockHours(0f), 6f) &&
+      Approximately(WorldTimeClockMapping.GameNormalizedToClockHours(0.25f), 12f) &&
+      Approximately(WorldTimeClockMapping.GameNormalizedToClockHours(0.5f), 18f) &&
+      Approximately(WorldTimeClockMapping.GameNormalizedToClockHours(0.75f), 0f),
+    "Unturned's dawn-based cycle is not projected onto the conventional 06:00/12:00/18:00/00:00 clock gradient.");
+Check(Approximately(WorldTimeClockMapping.ClockHoursToGameNormalized(6f), 0f) &&
+      Approximately(WorldTimeClockMapping.ClockHoursToGameNormalized(12f), 0.25f) &&
+      Approximately(WorldTimeClockMapping.ClockHoursToGameNormalized(18f), 0.5f) &&
+      Approximately(WorldTimeClockMapping.ClockHoursToGameNormalized(0f), 0.75f),
+    "Conventional clock input is not mapped back to Unturned's dawn-based cycle.");
+foreach (float sampleNormalized in new[] { 0f, 0.1f, 0.25f, 0.5f, 0.75f, 0.999f })
+{
+    float roundTrip = WorldTimeClockMapping.ClockHoursToGameNormalized(
+        WorldTimeClockMapping.GameNormalizedToClockHours(sampleNormalized));
+    Check(Approximately(roundTrip, sampleNormalized), $"World-time clock round-trip drifted at {sampleNormalized}.");
+}
+Check(WorldTimeClockMapping.FormatTwelveHour(0f, english: false) == "上午 12:00" &&
+      WorldTimeClockMapping.FormatTwelveHour(6f, english: false) == "上午 6:00" &&
+      WorldTimeClockMapping.FormatTwelveHour(12f, english: false) == "下午 12:00" &&
+      WorldTimeClockMapping.FormatTwelveHour(17.75f, english: false) == "下午 5:45",
+    "Chinese clock output is not using the requested 上午/下午 twelve-hour format.");
+Check(WorldTimeClockMapping.FormatTwelveHour(0f, english: true) == "12:00 AM" &&
+      WorldTimeClockMapping.FormatTwelveHour(17.75f, english: true) == "5:45 PM",
+    "English clock output no longer follows the matching AM/PM twelve-hour format.");
+WorldTimeRingDragAccumulator slowDrag = new();
+slowDrag.Begin(6f, 0f);
+float slowDragTime = 6f;
+for (int angle = 1; angle <= 30; angle++)
+{
+    slowDragTime = slowDrag.Continue(angle, 0.25f);
+}
+Check(Approximately(slowDragTime, 7f),
+    "One-degree pointer updates are discarded before they can accumulate into a snapped time-ring step.");
+WorldTimeRingDragAccumulator clockwiseWrap = new();
+clockwiseWrap.Begin(23.75f, 352.5f);
+Check(Approximately(clockwiseWrap.Continue(0f, 0.25f), 0f),
+    "Clockwise time-ring dragging cannot cross midnight.");
+WorldTimeRingDragAccumulator counterClockwiseWrap = new();
+counterClockwiseWrap.Begin(0f, 0f);
+Check(Approximately(counterClockwiseWrap.Continue(352.5f, 0.25f), 23.75f),
+    "Counter-clockwise time-ring dragging cannot cross midnight.");
 string prepareReferences = Read(Path.Combine(repoRoot, "scripts", "Prepare-References.ps1"));
+string plugin = Read(Path.Combine(sourceRoot, "CheatMenuPlugin.cs"));
 string teleportMapSurface = Read(Path.Combine(sourceRoot, "UI", "TeleportMapSurface.cs"));
 string teleportMapService = Read(Path.Combine(sourceRoot, "Services", "TeleportMapService.cs"));
 string minimapHud = Read(Path.Combine(sourceRoot, "UI", "MinimapHud.cs"));
 string minimapMarkerPool = Read(Path.Combine(sourceRoot, "UI", "MinimapMarkerPool.cs"));
+string minimapStarGraphic = Read(Path.Combine(sourceRoot, "UI", "MinimapStarGraphic.cs"));
 string minimapFeature = Read(Path.Combine(sourceRoot, "Minimap", "MinimapFeature.cs"));
+string minimapLayoutInputGate = Read(Path.Combine(sourceRoot, "Minimap", "MinimapLayoutInputGate.cs"));
+string minimapLayoutInputPatch = Read(Path.Combine(sourceRoot, "Patches", "MinimapLayoutInputPatch.cs"));
+string minimapDisplayTextSource = Read(Path.Combine(sourceRoot, "Minimap", "MinimapDisplayText.cs"));
 string minimapRenderer = Read(Path.Combine(sourceRoot, "Minimap", "MinimapSceneRenderer.cs"));
 string nativeMapCropProvider = Read(Path.Combine(sourceRoot, "Minimap", "NativeMapCropProvider.cs"));
 string minimapToolsView = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.MinimapToolsView.cs"));
@@ -109,7 +193,227 @@ string toolsShell = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.Tool
 string catalogViews = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.CatalogViews.cs"));
 string autoPickupToolsView = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.AutoPickupToolsView.cs"));
 string infiniteStorageView = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.InfiniteStorageView.cs"));
+string infiniteStorageRuntimeSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "InfiniteStorageRuntime.cs"));
+string infiniteStorageDecompositionSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "InfiniteStorageDecomposition.cs"));
 string overlayIconBinder = Read(Path.Combine(sourceRoot, "UI", "OverlayIconBinder.cs"));
+string cheatMenuStyleSource = Read(Path.Combine(sourceRoot, "UI", "CheatMenuStyle.cs"));
+string uiStateStoreSource = Read(Path.Combine(sourceRoot, "UI", "UiStateStore.cs"));
+string fluentThemeSource = Read(Path.Combine(sourceRoot, "UI", "ControlLibrary", "Core", "FluentTheme.cs"));
+string fluentThemesSource = Read(Path.Combine(sourceRoot, "UI", "ControlLibrary", "Core", "FluentThemes.cs"));
+string fluentFactorySource = Read(Path.Combine(sourceRoot, "UI", "ControlLibrary", "Runtime", "LegacyFluentControlFactory.cs"));
+string fluentAdapterSource = Read(Path.Combine(sourceRoot, "UI", "LegacyFluentControlAdapter.cs"));
+string hudFrameSource = Read(Path.Combine(sourceRoot, "UI", "HudFrameStyle.cs"));
+string pointToolHudSource = Read(Path.Combine(sourceRoot, "UI", "PointToolHud.cs"));
+string creatureHealthBarHudSource = Read(creatureHealthBarHudPath);
+string pluginLocalizationSource = Read(Path.Combine(sourceRoot, "Services", "PluginLocalization.cs"));
+
+CheckNoMixedLayoutGroupsOnSameCreation(sourceFiles, repoRoot);
+string responsiveEnsureShell = ReadMethodBody(overlay, "private void EnsureShell()");
+Check(responsiveEnsureShell.Contains("_wideBodyLayout = _shellBody.AddComponent<HorizontalLayoutGroup>()", StringComparison.Ordinal) &&
+      responsiveEnsureShell.Contains("_narrowBodyLayout = _narrowShellBody.AddComponent<VerticalLayoutGroup>()", StringComparison.Ordinal) &&
+      !responsiveEnsureShell.Contains("_shellBody.AddComponent<VerticalLayoutGroup>()", StringComparison.Ordinal) &&
+      !responsiveEnsureShell.Contains("_narrowShellBody.AddComponent<HorizontalLayoutGroup>()", StringComparison.Ordinal),
+    "Wide and narrow ShellBody containers do not each own exactly one orientation-specific LayoutGroup.");
+string responsiveBuildTabs = ReadMethodBody(overlay, "private void BuildTabs(Transform parent)");
+Check(responsiveBuildTabs.Contains("_wideNavigationLayout = content.AddComponent<VerticalLayoutGroup>()", StringComparison.Ordinal) &&
+      responsiveBuildTabs.Contains("_narrowNavigationLayout = narrowContent.AddComponent<HorizontalLayoutGroup>()", StringComparison.Ordinal) &&
+      !responsiveBuildTabs.Contains("content.AddComponent<HorizontalLayoutGroup>()", StringComparison.Ordinal) &&
+      !responsiveBuildTabs.Contains("narrowContent.AddComponent<VerticalLayoutGroup>()", StringComparison.Ordinal),
+    "Wide and narrow MainTabContent containers do not each own exactly one orientation-specific LayoutGroup.");
+string responsiveRefreshShellLayout = ReadMethodBody(overlay, "private void RefreshShellLayout()");
+Check(responsiveRefreshShellLayout.Contains("inactiveBody.SetActive(value: false)", StringComparison.Ordinal) &&
+      responsiveRefreshShellLayout.Contains("inactiveNavigationContent.gameObject.SetActive(value: false)", StringComparison.Ordinal) &&
+      responsiveRefreshShellLayout.Contains("_navigationScroll.content = activeNavigationContent", StringComparison.Ordinal) &&
+      responsiveRefreshShellLayout.Contains("tab.transform.SetParent(activeNavigationContent, worldPositionStays: false)", StringComparison.Ordinal) &&
+      responsiveRefreshShellLayout.Contains("_pageRegion.transform.SetParent(activeBody.transform, worldPositionStays: false)", StringComparison.Ordinal),
+    "Responsive shell switching does not preserve one active body/content, ScrollRect ownership, tab callbacks, and the existing PageRegion subtree.");
+
+Check(fluentThemesSource.Contains("RgbaColor.Parse(\"#0078D4\")", StringComparison.Ordinal) &&
+      !fluentThemesSource.Contains("#E87562", StringComparison.Ordinal),
+    "The default semantic accent is not Fluent blue or the retired coral accent remains.");
+string applyAccentTheme = ReadMethodBody(fluentThemeSource, "internal void ApplyAccent(RgbaColor accent)");
+Check(applyAccentTheme.Contains("AccentHover =", StringComparison.Ordinal) &&
+      applyAccentTheme.Contains("AccentPressed =", StringComparison.Ordinal) &&
+      applyAccentTheme.Contains("AccentSoft =", StringComparison.Ordinal) &&
+      applyAccentTheme.Contains("Focus =", StringComparison.Ordinal) &&
+      applyAccentTheme.Contains("FocusSoft =", StringComparison.Ordinal) &&
+      !applyAccentTheme.Contains("Success =", StringComparison.Ordinal) &&
+      !applyAccentTheme.Contains("Warning =", StringComparison.Ordinal) &&
+      !applyAccentTheme.Contains("Error =", StringComparison.Ordinal),
+    "Accent customization either misses an accent/focus token or overwrites semantic success/warning/error colors.");
+Check(cheatMenuStyleSource.Contains("internal static Color Accent =>", StringComparison.Ordinal) &&
+      cheatMenuStyleSource.Contains("internal static Color AccentBright =>", StringComparison.Ordinal) &&
+      cheatMenuStyleSource.Contains("Theme.ApplyAccent(color.ToRgba())", StringComparison.Ordinal) &&
+      fluentThemeSource.Contains("AccentRevision++", StringComparison.Ordinal),
+    "CheatMenuStyle still caches accent colors instead of resolving the mutable semantic theme.");
+Check(uiStateStoreSource.Contains("AccentColor = CheatMenuStyle.DefaultAccent", StringComparison.Ordinal) &&
+      overlay.Contains("ShowAccentColorPicker", StringComparison.Ordinal) &&
+      overlay.Contains("Session only · teleport marker color stays independent", StringComparison.Ordinal) &&
+      overlay.Split("CheatMenuStyle.ColorChannelLabelWidth", StringSplitOptions.None).Length - 1 == 3,
+    "The independent session-only accent picker/state is missing or its lifetime is not disclosed.");
+string applyAccentDraft = ReadMethodBody(overlay, "private void ApplyAccentColorDraft()");
+Check(applyAccentDraft.Contains("CheatMenuStyle.ApplyAccent(_accentColor)", StringComparison.Ordinal) &&
+      applyAccentDraft.Contains("RebuildVisualTreesPreservingVisibility()", StringComparison.Ordinal) &&
+      !applyAccentDraft.Contains("_teleportMarkerColor", StringComparison.Ordinal) &&
+      !applyAccentDraft.Contains("ShowTab(MenuTab.Teleports)", StringComparison.Ordinal),
+    "Applying an accent does not rebuild existing trees cleanly or still mutates teleport-marker state.");
+string applyTeleportColorDraft = ReadMethodBody(overlay, "private void ApplyTeleportMarkerColorDraft()");
+Check(applyTeleportColorDraft.Contains("_teleportMarkerColor = _teleportColorDraft", StringComparison.Ordinal) &&
+      applyTeleportColorDraft.Contains("ShowTab(MenuTab.Teleports)", StringComparison.Ordinal) &&
+      !applyTeleportColorDraft.Contains("CheatMenuStyle.ApplyAccent", StringComparison.Ordinal),
+    "Teleport-marker color application is no longer independent from the session accent.");
+Check(fluentThemeSource.Contains("TooltipBorder =>", StringComparison.Ordinal) &&
+      fluentFactorySource.Contains("borderThickness: 2f", StringComparison.Ordinal) &&
+      fluentAdapterSource.Contains("StyleTooltipSurface", StringComparison.Ordinal) &&
+      overlay.Contains("StyleTooltipSurface(_hoverExplanationRoot", StringComparison.Ordinal),
+    "Hover explanations do not use the dedicated brighter two-pixel tooltip border.");
+Check(cheatMenuStyleSource.Contains("CategorySidebarWidth = 176f", StringComparison.Ordinal) &&
+      cheatMenuStyleSource.Contains("CategoryButtonHeight = 40f", StringComparison.Ordinal) &&
+      catalogViews.Contains("CheatMenuStyle.CategorySidebarWidth", StringComparison.Ordinal) &&
+      catalogViews.Contains("CheatMenuStyle.CategoryButtonHeight", StringComparison.Ordinal) &&
+      catalogViews.Split("categoryLayout.minWidth = CheatMenuStyle.CategorySidebarWidth", StringSplitOptions.None).Length - 1 == 2 &&
+      catalogViews.Split("categoryLayout.preferredWidth = CheatMenuStyle.CategorySidebarWidth", StringSplitOptions.None).Length - 1 == 2,
+	"Catalog category sidebars/buttons do not preserve the user-approved 176x40 geometry.");
+string responsiveColumnsBody = ReadMethodBody(catalogViews, "private int GetResponsiveCardColumnCount()");
+Check(!responsiveColumnsBody.Contains("windowWidth - 235f", StringComparison.Ordinal) &&
+	  responsiveColumnsBody.Contains("CheatMenuStyle.MainNavigationWidth", StringComparison.Ordinal) &&
+	  responsiveColumnsBody.Contains("CheatMenuStyle.CategorySidebarWidth", StringComparison.Ordinal) &&
+	  responsiveColumnsBody.Contains("catalogSpacing", StringComparison.Ordinal) &&
+	  responsiveColumnsBody.Contains("CheatMenuStyle.CardWidth", StringComparison.Ordinal) &&
+	  responsiveColumnsBody.Contains("CheatMenuStyle.RowSpacing", StringComparison.Ordinal),
+	"Responsive card columns still ignore the actual navigation/sidebar/spacing geometry.");
+string refreshWindowGeometryBody = ReadMethodBody(overlay, "private void RefreshWindowGeometry(");
+string refreshInfiniteStorageGeometryBody = ReadMethodBody(overlay, "private void RefreshInfiniteStorageGeometry(");
+Check(overlay.Contains("PreferredWindowWidth = 1280f", StringComparison.Ordinal) &&
+	  overlay.Contains("PreferredInfiniteStorageWindowWidth = 1120f", StringComparison.Ordinal) &&
+	  refreshWindowGeometryBody.Contains("new Vector2(PreferredWindowWidth, PreferredWindowHeight)", StringComparison.Ordinal) &&
+	  !refreshWindowGeometryBody.Contains("PreferredInfiniteStorageWindowWidth", StringComparison.Ordinal) &&
+	  refreshInfiniteStorageGeometryBody.Contains("new Vector2(PreferredInfiniteStorageWindowWidth, PreferredWindowHeight)", StringComparison.Ordinal) &&
+	  !refreshInfiniteStorageGeometryBody.Contains("new Vector2(PreferredWindowWidth, PreferredWindowHeight)", StringComparison.Ordinal) &&
+	  cheatMenuStyleSource.Contains("CardWidth = 155f", StringComparison.Ordinal) &&
+	  cheatMenuStyleSource.Contains("CardHeight = 158f", StringComparison.Ordinal) &&
+	  catalogViews.Split("new Vector2(CheatMenuStyle.CardWidth, CheatMenuStyle.CardHeight)", StringSplitOptions.None).Length - 1 == 3 &&
+	  !catalogViews.Contains("new Vector2(155f, 158f)", StringComparison.Ordinal),
+	"Catalog density fix does not preserve 155x158 cards, a five-column-capable 1280 main window, or the 1120 Infinite Storage width.");
+string infiniteStorageGridBody = ReadMethodBody(infiniteStorageView, "private void BuildInfiniteStorageGrid(");
+Check(infiniteStorageGridBody.Contains("layout.constraintCount = 5", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("entries.Count / 15f", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("_infiniteStoragePage * 15", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("start + 15", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("layout.cellSize = new Vector2(155f, 158f)", StringComparison.Ordinal),
+	"Infinite Storage no longer preserves five 155x158 columns and 15 entries per page.");
+Check(hudFrameSource.Contains("new Color(0f, 0f, 0f, 0.8f)", StringComparison.Ordinal) ||
+      cheatMenuStyleSource.Contains("new Color(0f, 0f, 0f, 0.8f)", StringComparison.Ordinal),
+    "HUD backdrop is not black at 80% opacity.");
+foreach (string edge in new[] { "HudBorder.Top", "HudBorder.Bottom", "HudBorder.Left", "HudBorder.Right" })
+    Check(hudFrameSource.Contains(edge, StringComparison.Ordinal), $"HUD four-edge frame is missing: {edge}");
+Check(pointToolHudSource.Contains("HudFrameStyle.Apply(container, component2)", StringComparison.Ordinal) &&
+	  !minimapHud.Contains("HudFrameStyle.Apply(_root, _dragSurface)", StringComparison.Ordinal) &&
+	  !pointToolHudSource.Contains("LegacyFluentSurface.Attach(container", StringComparison.Ordinal),
+	"PointTool must retain its four-edge HUD frame while MinimapRoot remains frameless.");
+Check(creatureHealthBarHudSource.Contains("new GameObject(\"CreatureHealthBarItem.\" + index, typeof(RectTransform))", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("CreateBorderEdge(root.transform, \"Border.Bottom\"", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("CreateBorderEdge(root.transform, \"Border.Top\"", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("CreateBorderEdge(root.transform, \"Border.Left\"", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("CreateBorderEdge(root.transform, \"Border.Right\"", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("new GameObject(\"Fill\", typeof(RectTransform), typeof(Image))", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("fill.color = new Color(0.86f, 0.08f, 0.08f, 1f)", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("new GameObject(\"Label\", typeof(RectTransform), typeof(Text))", StringComparison.Ordinal) &&
+	  creatureHealthBarHudSource.Contains("label.color = Color.white", StringComparison.Ordinal) &&
+	  !creatureHealthBarHudSource.Contains("HudFrameStyle.Apply", StringComparison.Ordinal) &&
+	  !creatureHealthBarHudSource.Contains("FluentRoundedGraphic", StringComparison.Ordinal),
+	"CreatureHealthBar no longer matches the GitHub baseline visual structure and colors.");
+string minimapAccentRefresh = ReadMethodBody(minimapHud, "private void RefreshAccentVisuals()");
+Check(minimapHud.Contains("RefreshAccentVisuals();", StringComparison.Ordinal) &&
+      minimapAccentRefresh.Contains("CheatMenuStyle.AccentRevision", StringComparison.Ordinal) &&
+      minimapAccentRefresh.Contains("_editOutline.effectColor = CheatMenuStyle.Theme.Focus.ToUnity()", StringComparison.Ordinal) &&
+      minimapAccentRefresh.Contains("_resizeSurface?.SetColors", StringComparison.Ordinal),
+    "Existing minimap edit-outline/resize surfaces do not follow custom accent revisions.");
+string toggleFactoryBody = ReadMethodBody(overlay, "private void CreateToggleAction(");
+Check(toggleFactoryBody.Contains("localizedLabel = PluginLocalization.Translate(label)", StringComparison.Ordinal) &&
+      toggleFactoryBody.Contains("localize: false", StringComparison.Ordinal) &&
+      !toggleFactoryBody.Contains("label + \"  \" +", StringComparison.Ordinal),
+    "Initial Toggle labels can still bypass per-label localization and produce mixed-language UI.");
+string infiniteStoragePanelBody = ReadMethodBody(infiniteStorageView, "private void BuildInfiniteStoragePanel(");
+Check(infiniteStoragePanelBody.Contains("\"搜索\", 13, CheatMenuStyle.Text, 64f", StringComparison.Ordinal) &&
+      infiniteStoragePanelBody.Contains("CheatMenuStyle.InfiniteStorageWithdrawLabelWidth", StringComparison.Ordinal) &&
+      cheatMenuStyleSource.Contains("InfiniteStorageWithdrawLabelWidth = 132f", StringComparison.Ordinal),
+    "Infinite Storage Search/Withdraw semantic labels remain too narrow for English.");
+Check(infiniteStoragePanelBody.Contains("分解模式", StringComparison.Ordinal) &&
+      infiniteStoragePanelBody.Contains("ToggleInfiniteStorageDecomposeScopeDrawer", StringComparison.Ordinal) &&
+      infiniteStoragePanelBody.Contains("InfiniteStorageDecomposeScopeLabel", StringComparison.Ordinal),
+    "Infinite Storage is missing the decomposition-mode button and its adjacent range drawer.");
+string infiniteStorageCardBody = ReadMethodBody(infiniteStorageView, "private void CreateInfiniteStorageCard(");
+Check(infiniteStorageCardBody.Contains("bool canDecompose = _infiniteStoragePresenter.CanDecompose(entry.EntryId)", StringComparison.Ordinal) &&
+      infiniteStorageCardBody.Contains("_infiniteStoragePresenter.Decompose(entry.EntryId, _infiniteStorageDecomposeScope)", StringComparison.Ordinal) &&
+      infiniteStorageCardBody.Contains("button.interactable = canDecompose", StringComparison.Ordinal) &&
+      infiniteStorageCardBody.Contains("_fluentControls.MarkDestructiveHover(button)", StringComparison.Ordinal) &&
+      infiniteStorageCardBody.Contains("if (!_infiniteStorageDecomposeMode)", StringComparison.Ordinal),
+    "Infinite Storage cards do not restrict red-hover decomposition to supported non-material candidates.");
+string decomposeDrawerBody = ReadMethodBody(infiniteStorageView, "private void BuildInfiniteStorageDecomposeScopeDrawer(");
+Check(infiniteStorageView.Contains("InfiniteStorageDecomposeScope.SingleItem", StringComparison.Ordinal) &&
+      infiniteStorageView.Contains("InfiniteStorageDecomposeScope.AssetId", StringComparison.Ordinal) &&
+      infiniteStorageView.Contains("InfiniteStorageDecomposeScope.Stack", StringComparison.Ordinal) &&
+      decomposeDrawerBody.Contains("foreach (InfiniteStorageDecomposeScope scope in InfiniteStorageDecomposeScopes)", StringComparison.Ordinal) &&
+      decomposeDrawerBody.Contains("_uiRoot.RegisterPopup", StringComparison.Ordinal),
+    "The decomposition range drawer does not expose Single item, ID, and Stack through the popup lifecycle.");
+string destructiveHoverBody = ReadMethodBody(fluentAdapterSource, "internal void MarkDestructiveHover(");
+Check(destructiveHoverBody.Contains("_context.Theme.Error", StringComparison.Ordinal) &&
+      destructiveHoverBody.Contains("standard.NormalFill", StringComparison.Ordinal),
+    "Decomposition mode does not preserve a neutral card until pointer hover turns it red.");
+string runtimeDecomposeBody = ReadMethodBody(infiniteStorageRuntimeSource, "internal InfiniteStorageDecomposeResult Decompose(");
+Check(runtimeDecomposeBody.Contains("InfiniteStorageDecomposer.Execute", StringComparison.Ordinal) &&
+      runtimeDecomposeBody.Contains("Commit", StringComparison.Ordinal),
+    "Infinite Storage decomposition bypasses the storage transaction/persistence boundary.");
+Check(infiniteStorageDecompositionSource.Contains("asset.type == EItemType.SUPPLY", StringComparison.Ordinal) &&
+      infiniteStorageDecompositionSource.Contains("entry.UnitKind != StackUnitKind.ResourceUnits", StringComparison.Ordinal) &&
+      infiniteStorageDecompositionSource.Contains("MaterialNotDecomposable", StringComparison.Ordinal),
+    "Material/SUPPLY entries can still enter Infinite Storage decomposition.");
+Check(!infiniteStorageDecompositionSource.Contains("blueprint.outputs.All(output => InfiniteStorageDecomposeEligibility.IsMaterialAsset", StringComparison.Ordinal) &&
+      !infiniteStorageDecompositionSource.Contains("if (!InfiniteStorageDecomposeEligibility.IsMaterialAsset(outputAsset))", StringComparison.Ordinal) &&
+      !infiniteStorageDecompositionSource.Contains("|| blueprint.transferState", StringComparison.Ordinal) &&
+      infiniteStorageDecompositionSource.Contains("if (blueprint.transferState)", StringComparison.Ordinal) &&
+      infiniteStorageDecompositionSource.Contains("CreateTransferredPayload", StringComparison.Ordinal),
+    "Valid native salvage is still rejecting non-SUPPLY outputs or StateTransfer recipes such as Farmer Hat -> Wheat.");
+Check(catalogViews.Split("CheatMenuStyle.ToolbarFieldLabelWidth", StringSplitOptions.None).Length - 1 == 3 &&
+      cheatMenuStyleSource.Contains("ToolbarFieldLabelWidth = 64f", StringComparison.Ordinal),
+    "Catalog Amount labels can still be clipped in English.");
+Check(pluginLocalizationSource.Contains("^显示 ([\\\\d,]+) / ([\\\\d,]+)；搜索支持名称、ID、GUID 和来源。$", StringComparison.Ordinal),
+    "Formatted catalog counts containing thousands separators still bypass the English summary pattern.");
+foreach (string minimapValue in new[]
+{
+    "圆形", "正方形", "左上", "右上", "左下", "右下",
+    "仅原生地图", "实时地表", "实时高度切片", "关闭背景", "自动优先原生地图",
+    "备用网格", "背景已关闭", "原生地图裁剪",
+    "无", "全部", "普通", "罕见", "稀有", "史诗", "传奇", "神话"
+})
+{
+    Check(minimapDisplayTextSource.Contains($"\"{minimapValue}\"", StringComparison.Ordinal),
+        $"Minimap display contract no longer exposes expected value: {minimapValue}");
+    Check(pluginLocalizationSource.Contains($"dictionary[\"{minimapValue}\"]", StringComparison.Ordinal),
+        $"Minimap display value has no direct English translation: {minimapValue}");
+}
+foreach (string suffix in new[] { " 像素", " 米", " 次/秒", " 秒" })
+    Check(pluginLocalizationSource.Contains($"dictionary[\"{suffix}\"]", StringComparison.Ordinal),
+        $"Minimap slider suffix has no translation: {suffix}");
+Check(minimapToolsView.Contains("LocalizeMinimapValue(MinimapDisplayText.BackgroundState", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("LocalizeMinimapValue(MinimapDisplayText.Shape", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("LocalizeMinimapValue(MinimapDisplayText.Anchor", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("LocalizeMinimapValue(MinimapDisplayText.BackgroundMode", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("LocalizeMinimapValue(MinimapDisplayText.Rarity", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("value.Split('、')", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("PluginLanguage.English ? \", \" : \"、\"", StringComparison.Ordinal),
+    "Minimap dynamic enum/capture values are not localized recursively with locale-appropriate separators.");
+string minimapSliderContent = ReadMethodBody(minimapToolsView, "private void CreateMinimapSliderContent(");
+Check(minimapSliderContent.Contains("localizedSuffix = PluginLocalization.Translate(suffix)", StringComparison.Ordinal) &&
+      minimapSliderContent.Split("+ localizedSuffix", StringSplitOptions.None).Length - 1 == 2,
+    "Minimap slider suffix translation is not shared by initial and callback-updated values.");
+string minimapLinkPage = ReadMethodBody(minimapToolsView, "private void BuildMinimapLinkPage(");
+Check(minimapLinkPage.Contains("linkSummary = PluginLocalization.Translate($\"当前可见半径：", StringComparison.Ordinal) &&
+      minimapLinkPage.Contains("diagnosticsSummary = PluginLocalization.Translate($\"背景：", StringComparison.Ordinal) &&
+      minimapLinkPage.Contains("CreateLabel(panel, linkSummary", StringComparison.Ordinal) &&
+      minimapLinkPage.Contains("CreateLabel(panel, diagnosticsSummary", StringComparison.Ordinal),
+    "Minimap Links page can emit localized capture values under untranslated Chinese sentence shells.");
 
 string cardContents = ReadMethodBody(catalogViews, "private void AddCardContents(");
 Check(cardContents.Contains("new Vector2(0.06f, 0.28f)", StringComparison.Ordinal) &&
@@ -229,20 +533,77 @@ Check(minimapHud.Contains("CreateText(\"Coordinates\", _root.transform", StringC
 Check(minimapHud.Contains("_dragSurface.raycastTarget = _settings.LayoutEditMode", StringComparison.Ordinal) &&
       minimapHud.Contains("_uiRoot.SetHudInteraction(visible && _settings.LayoutEditMode)", StringComparison.Ordinal),
     "Minimap click-through is not limited to explicit layout edit mode.");
-Check(minimapHud.Contains("PlayerUI.message(EPlayerMessage.NPC_CUSTOM, LayoutPromptText", StringComparison.Ordinal) &&
+string minimapLayoutInput = ReadMethodBody(minimapHud, "private void UpdateLayoutEditInput()");
+Check(minimapHud.Contains("MinimapLayoutInputGate.SetEditing(visible && _settings.LayoutEditMode)", StringComparison.Ordinal) &&
+      minimapLayoutInput.Contains("SuppressUntilRelease(KeyCode.Return)", StringComparison.Ordinal) &&
+      minimapLayoutInput.Contains("SuppressUntilRelease(KeyCode.KeypadEnter)", StringComparison.Ordinal) &&
+      minimapLayoutInput.Contains("SuppressUntilRelease(KeyCode.Escape)", StringComparison.Ordinal) &&
+	  minimapLayoutInputGate.Contains("KeyCode.End => MinimapLayoutReservedKey.End", StringComparison.Ordinal) &&
+	  minimapLayoutInputPatch.Contains("typeof(InputEx), nameof(InputEx.GetKeyDown)", StringComparison.Ordinal) &&
+	  minimapLayoutInputPatch.Contains("typeof(InputEx), nameof(InputEx.GetKey)", StringComparison.Ordinal) &&
+	  minimapLayoutInputPatch.Contains("typeof(PlayerLifeUI), nameof(PlayerLifeUI.openChat)", StringComparison.Ordinal) &&
+	  minimapLayoutInputPatch.Contains("typeof(PlayerLifeUI), nameof(PlayerLifeUI.SendChatAndClose)", StringComparison.Ordinal) &&
+	  minimapLayoutInputPatch.Contains("ShouldBlockChatAction()", StringComparison.Ordinal) &&
+	  !minimapLayoutInputPatch.Contains("UnityEngine.IMGUIModule", StringComparison.Ordinal),
+	"Minimap layout editing does not suppress native menu/dialogue keys and the chat-open key-up action.");
+Check(minimapHud.Contains("PlayerUI.message(EPlayerMessage.NPC_CUSTOM, PluginLocalization.Translate(LayoutPromptText)", StringComparison.Ordinal) &&
       minimapHud.Contains("Input.GetKeyDown(KeyCode.Return)", StringComparison.Ordinal) &&
       minimapHud.Contains("Input.GetKeyDown(KeyCode.KeypadEnter)", StringComparison.Ordinal) &&
       minimapToolsView.Contains("_shellPresenter.CloseMenu()", StringComparison.Ordinal),
     "Layout editing does not hide the plugin window or use the native bottom-center HUD with Enter confirmation.");
+string minimapUpdatePose = ReadMethodBody(minimapHud, "internal void UpdatePose(");
+Check(minimapUpdatePose.Contains("RefreshLocalizedText()", StringComparison.Ordinal) &&
+      minimapUpdatePose.Contains("PluginLocalization.Translate($\"横坐标", StringComparison.Ordinal) &&
+      pluginLocalizationSource.Contains("^横坐标 (.+?)  高度 (.+?)  纵坐标 (.+?)$", StringComparison.Ordinal),
+    "Long-lived minimap coordinates do not refresh as one localized sentence after language changes.");
+Check(minimapHud.Contains("new GameObject(\"RotatingMapContent\"", StringComparison.Ordinal) &&
+      minimapHud.Contains("new GameObject(\"RotatingCompass\"", StringComparison.Ordinal) &&
+	  minimapHud.Contains("ResolveContentExtent(_settings.RotateWithView, _settings.Size)", StringComparison.Ordinal) &&
+	  minimapUpdatePose.Contains("ResolveMapContentRotation(", StringComparison.Ordinal) &&
+	  minimapUpdatePose.Contains("_settings.RotateWithView, viewYaw, mapYaw", StringComparison.Ordinal) &&
+	  minimapUpdatePose.Contains("_settings.RotateWithView ? viewYaw : mapYaw", StringComparison.Ordinal) &&
+	  minimapHud.Contains("view.Compass[index].rectTransform.localRotation = upright", StringComparison.Ordinal),
+	"Optional minimap rotation does not preserve fixed mode or rotate map/markers with upright compass labels.");
+string minimapViewportSize = ReadMethodBody(minimapHud, "private void ApplyViewportSize()");
+string minimapSafeAreaClamp = ReadMethodBody(minimapHud, "private void ClampToSafeArea()");
+Check(minimapViewportSize.Contains("ResolveContentExtent(_settings.RotateWithView, _settings.Size)", StringComparison.Ordinal) &&
+      minimapHud.Split("ApplyViewportSize();", StringSplitOptions.None).Length - 1 >= 3,
+    "Fixed and rotating minimaps do not share one viewport-size/layout update path.");
+Check(minimapHud.Contains("private readonly Vector3[] _rootWorldCorners = new Vector3[4]", StringComparison.Ordinal) &&
+      minimapSafeAreaClamp.Contains("_rootRect.GetWorldCorners(_rootWorldCorners)", StringComparison.Ordinal) &&
+      minimapSafeAreaClamp.Contains("parent.InverseTransformPoint", StringComparison.Ordinal) &&
+      !minimapSafeAreaClamp.Contains("CalculateRelativeRectTransformBounds", StringComparison.Ordinal),
+    "Safe-area clamping still includes the oversized rotating content subtree and can shift the shared layout.");
+string minimapSetBackground = ReadMethodBody(minimapHud, "private void SetViewBackground(");
+Check(minimapSetBackground.Contains("PluginLocalization.Translate(MinimapDisplayText.BackgroundState(state))", StringComparison.Ordinal) &&
+      minimapSetBackground.Contains("!string.Equals(view.State.text, stateText", StringComparison.Ordinal),
+    "Minimap background-state text is not refreshed when language changes without a state transition.");
+string minimapRefreshLanguage = ReadMethodBody(minimapHud, "private void RefreshLocalizedText()");
+Check(minimapHud.Contains("PluginLanguage? _lastLanguage", StringComparison.Ordinal) &&
+      minimapRefreshLanguage.Contains("RefreshViewLanguage(_circle)", StringComparison.Ordinal) &&
+      minimapRefreshLanguage.Contains("RefreshViewLanguage(_square)", StringComparison.Ordinal) &&
+      minimapHud.Contains("UiText[] Compass", StringComparison.Ordinal) &&
+      minimapHud.Contains("CompassSourceLabels", StringComparison.Ordinal) &&
+      minimapHud.Contains("PluginLocalization.Translate(CompassSourceLabels[index])", StringComparison.Ordinal),
+    "Long-lived minimap compass/state references do not refresh in place for language changes.");
 string minimapViewportBorder = ReadMethodBody(minimapHud, "private void CreateViewportBorder(Transform parent, bool circle)");
 Check(minimapHud.Contains("CreateCircleBorderSprite", StringComparison.Ordinal) &&
+	  minimapHud.Contains("CreateCircleBorderSprite(128, 1f", StringComparison.Ordinal) &&
+	  minimapHud.Contains("CircleBorderExpansionPixels = 2f", StringComparison.Ordinal) &&
       minimapViewportBorder.Contains("_circleBorderSprite", StringComparison.Ordinal) &&
+	  minimapViewportBorder.Contains("border.maskable = false", StringComparison.Ordinal) &&
+	  minimapViewportBorder.Contains("borderRect.offsetMin = -expansion", StringComparison.Ordinal) &&
+	  minimapViewportBorder.Contains("borderRect.offsetMax = expansion", StringComparison.Ordinal) &&
       minimapViewportBorder.Contains("ViewportBorder.Top", StringComparison.Ordinal) &&
       minimapViewportBorder.Contains("ViewportBorder.Bottom", StringComparison.Ordinal) &&
       minimapViewportBorder.Contains("ViewportBorder.Left", StringComparison.Ordinal) &&
       minimapViewportBorder.Contains("ViewportBorder.Right", StringComparison.Ordinal) &&
       !minimapViewportBorder.Contains("Outline", StringComparison.Ordinal),
-    "The persistent minimap border is not an independent transparent-center ring/edge stroke.");
+    "The circular minimap border must retain its line width and expand two pixels outside the masked map edge.");
+Check(!minimapHud.Contains("HudFrameStyle.Apply(_root, _dragSurface)", StringComparison.Ordinal) &&
+      minimapHud.Contains("_dragSurface.color = Color.clear;", StringComparison.Ordinal) &&
+      minimapHud.Contains("_dragSurface.raycastTarget = false;", StringComparison.Ordinal),
+    "MinimapRoot must remain transparent and omit the outer rectangular HUD frame in every shape mode.");
 Check(minimapHud.Contains("_uiRoot.QueueHudDestroy(_root)", StringComparison.Ordinal),
     "Minimap teardown bypasses the lifecycle-safe deferred HUD destroy queue.");
 Check(minimapHud.Contains("SetRawImage(view.ObjectOverlay, showObjects ? objects : null, new Rect(0f, 1f, 1f, -1f)", StringComparison.Ordinal),
@@ -259,6 +620,45 @@ Check(minimapMarkerPool.Contains("private readonly List<Slot> _slots", StringCom
       minimapMarkerPool.Contains("Slot slot = GetSlot(index)", StringComparison.Ordinal) &&
       minimapMarkerPool.Contains("_slots[index].Root.SetActive(false)", StringComparison.Ordinal),
     "Minimap markers are rebuilt instead of reused through the marker pool.");
+string markerPoolApply = ReadMethodBody(minimapMarkerPool, "internal void Apply(");
+Check(markerPoolApply.Contains("slot.ItemOutline.gameObject.SetActive(itemMarker)", StringComparison.Ordinal) &&
+	  markerPoolApply.Contains("slot.ItemFill.gameObject.SetActive(itemMarker)", StringComparison.Ordinal) &&
+	  markerPoolApply.Contains("new Color(0f, 0f, 0f, marker.Color.a * 0.90f)", StringComparison.Ordinal) &&
+	  markerPoolApply.Contains("slot.ItemFill.color = marker.Color", StringComparison.Ordinal) &&
+	  markerPoolApply.Contains("new Vector2(20f, 20f)", StringComparison.Ordinal) &&
+	  markerPoolApply.Contains("new Vector2(16f, 16f)", StringComparison.Ordinal),
+	"Vector item stars do not retain their 16px fill with one pooled 20px black outline.");
+Check(minimapMarkerPool.Contains("new GameObject(\"ItemOutline\"", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("new GameObject(\"ItemFill\"", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("new GameObject(\"Image\"", StringComparison.Ordinal) &&
+	  minimapMarkerPool.IndexOf("new GameObject(\"ItemOutline\"", StringComparison.Ordinal) <
+	  minimapMarkerPool.IndexOf("new GameObject(\"ItemFill\"", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("typeof(MinimapStarGraphic)", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("itemOutline.raycastTarget = false", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("itemFill.raycastTarget = false", StringComparison.Ordinal),
+	"The vector outline/fill layers are not ordered, pooled, and click-through.");
+Check(minimapStarGraphic.Contains("sealed class MinimapStarGraphic : MaskableGraphic", StringComparison.Ordinal) &&
+	  minimapStarGraphic.Contains("Rect rect = GetPixelAdjustedRect()", StringComparison.Ordinal) &&
+	  minimapStarGraphic.Contains("private const int PointCount = 8", StringComparison.Ordinal) &&
+	  minimapStarGraphic.Contains("vertexHelper.AddTriangle(0, current, next)", StringComparison.Ordinal) &&
+	  !minimapStarGraphic.Contains("Texture2D", StringComparison.Ordinal) &&
+	  !minimapStarGraphic.Contains("Sprite", StringComparison.Ordinal),
+	"The minimap star is not generated directly as a pixel-adjusted vector mesh.");
+int starTop = minimapStarGraphic.IndexOf("new Vector2(0f, outerY)", StringComparison.Ordinal);
+int starUpperLeft = minimapStarGraphic.IndexOf("new Vector2(-innerX, innerY)", StringComparison.Ordinal);
+int starLeft = minimapStarGraphic.IndexOf("new Vector2(-outerX, 0f)", StringComparison.Ordinal);
+int starBottom = minimapStarGraphic.IndexOf("new Vector2(0f, -outerY)", StringComparison.Ordinal);
+int starRight = minimapStarGraphic.IndexOf("new Vector2(outerX, 0f)", StringComparison.Ordinal);
+Check(starTop >= 0 && starTop < starUpperLeft && starUpperLeft < starLeft &&
+	  starLeft < starBottom && starBottom < starRight,
+	"The minimap star perimeter is not counter-clockwise, so CanvasRenderer can cull every triangle.");
+Check(minimapFeature.Contains("ItemTool.getRarityColorUI", StringComparison.Ordinal) &&
+	  !minimapFeature.Contains("MinimapRarityVisuals", StringComparison.Ordinal) &&
+	  !minimapHud.Contains("CreateStarSprite", StringComparison.Ordinal) &&
+	  !minimapHud.Contains("_itemStarSprite", StringComparison.Ordinal) &&
+	  !minimapHud.Contains("CreateMythicalIridescentFrames", StringComparison.Ordinal) &&
+      !minimapHud.Contains("AnimateVisibleItemMarkers", StringComparison.Ordinal),
+    "The minimap still replaces game rarity colors or retains the removed mythical animation path.");
 Check(minimapRenderer.Contains("internal const int DefaultResolution = 512", StringComparison.Ordinal) &&
       minimapRenderer.Contains("camera.enabled = false", StringComparison.Ordinal) &&
       minimapRenderer.Contains("camera.allowMSAA = true", StringComparison.Ordinal) &&
@@ -296,6 +696,21 @@ Check(minimapFeature.Contains("_hud.SetRuntimeVisible(active)", StringComparison
 Check(minimapFeature.Contains("_nextMarkerProjectionTime = now + 0.05f", StringComparison.Ordinal) &&
       minimapFeature.Contains("marker.FollowTarget != null ? marker.FollowTarget.position", StringComparison.Ordinal),
     "Moving minimap markers are not reprojected from live transforms at the 20Hz pose budget.");
+string minimapLateUpdate = ReadMethodBody(minimapFeature, "internal void LateUpdate()");
+Check(minimapFeature.Contains("Camera viewCamera = MainCamera.instance", StringComparison.Ordinal) &&
+      minimapFeature.Contains("Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg", StringComparison.Ordinal) &&
+      minimapLateUpdate.Contains("ResolveViewYaw(player, playerYaw)", StringComparison.Ordinal) &&
+      minimapLateUpdate.Contains("UpdatePose(player.transform.position, playerYaw, _viewYaw, _mapYaw)", StringComparison.Ordinal) &&
+	  minimapFeature.Contains("ResolveContentExtent(", StringComparison.Ordinal) &&
+	  minimapFeature.Contains("_settings.RotateWithView, _settings.VisibleRadiusMeters", StringComparison.Ordinal),
+	"Optional minimap heading does not use the final Unturned camera yaw or preserve fixed-mode crop extent.");
+
+Check(plugin.Contains("Config.Bind(\"Minimap\", \"RotateWithView\", defaultValue: false", StringComparison.Ordinal) &&
+      plugin.Contains("RotateWithView = _minimapRotateWithView?.Value ?? false", StringComparison.Ordinal) &&
+      plugin.Contains("_minimapRotateWithView.Value = settings.RotateWithView", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("\"随视角转动\", settings.RotateWithView", StringComparison.Ordinal) &&
+      minimapToolsView.Contains("s.RotateWithView = value", StringComparison.Ordinal),
+    "View rotation is not an additive, persisted, default-off minimap setting.");
 Check(ReadMethodBody(minimapFeature, "internal void ApplySettings(MinimapSettings settings)")
         .Contains("_nextRenderTime = 0f", StringComparison.Ordinal),
     "Changing the minimap background mode does not invalidate the scheduled camera render immediately.");
@@ -316,17 +731,27 @@ foreach (string file in new[] { "CheatMenuOverlayUi.cs", "PointToolHud.cs" })
 }
 string creatureHealthBarHud = Read(creatureHealthBarHudPath);
 Check(creatureHealthBarHud.Contains("CanvasScaler.ScaleMode.ConstantPixelSize", StringComparison.Ordinal)
-      && creatureHealthBarHud.Contains("scaler.scaleFactor = 1f", StringComparison.Ordinal),
-    "CreatureHealthBarHud no longer preserves the tooltip-feature pixel-space scaling contract.");
+&& creatureHealthBarHud.Contains("scaler.scaleFactor = 1f", StringComparison.Ordinal),
+"CreatureHealthBarHud no longer preserves the tooltip-feature pixel-space scaling contract.");
+Check(creatureHealthBarHud.Contains("SystemFontProvider.Resolve(_log)", StringComparison.Ordinal) &&
+      creatureHealthBarHud.Contains("SystemFontProvider.Revision", StringComparison.Ordinal) &&
+      creatureHealthBarHud.Contains("item.Label.font = _font", StringComparison.Ordinal),
+    "CreatureHealthBarHud does not follow the selected system-font revision.");
+Check(!creatureHealthBarHud.Contains("Font.CreateDynamicFontFromOSFont", StringComparison.Ordinal) &&
+      !creatureHealthBarHud.Contains("_ownsFont", StringComparison.Ordinal) &&
+      !creatureHealthBarHud.Contains("Object.Destroy(_font)", StringComparison.Ordinal),
+    "CreatureHealthBarHud still creates or destroys a private font instead of borrowing SystemFontProvider ownership.");
 
 string context = Read(Path.Combine(sourceRoot, "Services", "PluginRuntimeContext.cs"));
 string runtimeComposition = Read(Path.Combine(sourceRoot, "Services", "PluginRuntimeComposition.cs"));
-string plugin = Read(Path.Combine(sourceRoot, "CheatMenuPlugin.cs"));
 Check(context.Contains("_minimap?.Update(Time.realtimeSinceStartup, sharedItemSnapshot)", StringComparison.Ordinal) &&
       context.Contains("_minimap?.LateUpdate()", StringComparison.Ordinal) &&
       context.Contains("_minimap?.HandleSceneChanged()", StringComparison.Ordinal) &&
       context.Contains("RunTeardownStep(\"minimap\", () => _minimap?.Dispose())", StringComparison.Ordinal),
     "RuntimeContext does not own the minimap update, late-update, scene, and teardown lifecycle.");
+Check(context.Contains("MinimapLayoutInputPatch.Install(_harmony, _log)", StringComparison.Ordinal) &&
+      context.Contains("RunTeardownStep(\"minimap layout input\", MinimapLayoutInputPatch.Reset)", StringComparison.Ordinal),
+    "Minimap layout input interception is not installed and reset with the runtime lifecycle.");
 Check(context.Contains("Mathf.Max(radius, autoRadius)", StringComparison.Ordinal) &&
       context.Contains("Mathf.Max(frequency, autoFrequency)", StringComparison.Ordinal) &&
       context.Contains("_nearbyItemIndex.Refresh", StringComparison.Ordinal),
@@ -488,11 +913,27 @@ Check(characterView.Contains("_characterPresenter.CaptureSnapshot()", StringComp
     "Character View does not render from a presenter snapshot.");
 Check(!characterView.Contains("Player.LocalPlayer", StringComparison.Ordinal) && !characterView.Contains("_plugin.Actions", StringComparison.Ordinal),
     "Character View still calls the Unturned gameplay API or action service directly.");
+Check(characterView.Contains("CharacterStatTwoColumnGrid", StringComparison.Ordinal) &&
+      characterView.Split("CreateLabeledInput(statRow", StringSplitOptions.None).Length - 1 == 6 &&
+      characterView.Contains("statRow1", StringComparison.Ordinal) &&
+      characterView.Contains("statRow2", StringComparison.Ordinal) &&
+      characterView.Contains("statRow3", StringComparison.Ordinal),
+    "Character survival values are not organized as a genuine two-column grid.");
 string worldView = ReadMethodBody(overlay, "private void BuildOtherTab()");
 Check(worldView.Contains("_worldPresenter.CaptureSnapshot()", StringComparison.Ordinal),
     "World View does not render from a presenter snapshot.");
 Check(!worldView.Contains("LightingManager.", StringComparison.Ordinal) && !worldView.Contains("_plugin.Actions", StringComparison.Ordinal),
     "World View still calls the Unturned gameplay API or action service directly.");
+Check(worldView.Split("CreateWorldCard(", StringSplitOptions.None).Length - 1 == 3 &&
+      worldView.Contains("\"TimeCard\"", StringComparison.Ordinal) &&
+      worldView.Contains("\"WorldEventsCard\"", StringComparison.Ordinal) &&
+      worldView.Contains("\"ScanInfoCard\"", StringComparison.Ordinal),
+    "Other page is not grouped into time, world-event, and scan/misc operation cards.");
+Check(worldView.Contains("primaryCardHeight = 460f", StringComparison.Ordinal) &&
+      worldView.Contains("CreateShortcutScroll(_contentHost.transform, styleSurface: false)", StringComparison.Ordinal) &&
+      worldView.Contains("AddShortcutScrollbar(worldScroll)", StringComparison.Ordinal) &&
+      worldView.Contains("ContentSizeFitter.FitMode.PreferredSize", StringComparison.Ordinal),
+    "Other-page cards either under-allocate their content height or cannot scroll at the minimum window size.");
 string pagePresenters = Read(Path.Combine(sourceRoot, "UI", "CheatMenuPagePresenters.cs"));
 string featurePresenters = Read(Path.Combine(sourceRoot, "UI", "CheatMenuFeaturePresenters.cs"));
 string featurePorts = Read(Path.Combine(sourceRoot, "UI", "CheatMenuUiFeaturePorts.cs"));
@@ -573,6 +1014,13 @@ Check(apiKeyRows.Contains("CheatMenuStyle.Muted, 86f, TextAnchor.MiddleRight", S
     "Workshop API-key inputs do not share the same left edge as the other Chinese translation-setting inputs.");
 Check(apiKeyRows.Contains("36f, 34f, CheatMenuStyle.SurfaceHover, 17", StringComparison.Ordinal),
     "Workshop API-key alignment changed the add-button geometry or style.");
+string workshopValuesBody = ReadMethodBody(translationToolsView, "private void RefreshWorkshopLocalizationPageValues()");
+Check(workshopValuesBody.Contains("string arg = PluginLocalization.Translate(progress.State switch", StringComparison.Ordinal),
+    "Workshop localization state capture groups are not translated before composing the localized sentence.");
+Check(workshopValuesBody.Contains("PluginLocalization.Translate(workshopLocalization.ApiConfigured ? \"已配置\" : \"未配置\")", StringComparison.Ordinal),
+    "Workshop API configuration capture group is not translated before composing the localized sentence.");
+Check(workshopValuesBody.Contains("PluginLocalization.Translate(\"未填写\")", StringComparison.Ordinal),
+    "An empty Workshop model name can leak a Chinese capture-group value into the English UI.");
 string createToolsPageView = ReadMethodBody(toolsShell, "private UiPageView<ToolsTab> CreateToolsPageView(");
 Check(createToolsPageView.Contains("tab == ToolsTab.Translation", StringComparison.Ordinal) &&
       createToolsPageView.Contains("CreateShortcutScroll", StringComparison.Ordinal) &&
@@ -613,9 +1061,45 @@ Check(onOpened.Contains("RefreshWindowGeometry", StringComparison.Ordinal), "Reo
 string buildTabs = ReadMethodBody(overlay, "private void BuildTabs(Transform parent)");
 Check(buildTabs.Contains("ScrollRect", StringComparison.Ordinal) && buildTabs.Contains("RectMask2D", StringComparison.Ordinal),
     "Primary navigation is not horizontally scrollable on narrow windows.");
-Check(buildTabs.Contains("contentLayout.minWidth = PreferredWindowWidth - 36f", StringComparison.Ordinal) &&
-      buildTabs.Contains("layout.childAlignment = TextAnchor.MiddleCenter", StringComparison.Ordinal),
-    "Primary navigation buttons are not centered within the preferred-width viewport.");
+Check(buildTabs.Contains("VerticalLayoutGroup", StringComparison.Ordinal) &&
+      buildTabs.Contains("HorizontalLayoutGroup", StringComparison.Ordinal),
+    "Primary navigation does not provide both wide rail and narrow row layouts.");
+string refreshShellLayout = ReadMethodBody(overlay, "private void RefreshShellLayout()");
+Check(refreshShellLayout.Contains("_panel.rect.width >= 1040f", StringComparison.Ordinal) &&
+      refreshShellLayout.Contains("preferredWidth = CheatMenuStyle.MainNavigationWidth", StringComparison.Ordinal) &&
+      refreshShellLayout.Contains("_navigationScroll.horizontal = true", StringComparison.Ordinal) &&
+      refreshShellLayout.Contains("_navigationScroll.vertical = true", StringComparison.Ordinal),
+    "Primary navigation does not switch between the 168px wide rail and narrow horizontal scroll row.");
+string overlaySceneChanged = ReadMethodBody(overlay, "internal void HandleSceneChanged()");
+string rebuildShellVisualTree = ReadMethodBody(overlay, "private void RebuildShellVisualTree(bool reopen)");
+Check(overlaySceneChanged.Contains("RebuildShellVisualTree", StringComparison.Ordinal) &&
+      overlaySceneChanged.Contains("RebuildInfiniteStorageVisualTree", StringComparison.Ordinal) &&
+      rebuildShellVisualTree.Contains("_fluentHandles.Clear()", StringComparison.Ordinal),
+    "Scene changes do not retire and rebuild all control-handle registries.");
+Check(rebuildShellVisualTree.Contains("_pageViewHost?.DetachForAncestorDestroy()", StringComparison.Ordinal) &&
+      rebuildShellVisualTree.Contains("_toolsPageViewHost?.DetachForAncestorDestroy()", StringComparison.Ordinal) &&
+      !rebuildShellVisualTree.Contains("_pageViewHost?.Dispose()", StringComparison.Ordinal) &&
+      !rebuildShellVisualTree.Contains("_toolsPageViewHost?.Dispose()", StringComparison.Ordinal) &&
+      rebuildShellVisualTree.Split("QueueForDestroy(", StringSplitOptions.None).Length - 1 == 1 &&
+      rebuildShellVisualTree.Contains("QueueForDestroy(root)", StringComparison.Ordinal),
+    "Whole-shell rebuild queues nested page/tools roots in addition to the owning window root.");
+string rebuildForLanguageChange = ReadMethodBody(overlay, "private void RebuildForLanguageChange(bool persisted)");
+string rebuildVisualTrees = ReadMethodBody(overlay, "private void RebuildVisualTreesPreservingVisibility()");
+Check(rebuildForLanguageChange.Contains("RebuildVisualTreesPreservingVisibility()", StringComparison.Ordinal) &&
+      rebuildVisualTrees.Contains("reopenInfiniteStorage", StringComparison.Ordinal) &&
+      rebuildVisualTrees.Contains("RebuildInfiniteStorageVisualTree(reopenInfiniteStorage)", StringComparison.Ordinal),
+    "Language/font changes do not rebuild an existing infinite-storage shell while preserving its visibility.");
+string rebuildInfiniteStorageVisualTree = ReadMethodBody(overlay, "private void RebuildInfiniteStorageVisualTree(bool reopen)");
+string restoreSelectionAfterRebuild = ReadMethodBody(overlay,
+    "private static void RestoreSelectionAfterRebuild(bool replacePluginSelection, bool reopen, GameObject preferredSelection, GameObject rebuiltRoot)");
+Check(rebuildShellVisualTree.Contains("SelectionBelongsToRoot", StringComparison.Ordinal) &&
+      rebuildShellVisualTree.Contains("_tabButtons.TryGetValue(_activeTab", StringComparison.Ordinal) &&
+      rebuildShellVisualTree.Contains("RestoreSelectionAfterRebuild", StringComparison.Ordinal) &&
+      rebuildInfiniteStorageVisualTree.Contains("SelectionBelongsToRoot", StringComparison.Ordinal) &&
+      rebuildInfiniteStorageVisualTree.Contains("RestoreSelectionAfterRebuild", StringComparison.Ordinal) &&
+      restoreSelectionAfterRebuild.Contains("if (!replacePluginSelection || EventSystem.current == null)", StringComparison.Ordinal) &&
+      restoreSelectionAfterRebuild.Contains("SetSelectedGameObject(null)", StringComparison.Ordinal),
+    "Visual-tree rebuilds leave plugin-owned focus on inactive objects or overwrite native selection.");
 Check(!overlay.Contains("ShowToolsTab(_activeToolsTab, invalidate: true)", StringComparison.Ordinal),
     "Tools callbacks still invalidate and rebuild the complete active Tools view.");
 string autoPickupPanel = ReadMethodBody(overlay, "private void PopulateAutoPickupPanel()");
@@ -625,10 +1109,19 @@ string pageViewHost = Read(Path.Combine(sourceRoot, "UI", "CheatMenuPageViewHost
 string toolsViewHost = Read(Path.Combine(sourceRoot, "UI", "CheatMenuToolsPageViewHost.cs"));
 string activePageViewHost = Read(Path.Combine(sourceRoot, "UI", "ActivePageViewHost.cs"));
 string uiPageView = Read(Path.Combine(sourceRoot, "UI", "UiPageView.cs"));
+Check(createToolsPageView.IndexOf("_fluentHandles.RegisterScope(panel)", StringComparison.Ordinal) >= 0 &&
+      createToolsPageView.IndexOf("_fluentHandles.RegisterScope(panel)", StringComparison.Ordinal) <
+      createToolsPageView.IndexOf("BuildActiveToolsPageContent", StringComparison.Ordinal),
+    "Tools child-page handles are not scoped before controls are built.");
+Check(queueForDestroy.Contains("_fluentHandles.DisposeSubtree(target)", StringComparison.Ordinal),
+    "Queued Tools/page subtree destruction does not immediately dispose its handle scope.");
 Check(activePageViewHost.Contains("!invalidate && _activeView?.Root != null && _activePage.HasValue", StringComparison.Ordinal),
     "Shared page View host ignores its invalidation contract.");
 Check(activePageViewHost.Contains("_activeView.Dispose()", StringComparison.Ordinal),
     "Shared page View host does not delegate subtree teardown to the View.");
+Check(activePageViewHost.Contains("internal void DetachForAncestorDestroy()", StringComparison.Ordinal) &&
+      uiPageView.Contains("internal void DetachForAncestorDestroy()", StringComparison.Ordinal),
+    "Page hosts have no non-destroying detach path for ancestor-owned shell teardown.");
 string activatePageView = ReadMethodBody(activePageViewHost, "internal GameObject Activate(TPage page, bool invalidate)");
 Check(activatePageView.IndexOf("DestroyActiveView()", StringComparison.Ordinal) >= 0 &&
       activatePageView.IndexOf("DestroyActiveView()", StringComparison.Ordinal) <
@@ -711,20 +1204,145 @@ Check(fontPickerBody.Contains("fontOption.DisplayName", StringComparison.Ordinal
 Check(fontPickerBody.Contains("CreateShortcutScroll(listPanel.transform)", StringComparison.Ordinal) &&
       !fontPickerBody.Contains("CreateScroll(listPanel.transform)", StringComparison.Ordinal),
     "The font picker still uses the stencil-mask scroll path that creates rows but clips every row from view.");
-string sharedScrollFactory = ReadMethodBody(modalViews, "private static RectTransform CreateShortcutScroll(Transform parent)");
+string sharedScrollFactory = ReadMethodBody(modalViews, "private RectTransform CreateShortcutScroll(Transform parent, bool styleSurface = true)");
 Check(sharedScrollFactory.Contains("typeof(RectMask2D)", StringComparison.Ordinal) &&
       !sharedScrollFactory.Contains("typeof(Mask)", StringComparison.Ordinal),
     "The shared modal list viewport does not use deterministic RectMask2D clipping.");
+string applyFontFamily = ReadMethodBody(modalViews, "private void ApplyFontFamily(string fontFamily, string displayName)");
+Check(applyFontFamily.Contains("RebuildVisualTreesPreservingVisibility()", StringComparison.Ordinal) &&
+      !applyFontFamily.Contains("RebuildForLanguageChange", StringComparison.Ordinal) &&
+      !applyFontFamily.Contains("LanguageChangedMessage", StringComparison.Ordinal),
+    "Font changes either skip visual-tree rebuilding or emit a duplicate language-change notification.");
+int sliderCreationCount = overlay.Split("typeof(Slider)", StringSplitOptions.None).Length - 1;
+int sliderAdapterCount = overlay.Split("_fluentControls.AdaptSlider(", StringSplitOptions.None).Length - 1;
+Check(sliderCreationCount > 0 && sliderCreationCount == sliderAdapterCount,
+    "Every Slider creation point must route callbacks and lifetime through LegacyFluentControlAdapter.");
+string legacyFluentAdapterSource = Read(Path.Combine(sourceRoot, "UI", "LegacyFluentControlAdapter.cs"));
+string adaptSliderBody = ReadMethodBody(legacyFluentAdapterSource, "internal LegacyFluentControlHandle AdaptSlider(");
+Check(adaptSliderBody.Contains("root.GetComponents<Outline>()", StringComparison.Ordinal) &&
+      adaptSliderBody.Contains("outline.enabled = false", StringComparison.Ordinal),
+    "Fluent sliders do not disable the legacy root Outline before applying the semantic border.");
+string worldViewSource = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.WorldView.cs"));
+string buildOtherTab = ReadMethodBody(worldViewSource, "private void BuildOtherTab()");
+string createWorldTimeRing = ReadMethodBody(overlay, "private LegacyFluentTimeRingControl CreateWorldTimeRing(");
+string refreshOtherTime = ReadMethodBody(overlay, "private void RefreshOtherTime()");
+Check(buildOtherTab.Contains("_timeRing = CreateWorldTimeRing", StringComparison.Ordinal) &&
+      buildOtherTab.Contains("const float primaryCardHeight = 460f", StringComparison.Ordinal) &&
+      !buildOtherTab.Contains("CreateTimeSlider", StringComparison.Ordinal) &&
+      !buildOtherTab.Contains("_timeSlider", StringComparison.Ordinal),
+    "The Other/Time card still uses the linear Slider instead of the control-library clock.");
+Check(createWorldTimeRing.Contains("LegacyFluentTimeRingGraphic", StringComparison.Ordinal) &&
+      createWorldTimeRing.Contains("Step = 0.25f", StringComparison.Ordinal) &&
+      createWorldTimeRing.Contains("WorldTimeClockMapping.GameNormalizedToClockHours(normalized)", StringComparison.Ordinal) &&
+      createWorldTimeRing.Contains("FormatWorldTime", StringComparison.Ordinal) &&
+      createWorldTimeRing.Contains("CreateWorldTimeRingHourLabels", StringComparison.Ordinal) &&
+      createWorldTimeRing.Contains("_fluentControls.AdaptTimeRing", StringComparison.Ordinal) &&
+      createWorldTimeRing.Contains("PluginLanguage.English", StringComparison.Ordinal),
+    "The world-time clock is missing its upstream graphic, 15-minute step, managed lifetime, or bilingual labels.");
+string createWorldTimeRingHourLabels = ReadMethodBody(overlay, "private void CreateWorldTimeRingHourLabels(Transform parent)");
+Check(createWorldTimeRingHourLabels.Contains("for (int hour = 1; hour <= 12; hour++)", StringComparison.Ordinal) &&
+      createWorldTimeRingHourLabels.Contains("hour % 12 * 30f * Mathf.Deg2Rad", StringComparison.Ordinal) &&
+      createWorldTimeRingHourLabels.Contains("Mathf.Sin(angle) * labelRadius", StringComparison.Ordinal) &&
+      createWorldTimeRingHourLabels.Contains("Mathf.Cos(angle) * labelRadius", StringComparison.Ordinal) &&
+      createWorldTimeRingHourLabels.Contains("$\"Hour{hour:00}\"", StringComparison.Ordinal) &&
+      createWorldTimeRingHourLabels.Contains("hour.ToString()", StringComparison.Ordinal),
+    "The twelve-hour face does not place all numbers 1-12 clockwise around one dial.");
+string timeRingGraphicSource = Read(Path.Combine(sourceRoot, "UI", "ControlLibrary", "Runtime", "LegacyFluentHudGraphics.cs"));
+foreach (string dragSignature in new[]
+{
+    "public void OnPointerDown(PointerEventData eventData)",
+    "public void OnBeginDrag(PointerEventData eventData)",
+    "public void OnDrag(PointerEventData eventData)",
+    "public void OnEndDrag(PointerEventData eventData)",
+    "public void OnPointerUp(PointerEventData eventData)"
+})
+{
+    Check(!ReadMethodBody(timeRingGraphicSource, dragSignature).Contains("eventData.Use()", StringComparison.Ordinal),
+        "Time-ring drag lifecycle consumes Glazier pointer state before it can retain the drag target: " + dragSignature);
+}
+Check(ReadMethodBody(timeRingGraphicSource, "public void OnScroll(PointerEventData eventData)")
+        .Contains("eventData.Use()", StringComparison.Ordinal),
+    "Time-ring wheel input should remain consumed instead of scrolling the parent page.");
+Check(timeRingGraphicSource.Contains("_dragAccumulator.Continue(angle, _step)", StringComparison.Ordinal) &&
+      !timeRingGraphicSource.Contains("Mathf.Round((_time + deltaHours) / _step) * _step", StringComparison.Ordinal),
+    "Time-ring drag still rounds each tiny pointer delta independently instead of accumulating sub-step motion.");
+Check(refreshOtherTime.Contains("!_timeRing.IsInteracting", StringComparison.Ordinal) &&
+      refreshOtherTime.Contains("!_timeApplyDebouncer.HasPending", StringComparison.Ordinal) &&
+      refreshOtherTime.Contains("WorldTimeClockMapping.GameNormalizedToClockHours(num2)", StringComparison.Ordinal),
+    "Live world-time refresh can overwrite the clock while a drag/debounced apply is active.");
+string shortcutScrollbarBody = ReadMethodBody(modalViews, "private void AddShortcutScrollbar(ScrollRect scrollRect)");
+Check(shortcutScrollbarBody.Split("_fluentControls.StyleSurface", StringSplitOptions.None).Length - 1 == 2 &&
+      shortcutScrollbarBody.Contains("Selectable.Transition.None", StringComparison.Ordinal),
+    "Shared modal/Workshop scrollbars do not use semantic track and handle surfaces.");
+string ensureShellBody = ReadMethodBody(overlay, "private void EnsureShell()");
+string createPageHostBody = ReadMethodBody(overlay, "private GameObject CreatePageHost(MenuTab tab)");
+Check(ensureShellBody.Contains("CreateObject(\"PageRegion\", _shellBody.transform)", StringComparison.Ordinal) &&
+      !ensureShellBody.Contains("StyleSurface(_pageRegion", StringComparison.Ordinal) &&
+      createPageHostBody.Contains("StyleSurface(host", StringComparison.Ordinal),
+    "Main content uses nested Fluent surfaces instead of one page-host surface.");
+string createButtonBody = ReadMethodBody(overlay, "private Button CreateButton(Transform parent");
+string createRowBody = ReadMethodBody(overlay, "private GameObject CreateRow(Transform parent, float height, float spacing)");
+string addVerticalLayoutBody = ReadMethodBody(overlay, "private VerticalLayoutGroup AddVerticalLayout(GameObject target, float spacing, RectOffset padding)");
+string createTimeSliderBody = ReadMethodBody(overlay, "private Slider CreateTimeSlider(Transform parent, float normalized, Action<float> changed)");
+string createColorSliderBody = ReadMethodBody(overlay, "private Slider CreateColorChannelSlider(Transform parent, float value, Color fillColor, Action<int> changed, out Text valueText)");
+Check(createButtonBody.Contains("NormalizeControlHeight(height)", StringComparison.Ordinal) &&
+      createRowBody.Contains("NormalizeControlHeight(height)", StringComparison.Ordinal) &&
+      createRowBody.Contains("NormalizeSpacing(spacing)", StringComparison.Ordinal) &&
+      addVerticalLayoutBody.Contains("NormalizePadding(padding)", StringComparison.Ordinal) &&
+      addVerticalLayoutBody.Contains("NormalizeSpacing(spacing)", StringComparison.Ordinal) &&
+      createTimeSliderBody.Contains("Theme.ControlCompact", StringComparison.Ordinal) &&
+      createColorSliderBody.Contains("Theme.ControlCompact", StringComparison.Ordinal),
+    "Recurring controls bypass the 34/40/44 height or semantic spacing token gates.");
+HashSet<double> allowedSpacingTokens = new() { 0d, 4d, 8d, 12d, 16d, 24d, 32d };
+string uiTokenSource = string.Join("\n", Directory.EnumerateFiles(Path.Combine(sourceRoot, "UI"), "*.cs", SearchOption.AllDirectories).Select(Read));
+foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+             uiTokenSource, @"\.spacing\s*=\s*(\d+(?:\.\d+)?)f"))
+{
+    double value = double.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+    Check(allowedSpacingTokens.Contains(value), "A direct layout spacing bypasses the 4/8/12/16/24/32 token set: " + value);
+}
+foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+             uiTokenSource, @"new RectOffset\(([0-9,\s]+)\)"))
+{
+    foreach (string part in match.Groups[1].Value.Split(','))
+    {
+        double value = double.Parse(part.Trim(), System.Globalization.CultureInfo.InvariantCulture);
+        Check(allowedSpacingTokens.Contains(value), "A direct padding value bypasses the spacing token set: " + value);
+    }
+}
+string uiSourceDirectory = Path.Combine(sourceRoot, "UI");
+foreach (string uiFile in Directory.EnumerateFiles(uiSourceDirectory, "*.cs", SearchOption.AllDirectories))
+{
+    string relativeUiFile = Path.GetRelativePath(uiSourceDirectory, uiFile).Replace('\\', '/');
+    if (relativeUiFile.Equals("LegacyFluentControlAdapter.cs", StringComparison.Ordinal) ||
+        relativeUiFile.Equals("UiSearchInputController.cs", StringComparison.Ordinal) ||
+        relativeUiFile.StartsWith("ControlLibrary/", StringComparison.Ordinal))
+        continue;
+    Check(!Read(uiFile).Contains(".AddListener(", StringComparison.Ordinal),
+        "UI listener bypasses the disposable adapter/controller lifetime: " + relativeUiFile);
+}
+string trackInputEndEdit = ReadMethodBody(legacyFluentAdapterSource,
+    "internal void TrackInputEndEdit(GameObject root, InputField input, Action<string> changed)");
+Check(trackInputEndEdit.Contains("input.onEndEdit.AddListener(listener)", StringComparison.Ordinal) &&
+      trackInputEndEdit.Contains("input.onEndEdit.RemoveListener(listener)", StringComparison.Ordinal) &&
+      trackInputEndEdit.Contains("_registry.Track(root, handle)", StringComparison.Ordinal),
+    "Additional InputField end-edit subscriptions are not retired through a registered Handle.");
 Check(!Directory.EnumerateFiles(sourceRoot, "*.otf", SearchOption.AllDirectories).Any(),
     "A heavyweight OTF font was bundled even though the runtime must use the installed Windows font.");
-Check(minimapHud.Contains("CreateStarSprite(32", StringComparison.Ordinal) &&
-      minimapHud.Contains("CreateHeightIndicatorSprite(16", StringComparison.Ordinal) &&
-      minimapMarkerPool.Contains("slot.Image.sprite = itemStarSprite", StringComparison.Ordinal) &&
-      minimapMarkerPool.Contains("slot.HeightIndicator.sprite = heightIndicatorSprite", StringComparison.Ordinal) &&
-      !minimapMarkerPool.Contains("UiText", StringComparison.Ordinal) &&
-      !minimapMarkerPool.Contains("Glyph", StringComparison.Ordinal) &&
-      !fontProvider.Contains("MinimapArrowProbeGlyphs", StringComparison.Ordinal),
-    "The minimap star or floor indicator still depends on font rendering instead of pooled Image sprites.");
+Check(!minimapHud.Contains("CreateStarSprite", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("MinimapStarGraphic ItemOutline", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("MinimapStarGraphic ItemFill", StringComparison.Ordinal) &&
+	  minimapMarkerPool.Contains("slot.Image.sprite = marker.Kind switch", StringComparison.Ordinal) &&
+	  !minimapHud.Contains("CreateHeightIndicatorSprite", StringComparison.Ordinal) &&
+	  !minimapMarkerPool.Contains("HeightIndicator", StringComparison.Ordinal) &&
+	  minimapFeature.Contains("if (indicator != MinimapHeightIndicator.None) color.a *= 0.65f", StringComparison.Ordinal) &&
+	  minimapFeature.Contains("color.a *= 0.55f", StringComparison.Ordinal) &&
+	  minimapToolsView.Contains("不同楼层的标记会以淡化颜色区分", StringComparison.Ordinal) &&
+	  !minimapToolsView.Contains("淡化的三角图形", StringComparison.Ordinal) &&
+	  !minimapMarkerPool.Contains("UiText", StringComparison.Ordinal) &&
+	  !minimapMarkerPool.Contains("Glyph", StringComparison.Ordinal) &&
+	  !fontProvider.Contains("MinimapArrowProbeGlyphs", StringComparison.Ordinal),
+	"The minimap floor arrows returned or the existing cross-floor color dimming was removed.");
 Check(minimapHud.Contains("MinimapDisplayText.BackgroundState(state)", StringComparison.Ordinal) &&
       minimapToolsView.Contains("MinimapDisplayText.Shape(settings.Shape)", StringComparison.Ordinal) &&
       minimapToolsView.Contains("MinimapDisplayText.BackgroundMode(settings.BackgroundMode)", StringComparison.Ordinal) &&
@@ -847,10 +1465,10 @@ internal static class SystemFontProbe
 
     internal static void AssertGlyphs(string familyName, string expectedFaceToken, string requiredText)
     {
-		IntPtr font = CreateFontW(-24, 0, 0, 0, 400, 0, 0, 0, DefaultCharset,
-			OutDefaultPrecision, ClipDefaultPrecision, DefaultQuality, DefaultPitchAndFamily, familyName);
-		if (font == IntPtr.Zero)
-			throw new InvalidOperationException($"Windows could not create {familyName}.");
+        IntPtr font = CreateFontW(-24, 0, 0, 0, 400, 0, 0, 0, DefaultCharset,
+            OutDefaultPrecision, ClipDefaultPrecision, DefaultQuality, DefaultPitchAndFamily, familyName);
+        if (font == IntPtr.Zero)
+            throw new InvalidOperationException($"Windows could not create {familyName}.");
 
         IntPtr dc = CreateCompatibleDC(IntPtr.Zero);
         if (dc == IntPtr.Zero)
@@ -863,17 +1481,17 @@ internal static class SystemFontProbe
         try
         {
             StringBuilder actualFace = new(128);
-			if (GetTextFaceW(dc, actualFace.Capacity, actualFace) <= 0 ||
-				actualFace.ToString().IndexOf(expectedFaceToken, StringComparison.OrdinalIgnoreCase) < 0)
-				throw new InvalidOperationException($"{familyName} was substituted by an unrelated font: {actualFace}.");
+            if (GetTextFaceW(dc, actualFace.Capacity, actualFace) <= 0 ||
+                actualFace.ToString().IndexOf(expectedFaceToken, StringComparison.OrdinalIgnoreCase) < 0)
+                throw new InvalidOperationException($"{familyName} was substituted by an unrelated font: {actualFace}.");
 
             ushort[] glyphs = new ushort[requiredText.Length];
             if (GetGlyphIndicesW(dc, requiredText, requiredText.Length, glyphs, MarkMissingGlyphs) == uint.MaxValue)
-				throw new InvalidOperationException($"Windows failed to query {familyName} glyph indices.");
+                throw new InvalidOperationException($"Windows failed to query {familyName} glyph indices.");
 
             int missingIndex = Array.IndexOf(glyphs, ushort.MaxValue);
             if (missingIndex >= 0)
-				throw new InvalidOperationException($"{familyName} is missing U+{(int)requiredText[missingIndex]:X4}.");
+                throw new InvalidOperationException($"{familyName} is missing U+{(int)requiredText[missingIndex]:X4}.");
         }
         finally
         {

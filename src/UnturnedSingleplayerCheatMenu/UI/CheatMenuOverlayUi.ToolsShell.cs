@@ -25,7 +25,7 @@ internal sealed partial class CheatMenuOverlayUi
 		_toolsTabButtons.Clear();
 		_toolsPageViewHost?.Dispose();
 		_toolsPageViewHost = new CheatMenuToolsPageViewHost(CreateToolsPageView);
-		AddVerticalLayout(_contentHost, 8f, new RectOffset(10, 10, 9, 9));
+		AddVerticalLayout(_contentHost, CheatMenuStyle.Theme.Space2, new RectOffset(12, 12, 8, 8));
 		GameObject gameObject = CreateRow(_contentHost.transform, 38f, 7f);
 		AddToolsTab(gameObject.transform, ToolsTab.Interaction, "交互");
 		AddToolsTab(gameObject.transform, ToolsTab.Inventory, "背包整理");
@@ -60,8 +60,11 @@ internal sealed partial class CheatMenuOverlayUi
 	private UiPageView<ToolsTab> CreateToolsPageView(ToolsTab tab)
 	{
 		GameObject panel = CreateObject(tab + "ToolsPageView", _toolsPageHost.transform, typeof(Image));
-		panel.GetComponent<Image>().color = CheatMenuStyle.Surface;
-		AddVerticalLayout(panel, 10f, new RectOffset(18, 18, 16, 16));
+		Image panelImage = panel.GetComponent<Image>();
+		panelImage.color = CheatMenuStyle.Surface;
+		_fluentHandles.RegisterScope(panel);
+		_fluentControls.StyleSurface(panel, panelImage, ControlLibrary.Core.FluentSurfaceRole.Surface, CheatMenuStyle.Theme.RadiusControl);
+		AddVerticalLayout(panel, CheatMenuStyle.Theme.Space3, new RectOffset(16, 16, 16, 16));
 		Stretch(panel.GetComponent<RectTransform>());
 		if (tab == ToolsTab.Translation)
 		{
@@ -70,7 +73,7 @@ internal sealed partial class CheatMenuOverlayUi
 			_workshopLocalizationScrollRect = _workshopLocalizationScrollContent.GetComponentInParent<ScrollRect>();
 			_workshopLocalizationScrollRect.scrollSensitivity = 48f;
 			AddShortcutScrollbar(_workshopLocalizationScrollRect);
-			AddShortcutScrollLayout(_workshopLocalizationScrollContent.gameObject, 10f, new RectOffset(0, 18, 0, 0));
+			AddShortcutScrollLayout(_workshopLocalizationScrollContent.gameObject, CheatMenuStyle.Theme.Space3, new RectOffset(0, 16, 0, 0));
 			_toolsPageContentHost = _workshopLocalizationScrollContent.gameObject;
 			BuildActiveToolsPageContent(tab, _workshopLocalizationScrollContent);
 			RebuildWorkshopLocalizationScrollLayout(resetToTop: true);
@@ -88,7 +91,7 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		CreateLabel(panel.transform, GetToolsTabTitle(tab), 19, CheatMenuStyle.Text);
 		_toolsPageContentHost = CreateObject("ToolsPageContentHost", panel.transform);
-		AddVerticalLayout(_toolsPageContentHost, 10f, new RectOffset(0, 0, 0, 0));
+		AddVerticalLayout(_toolsPageContentHost, CheatMenuStyle.Theme.Space3, new RectOffset(0, 0, 0, 0));
 		SetLayout(_toolsPageContentHost, -1f, -1f, 1f, 1f);
 		BuildActiveToolsPageContent(tab, _toolsPageContentHost.transform);
 	}
@@ -133,6 +136,7 @@ internal sealed partial class CheatMenuOverlayUi
 		HideInventoryScopeDrawer();
 		HideWorkshopProtocolDrawer();
 		HideAutoPickupBlacklistPicker();
+		HideAutoPickupRarityPicker();
 		ClearResultHost(_toolsPageContentHost);
 		BuildActiveToolsPageContent(_activeToolsTab, _toolsPageContentHost.transform);
 		RebuildWorkshopLocalizationScrollLayout();
@@ -157,6 +161,7 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			ShowToolsTab(tab, invalidate: false);
 		}, string.Format(PluginLocalization.Translate("切换到“{0}”工具页面。"), PluginLocalization.Translate(label)), 0f, 40f, (_activeToolsTab == tab) ? CheatMenuStyle.Accent : CheatMenuStyle.Surface, 14);
+		_fluentControls.MarkNavigation(button);
 		_toolsTabButtons[tab] = button;
 		SetLayout(button.gameObject, -1f, -1f, 1f);
 	}

@@ -23,7 +23,7 @@ internal sealed partial class CheatMenuOverlayUi
 	private void BuildCharacterTab()
 	{
 		Transform transform = _contentHost.transform;
-		AddVerticalLayout(_contentHost, 9f, new RectOffset(12, 12, 10, 10)).childForceExpandHeight = false;
+		AddVerticalLayout(_contentHost, CheatMenuStyle.Theme.Space3, new RectOffset(12, 12, 8, 8)).childForceExpandHeight = false;
 		CharacterPageSnapshot snapshot = _characterPresenter.CaptureSnapshot();
 		if (!snapshot.IsReady)
 		{
@@ -32,7 +32,7 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 		CreateSection(transform, "生存状态");
 		CreateSummaryPanel(transform, $"生命 {snapshot.Health}/100    饱食 {snapshot.Food}/100    水分 {snapshot.Water}/100    免疫 {snapshot.Virus}/100    体力 {snapshot.Stamina}/100    氧气 {snapshot.Oxygen}/100");
-		GameObject gameObject = CreateRow(transform, 42f, 8f);
+		GameObject gameObject = CreateRow(transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateToggleAction(gameObject.transform, "无敌模式", snapshot.GodModeEnabled, delegate(bool value)
 		{
 			_characterPresenter.SetGodMode(value);
@@ -44,37 +44,44 @@ internal sealed partial class CheatMenuOverlayUi
 			SetStatus(value ? "无限生存状态已开启。" : "无限生存状态已关闭。");
 		});
 		CreateLabel(transform, "设置指定数值（0–100；生命最低 1）", 12, CheatMenuStyle.Muted);
-		GameObject gameObject2 = CreateRow(transform, 36f, 6f);
-		CreateLabeledInput(gameObject2.transform, "生命", _healthTarget, delegate(string value)
+		GameObject statGrid = CreateObject("CharacterStatTwoColumnGrid", transform);
+		AddVerticalLayout(statGrid, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
+		SetLayout(statGrid, -1f, CheatMenuStyle.Theme.ControlDefault * 3f + CheatMenuStyle.Theme.Space2 * 2f, 1f, 0f);
+		GameObject statRow1 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space3);
+		CreateLabeledInput(statRow1.transform, "生命", _healthTarget, delegate(string value)
 		{
 			_healthTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "饱食", _foodTarget, delegate(string value)
+		}, width: 0f);
+		CreateLabeledInput(statRow1.transform, "饱食", _foodTarget, delegate(string value)
 		{
 			_foodTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "水分", _waterTarget, delegate(string value)
+		}, width: 0f);
+		GameObject statRow2 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space3);
+		CreateLabeledInput(statRow2.transform, "水分", _waterTarget, delegate(string value)
 		{
 			_waterTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "免疫", _virusTarget, delegate(string value)
+		}, width: 0f);
+		CreateLabeledInput(statRow2.transform, "免疫", _virusTarget, delegate(string value)
 		{
 			_virusTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "体力", _staminaTarget, delegate(string value)
+		}, width: 0f);
+		GameObject statRow3 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space3);
+		CreateLabeledInput(statRow3.transform, "体力", _staminaTarget, delegate(string value)
 		{
 			_staminaTarget = value;
-		});
-		CreateLabeledInput(gameObject2.transform, "氧气", _oxygenTarget, delegate(string value)
+		}, width: 0f);
+		CreateLabeledInput(statRow3.transform, "氧气", _oxygenTarget, delegate(string value)
 		{
 			_oxygenTarget = value;
-		});
-		CreateButton(gameObject2.transform, "应用", delegate
+		}, width: 0f);
+		GameObject applyRow = CreateRow(transform, CheatMenuStyle.Theme.ControlCompact, CheatMenuStyle.Theme.Space2);
+		CreateFlexibleSpacer(applyRow.transform);
+		CreateButton(applyRow.transform, "应用", delegate
 		{
 			bool flag = _characterPresenter.SetLifeStats((byte)ParseClamped(_healthTarget, 1, 100, 100), (byte)ParseClamped(_foodTarget, 0, 100, 100), (byte)ParseClamped(_waterTarget, 0, 100, 100), (byte)ParseClamped(_virusTarget, 0, 100, 100), (byte)ParseClamped(_staminaTarget, 0, 100, 100), (byte)ParseClamped(_oxygenTarget, 0, 100, 100));
 			SetStatus(flag ? "角色生存数值已设置。" : "设置失败。", 3f, flag ? StatusKind.Success : StatusKind.Error);
-		}, "将六个输入框中的数值写入当前角色的生命与生存状态。", 76f, 34f, CheatMenuStyle.Accent);
-		GameObject gameObject3 = CreateRow(transform, 42f, 8f);
+		}, "将六个输入框中的数值写入当前角色的生命与生存状态。", 120f, CheatMenuStyle.Theme.ControlCompact, CheatMenuStyle.Accent);
+		GameObject gameObject3 = CreateRow(transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateAction(gameObject3.transform, "全部恢复", delegate
 		{
 			SetStatus(_characterPresenter.RestoreEverything() ? "角色状态已全部恢复。" : "恢复失败。");
@@ -89,7 +96,7 @@ internal sealed partial class CheatMenuOverlayUi
 		}, "停止流血并治愈骨折，不改动其他角色数值。");
 		CreateSection(transform, "经验、声望与技能");
 		CreateLabel(transform, $"经验 {snapshot.Experience:N0}    声望 {snapshot.Reputation:N0}", 14);
-		GameObject gameObject4 = CreateRow(transform, 38f, 8f);
+		GameObject gameObject4 = CreateRow(transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateLabeledInput(gameObject4.transform, "经验", _experienceAmount, delegate(string value)
 		{
 			_experienceAmount = value;

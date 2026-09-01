@@ -20,6 +20,11 @@ internal sealed class VirtualStorageTransaction
 		return !_completed && _storage.Add(descriptor).Success;
 	}
 
+	internal bool Add(ItemStorageDescriptor descriptor, long occurrences)
+	{
+		return !_completed && _storage.Add(descriptor, occurrences).Success;
+	}
+
 	internal bool Remove(ItemStorageDescriptor descriptor, long units)
 	{
 		return !_completed && _storage.Remove(descriptor, units);
