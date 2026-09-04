@@ -2,7 +2,7 @@
 
 [中文说明](README.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
-A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `1.995.0`; v1.995 introduces exact-snapshot Infinite Storage with same-DLL crafting/ammo/decomposition adapters, strengthens AutoPickup and inventory-arrange consistency, and adds Legacy uGUI motion, flight-viewmodel, and rich-text compatibility fixes.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `1.995.0`; the only newly added feature in v1.995 is Legacy uGUI motion. The remaining work replaces the Infinite Storage core with the Snapshot Kernel and fixes storage, AutoPickup, inventory hotkeys, flight-viewmodel, rich-text, and UI-lifecycle issues.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 

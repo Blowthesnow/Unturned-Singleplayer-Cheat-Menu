@@ -8,48 +8,39 @@ All notable changes to this project are documented here.
 
 ### Added
 
-- Replaced the never-released Infinite Storage migration design with a Snapshot Kernel built on exact native `{id, amount, quality, state[]}` buckets, checked `long` instance counts, collision-safe versioned keys, runtime-only default templates, and one narrowly proven Farm timestamp canonicalizer.
-- Added strict Snapshot schema 1 persistence under `InfiniteStorageSnapshots/v1`, with atomic primary/backup writes, backup fallback, TOCTOU drift checks, reconciliation markers, process-lifetime path latching, and bounded candidate/backup recovery history.
-- Added independently configurable Crafting, AmmoRefill, and Decomposition adapters inside the existing main DLL. The adapters register through a small runtime port and keep their semantic interpretations outside the Snapshot Core schema.
-- Added runtime-asset-driven item stacking and ammo compatibility models shared by Inventory Arrange and the Snapshot AmmoRefill adapter without per-item ID, name, or Workshop exclusions.
 - Added one stable, frame-driven Legacy uGUI motion driver for selectable colors, switches, modal and popup transitions, tooltips, and toast enter/exit/reflow while preserving synchronous high-frequency and native-handoff paths.
-- Added a local-flight viewmodel policy and Harmony patch that suppresses only the native airborne viewmodel tilt for the local player while flight is enabled.
-- Added an item/API living reference, a Roslyn-based external API inventory generator, and a checked-in TSV inventory for the current plugin surface.
-- Added dedicated Snapshot Kernel, Crafting, AmmoRefill, Decomposition, module-registry, runtime-integration, and UI-motion Smoke projects.
 
 ### Changed
 
-- Reworked Infinite Storage into an ItemGroup header layer with expandable exact SnapshotBucket rows, runtime asset metadata, default-template priority, asset-conflict locks, one-time destruction acknowledgement, and registry-driven optional actions.
-- Infinite Storage identity now follows native `Singleplayer_<Characters.selected>`, Steam ID, level, Sync/World root, and character slot 0 through 4. Different slots cannot share a warehouse.
-- AutoPickup now evaluates the requested whitelist state separately from effective matching and coordinates native delivery, Snapshot storage, world-drop removal, fallback, quarantine, and reconciliation from observed evidence.
-- Inventory Arrange now preserves exact amount, quality, state, and capacity semantics; avoids rebuilding a true no-op plan; refreshes native hotkey displays after real rebuilds; and remaps bound items across native drag and swap operations.
-- Refined tooltip timing with a short warm handoff window, animated toast layout collapse, and lifecycle-safe transient cleanup during tab, scene, menu, and UI-root transitions.
-- Replaced the old Infinite Storage project/test entries in the solution with the Snapshot modules and their focused test projects.
+- Replaced the previous unreleased Infinite Storage runtime and persistence design with a Snapshot Kernel that stores exact native `{id, amount, quality, state[]}` buckets and checked `long` instance counts.
+- Moved Infinite Storage to strict Snapshot schema 1 under `InfiniteStorageSnapshots/v1`, with versioned identity keys, collision checks, exact world/player/character-slot validation, atomic primary/backup handling, and reconciliation recovery records.
+- Reconnected the existing Crafting, AmmoRefill, and Decomposition capabilities as independently configurable same-DLL adapters over a small runtime port, keeping their interpretation rules outside the Snapshot Core.
+- Reworked the existing Infinite Storage view around ItemGroup headers and expandable exact SnapshotBucket rows, with runtime asset metadata, default-template priority, asset-conflict locks, and a one-time permanent-destruction warning.
+- Consolidated the existing inventory-arrange and storage ammo paths onto runtime-asset-driven item identity, stacking, compatibility-graph, and allocation rules without per-item ID/name or Workshop exclusions.
+- Replaced the retired Infinite Storage implementation and monolithic Smoke project in the solution with focused Snapshot Kernel, adapter, registry, and single-DLL integration coverage.
 
 ### Fixed
 
-- Prevented `SteamPlayerID == null` from invoking Unturned's null-unsafe overloaded equality inside the Snapshot Runtime. Snapshot Pump is independently isolated so a storage fault cannot abort later HUD updates.
-- Prevented hidden-quality loss and amount/state conflation by making exact native snapshots the only Core storage unit; only proven four-byte Farm timestamps canonicalize.
-- Prevented malformed, duplicate, trailing, wrong-version, comment-bearing, or unknown-field Snapshot JSON from entering an active session.
-- Prevented Snapshot Store, Withdraw, crafting, ammo refill, decomposition, and native compensation failures from leaving unproven in-memory/native state; reconciliation now persists and closes the affected identity.
-- Bound Snapshot saves to the exact primary, backup, candidate, and history versions observed during the transaction, with final marker/SHA revalidation and fail-closed handling for pre- and post-replacement uncertainty.
-- Replaced candidate-history cleanup with a Windows identity-bound handle operation that verifies path, SHA, handle ownership, delete sharing, and filesystem identity before deletion.
-- Expanded native rollback checkpoints to equipment selection, all clothing slots, quick slots 0/1, and carried pages 2-6; crafting rollback bypasses output interception and restores storage before native inventory.
-- Prevented Snapshot page-255 entries from satisfying target-item searches, enforced exact `ItemToIgnore` identity, and rejected over-capacity ammo in every source/target role before planning or mutation.
-- Prevented AutoPickup duplication and item loss across native/Snapshot double failures, legal `amount=0` pickups, sent-request uncertainty, stale or timed-out pending work, scheduler recreation, and reconciliation-marker races.
-- Preserved native AutoPickup diagnostic details byte-for-byte while appending and translating exactly one structured confirmation suffix; callback false/throw/default outcomes retain their most specific final result.
-- Prevented Inventory Arrange from clearing numeric item bindings during no-op, rebuild, native drag, or native swap paths.
-- Prevented local flight from applying the native airborne viewmodel tilt while retaining normal jump and remote-player behavior.
-- Repaired malformed bare `<color>` closing tags in legacy item descriptions without changing already valid rich-text color markup.
-- Prevented UI motion retargeting, destroyed-owner cleanup, modal/popup layer ownership, toggle-state animation, and toast layout transitions from leaving stale handles, focus, raycasts, or visual residue.
-- Removed the never-released migration, provenance, ambiguity, and Claim paths from the product and solution; retired live files are ignored rather than read, moved, deleted, or represented as migrated.
+- Prevented `SteamPlayerID == null` from invoking Unturned's null-unsafe overloaded equality inside the storage runtime; Snapshot Pump is isolated so a storage fault cannot abort later HUD updates.
+- Prevented hidden-quality loss and amount/state conflation by keeping native amount, quality, state, and capacity exact; only the evidence-backed four-byte Farm timestamp is canonicalized.
+- Rejected malformed, duplicate, trailing, wrong-version, comment-bearing, unknown-field, identity-conflicting, or externally changed Snapshot documents instead of activating or overwriting them.
+- Fixed Store All, Withdraw, crafting, ammo refill, and decomposition failure paths so Kernel mutations, persistence, native inventory changes, and compensation either agree or enter a persistent fail-closed reconciliation state.
+- Closed replacement-time and final-verification races across primary, backup, transaction backup, candidate history, reconciliation marker, and process-lifetime path latches while retaining independently recoverable evidence.
+- Made candidate-history cleanup verify Windows file identity, SHA-256, path, handle ownership, sharing, and deletion state before removing a sidecar.
+- Expanded native rollback checkpoints to equipment selection, clothing, quick slots, and carried pages; fixed crafting rollback ordering, page-255 target matching, exact ignored-item matching, and over-capacity ammo rejection.
+- Fixed AutoPickup's native/storage handoff so legal `amount=0` items, sent-request uncertainty, stale/timeout confirmation, double failures, fallback, quarantine, scheduler recreation, and reconciliation races do not duplicate or lose items.
+- Preserved native AutoPickup diagnostic text byte-for-byte while appending and translating exactly one structured confirmation suffix, and retained specific false/throw/default callback outcomes through final accounting.
+- Fixed the existing Inventory Arrange feature so true no-op plans do not rebuild inventory and numeric item bindings survive rebuild, native drag, and native swap paths.
+- Fixed the existing flight feature so local flight suppresses the native airborne viewmodel tilt without changing normal jumps or remote-player animation.
+- Fixed malformed bare `<color>` closing tags in legacy item descriptions without altering valid rich-text color markup.
+- Fixed UI-motion retargeting and teardown so destroyed owners, modal/popup layers, toggle transitions, tooltip handoff, tab/scene/menu closure, and toast reflow do not leave stale handles, focus, raycasts, or visual residue.
+- Removed the retired migration, provenance, ambiguity, and Claim paths; old never-released storage files are ignored rather than read, moved, deleted, or represented as migrated.
 
 ### Documentation
 
-- Replaced the retired migration reference with the Snapshot Kernel living specification, strict schema-1 examples, recovery bundle, deployment checklist, and explicit source/Smoke versus deployment/game-acceptance boundary.
-- Added the current external API inventory and its deterministic refresh tool.
-- Added a source-only multiplayer/BattlEye boundary plan that separates menu readiness, gameplay authorization, true-singleplayer Snapshot identity, dedicated-server behavior, and Workshop translation lifecycle.
-- Updated the UI-motion implementation plan, Chinese/English README version text, Snapshot paths, and reconciliation guidance while retaining `v1.7.0` as the latest formal release asset.
+- Replaced the retired storage-migration reference with the Snapshot Kernel living specification, schema-1 examples, recovery bundle, deployment checklist, and source/Smoke versus deployment/game-acceptance boundary.
+- Added a deterministic Roslyn external-API inventory generator and checked-in inventory for auditing the implementation's dependency surface.
+- Added the source-only multiplayer/BattlEye boundary plan and updated the UI-motion plan, Chinese/English README version text, Snapshot paths, and reconciliation guidance.
 
 ### Verification
 
