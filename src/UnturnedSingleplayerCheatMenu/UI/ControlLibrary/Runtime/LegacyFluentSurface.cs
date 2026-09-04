@@ -19,6 +19,9 @@ internal sealed class LegacyFluentSurface : IDisposable
 		_fill = fill;
 	}
 
+	internal Color CurrentFill { get; private set; }
+	internal Color CurrentBorder { get; private set; }
+
 	internal static LegacyFluentSurface Attach(GameObject host, Color fill, Color border, float radius, float borderThickness = 1f)
 	{
 		if (host == null)
@@ -30,7 +33,8 @@ internal sealed class LegacyFluentSurface : IDisposable
 		GameObject borderObject = borderTransform != null ? borderTransform.gameObject : CreateGraphicObject(BorderName, host.transform);
 		FluentRoundedGraphic borderGraphic = borderObject.GetComponent<FluentRoundedGraphic>();
 		borderGraphic.Radius = radius;
-		borderGraphic.color = border;
+		borderGraphic.color = Color.white;
+		borderGraphic.canvasRenderer.SetColor(border);
 		borderGraphic.raycastTarget = false;
 		borderObject.transform.SetAsFirstSibling();
 
@@ -38,11 +42,16 @@ internal sealed class LegacyFluentSurface : IDisposable
 		GameObject fillObject = fillTransform != null ? fillTransform.gameObject : CreateGraphicObject(FillName, borderObject.transform);
 		FluentRoundedGraphic fillGraphic = fillObject.GetComponent<FluentRoundedGraphic>();
 		fillGraphic.Radius = Mathf.Max(0f, radius - borderThickness);
-		fillGraphic.color = fill;
+		fillGraphic.color = Color.white;
+		fillGraphic.canvasRenderer.SetColor(fill);
 		fillGraphic.raycastTarget = false;
 		SetOffsets(fillObject.GetComponent<RectTransform>(), borderThickness);
 
-		return new LegacyFluentSurface(borderGraphic, fillGraphic);
+		return new LegacyFluentSurface(borderGraphic, fillGraphic)
+		{
+			CurrentFill = fill,
+			CurrentBorder = border
+		};
 	}
 
 	internal void SetColors(Color fill, Color border)
@@ -51,13 +60,15 @@ internal sealed class LegacyFluentSurface : IDisposable
 		{
 			return;
 		}
+		CurrentFill = fill;
+		CurrentBorder = border;
 		if (_fill != null)
 		{
-			_fill.color = fill;
+			_fill.canvasRenderer.SetColor(fill);
 		}
 		if (_border != null)
 		{
-			_border.color = border;
+			_border.canvasRenderer.SetColor(border);
 		}
 	}
 

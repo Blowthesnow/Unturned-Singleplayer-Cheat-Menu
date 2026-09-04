@@ -34,8 +34,11 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			return;
 		}
-		HideAutoPickupBlacklistPicker();
-		HideAutoPickupRarityPicker();
+		RunWithoutTransientMotion(delegate
+		{
+			HideAutoPickupBlacklistPicker();
+			HideAutoPickupRarityPicker();
+		});
 		ClearResultHost(_autoPickupContentHost);
 		PopulateAutoPickupPanel();
 	}
@@ -175,7 +178,13 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateToggleAction(whitelistSummary.transform, "启用白名单", document.Enabled, delegate(bool value)
 		{
 			AutoPickupRuleLoadResult result = _autoPickupPresenter.SetWhitelistEnabled(value);
-			SetStatus(result.Success ? (value ? "白名单已启用；现在只拾取白名单物品。" : "白名单已停用；黑名单仍然生效。") : "保存白名单状态失败：" + result.Error, 4f, result.Success ? StatusKind.Info : StatusKind.Error);
+			string success = !value
+				? "白名单已停用；黑名单仍然生效。"
+				: whitelistCount > 0
+					? "白名单已启用；现在只拾取白名单物品。"
+					: "白名单开关已打开；名单为空，当前仍按黑名单路径拾取，添加至少一项后自动生效。";
+			SetStatus(result.Success ? success : "保存白名单状态失败：" + result.Error,
+				4f, result.Success ? StatusKind.Info : StatusKind.Error);
 			RefreshAutoPickupPanel();
 		});
 		CreateLabel(whitelistSummary.transform, $"当前 {whitelistCount} 条白名单物品。", 12, CheatMenuStyle.Muted, 170f);
@@ -353,9 +362,13 @@ internal sealed partial class CheatMenuOverlayUi
 			Field = ItemFilterRuleField.AssetId,
 			Value = asset.id.ToString(CultureInfo.InvariantCulture)
 		});
-		bool whitelistEnabled = whitelist || document.Enabled;
+		bool whitelistEnabled = document.Enabled;
 		AutoPickupRuleLoadResult result = _autoPickupPresenter.SetRules(whitelistEnabled, whitelistEnabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly, rules);
-		string success = whitelist ? $"已将 {GetItemDisplayName(asset)} 加入白名单。" : $"已将 {GetItemDisplayName(asset)} 加入黑名单。";
+		string success = whitelist
+			? document.Enabled
+				? $"已将 {GetItemDisplayName(asset)} 加入白名单；白名单路径现已生效。"
+				: $"已将 {GetItemDisplayName(asset)} 加入白名单；白名单开关未开启，暂不限制拾取。"
+			: $"已将 {GetItemDisplayName(asset)} 加入黑名单。";
 		string failure = (whitelist ? "保存白名单失败：" : "保存黑名单失败：") + result.Error;
 		SetStatus(result.Success ? success : failure, 4f, result.Success ? StatusKind.Success : StatusKind.Error);
 		if (result.Success)
@@ -408,7 +421,7 @@ internal sealed partial class CheatMenuOverlayUi
 			BuildAutoPickupBlacklistPickerContents();
 			return;
 		}
-		HideHoverExplanation();
+		PrepareModalOpen();
 		_autoPickupBlacklistPickerRoot = CreateObject("AutoPickupBlacklistPicker", _uiRoot.ModalLayer, typeof(Image));
 		_fluentHandles.RegisterScope(_autoPickupBlacklistPickerRoot);
 		_uiRoot.RegisterModal(_autoPickupBlacklistPickerRoot, HideAutoPickupBlacklistPicker);
@@ -457,6 +470,7 @@ internal sealed partial class CheatMenuOverlayUi
 		SetLayout(_autoPickupBlacklistPickerHost, -1f, 560f, 1f, 0f);
 		_autoPickupBlacklistPickerRoot.transform.SetAsLastSibling();
 		BuildAutoPickupBlacklistPickerContents();
+		AnimateModalEnter(_autoPickupBlacklistPickerRoot, popup.transform);
 	}
 
 	private void BuildAutoPickupBlacklistPickerContents()
@@ -515,9 +529,10 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		if (_autoPickupBlacklistPickerRoot != null)
 		{
-			QueueForDestroy(_autoPickupBlacklistPickerRoot);
+			GameObject root = _autoPickupBlacklistPickerRoot;
+			_autoPickupBlacklistPickerRoot = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
-		_autoPickupBlacklistPickerRoot = null;
 		_autoPickupBlacklistPickerHost = null;
 	}
 
@@ -529,7 +544,7 @@ internal sealed partial class CheatMenuOverlayUi
 			_autoPickupRarityPickerRoot.transform.SetAsLastSibling();
 			return;
 		}
-		HideHoverExplanation();
+		PrepareModalOpen();
 		_autoPickupRarityPickerRoot = CreateObject("AutoPickupRarityPicker", _uiRoot.ModalLayer, typeof(Image));
 		_fluentHandles.RegisterScope(_autoPickupRarityPickerRoot);
 		_uiRoot.RegisterModal(_autoPickupRarityPickerRoot, HideAutoPickupRarityPicker);
@@ -572,6 +587,7 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateAutoPickupRarityToggle(row3.transform, "传奇", 4, settings);
 		CreateAutoPickupRarityToggle(row3.transform, "神话", 5, settings);
 		_autoPickupRarityPickerRoot.transform.SetAsLastSibling();
+		AnimateModalEnter(_autoPickupRarityPickerRoot, popup.transform);
 	}
 
 	private void CreateAutoPickupRarityToggle(Transform parent, string label, int rarity, AutoPickupSettings settings)
@@ -588,9 +604,10 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		if (_autoPickupRarityPickerRoot != null)
 		{
-			QueueForDestroy(_autoPickupRarityPickerRoot);
+			GameObject root = _autoPickupRarityPickerRoot;
+			_autoPickupRarityPickerRoot = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
-		_autoPickupRarityPickerRoot = null;
 	}
 
 

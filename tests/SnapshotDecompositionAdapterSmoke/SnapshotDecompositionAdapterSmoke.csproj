@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotContracts.cs" Link="SnapshotContracts.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotKey.cs" Link="SnapshotKey.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotKernel.cs" Link="SnapshotKernel.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotPersistence.cs" Link="SnapshotPersistence.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotTransaction.cs" Link="SnapshotTransaction.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\Adapters\Decomposition\SnapshotDecompositionPlanner.cs" Link="SnapshotDecompositionPlanner.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json" HintPath="..\..\lib\Newtonsoft.Json.dll" Private="true" />
+  </ItemGroup>
+</Project>

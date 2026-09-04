@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Models\AssetHoverDetails.cs" Link="AssetHoverDetails.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\AmmoTooltipText.cs" Link="AmmoTooltipText.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\LegacyRichTextSanitizer.cs" Link="LegacyRichTextSanitizer.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\PageNavigation.cs" Link="PageNavigation.cs" />
   </ItemGroup>
 </Project>

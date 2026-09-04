@@ -6,6 +6,8 @@ using SDG.Unturned;
 using UnityEngine;
 using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Composition;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.Models;
@@ -132,15 +134,17 @@ internal sealed class InfiniteStoragePageSnapshot
 		IsAvailable = feature?.IsAvailable ?? false;
 		Enabled = feature?.Enabled ?? false;
 		PickupPriorityEnabled = feature?.PickupPriorityEnabled ?? false;
-		Entries = feature?.Entries ?? Array.Empty<VirtualStorageEntry>();
-		LegacyAmbiguousEntryCount = feature?.LegacyAmbiguousEntryCount ?? 0;
+		DestructionWarningAcknowledged = feature?.DestructionWarningAcknowledged ?? false;
+		Groups = feature?.Groups ?? Array.Empty<ItemGroupView>();
+		ModuleActions = feature?.ModuleActions ?? Array.Empty<SnapshotModuleAction>();
 	}
 
 	internal bool IsAvailable { get; }
 	internal bool Enabled { get; }
 	internal bool PickupPriorityEnabled { get; }
-	internal IReadOnlyList<VirtualStorageEntry> Entries { get; }
-	internal int LegacyAmbiguousEntryCount { get; }
+	internal bool DestructionWarningAcknowledged { get; }
+	internal IReadOnlyList<ItemGroupView> Groups { get; }
+	internal IReadOnlyList<SnapshotModuleAction> ModuleActions { get; }
 }
 
 internal sealed class InfiniteStoragePagePresenter
@@ -152,11 +156,18 @@ internal sealed class InfiniteStoragePagePresenter
 	internal InfiniteStoragePageSnapshot CaptureSnapshot() => new InfiniteStoragePageSnapshot(_feature);
 	internal void SetEnabled(bool value) => _feature.SetEnabled(value);
 	internal void SetPickupPriority(bool value) => _feature.SetPickupPriority(value);
-	internal bool TryExportLegacyAmbiguousEntries() => _feature.TryExportLegacyAmbiguousEntries();
 	internal int StoreAllCarried() => _feature.StoreAllCarried();
-	internal long Withdraw(string entryId, long amount) => _feature.Withdraw(entryId, amount);
-	internal bool CanDecompose(string entryId) => _feature.CanDecompose(entryId);
-	internal InfiniteStorageDecomposeResult Decompose(string entryId, InfiniteStorageDecomposeScope scope) => _feature.Decompose(entryId, scope);
+	internal long Withdraw(ItemGroupIdentity identity, ItemSnapshot snapshot, long count) =>
+		_feature.Withdraw(identity, snapshot, count);
+	internal bool CanWithdraw(ItemGroupIdentity identity) => _feature.CanWithdraw(identity);
+	internal bool DestructionWarningAcknowledged => _feature.DestructionWarningAcknowledged;
+	internal bool AcknowledgeDestructionWarning() => _feature.AcknowledgeDestructionWarning();
+	internal bool CanDestroy(ItemGroupIdentity identity) => _feature.CanDestroy(identity);
+	internal InfiniteStorageDestructionResult Destroy(ItemGroupIdentity identity, ItemSnapshot snapshot,
+		SnapshotDestructionScope scope) => _feature.Destroy(identity, snapshot, scope);
+	internal bool CanExecuteModule(string id, SnapshotModuleRequest request) => _feature.CanExecuteModule(id, request);
+	internal SnapshotModuleExecutionResult ExecuteModule(string id, SnapshotModuleRequest request) =>
+		_feature.ExecuteModule(id, request);
 }
 
 internal sealed class TranslationSettingsSnapshot

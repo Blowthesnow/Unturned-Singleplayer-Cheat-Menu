@@ -4,6 +4,7 @@ using UnityEngine.Events;
 using UnityEngine.UI;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Controls;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
+using UnturnedSingleplayerCheatMenu.UI.Motion;
 
 namespace UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Runtime;
 
@@ -12,11 +13,13 @@ internal sealed class LegacyFluentControlFactory
 {
 	private readonly FluentTheme _theme;
 	private readonly Func<Font> _font;
+	private readonly UiMotionDriver _motion;
 
-	internal LegacyFluentControlFactory(FluentTheme theme, Func<Font> font)
+	internal LegacyFluentControlFactory(FluentTheme theme, Func<Font> font, UiMotionDriver motion)
 	{
 		_theme = theme ?? throw new ArgumentNullException(nameof(theme));
 		_font = font ?? throw new ArgumentNullException(nameof(font));
+		_motion = motion;
 	}
 
 	internal Font ResolveFont() => _font();
@@ -39,20 +42,26 @@ internal sealed class LegacyFluentControlFactory
 		return new LegacyFluentControlHandle(root, surface);
 	}
 
-	internal LegacyFluentControlHandle AdaptToggle(GameObject root, Toggle toggle, Image hitTarget, GameObject legacyCheck)
+	internal LegacyFluentControlHandle AdaptToggle(GameObject root, Toggle toggle, Image hitTarget,
+		GameObject legacyCheck, Color? activeColor = null)
 	{
-		LegacyFluentSurface surface = AttachSurface(root, hitTarget, toggle.isOn ? _theme.AccentSoft : _theme.Surface, _theme.BorderStrong, _theme.RadiusControl);
+		LegacyFluentSurface surface = AttachSurface(root, hitTarget, _theme.Surface, _theme.BorderStrong, _theme.RadiusControl);
 		toggle.targetGraphic = hitTarget;
 		toggle.transition = Selectable.Transition.None;
 		toggle.graphic = null;
 		legacyCheck?.SetActive(false);
 
-		GameObject trackObject = CreateRoundedChild(root.transform, "SwitchTrack", new Vector2(44f, 22f), _theme.RadiusControl);
+		GameObject trackObject = CreateSurfaceRoot(root.transform, "SwitchTrack", new Vector2(44f, 22f));
 		RectTransform trackRect = trackObject.GetComponent<RectTransform>();
 		trackRect.anchorMin = trackRect.anchorMax = new Vector2(1f, 0.5f);
 		trackRect.pivot = new Vector2(1f, 0.5f);
 		trackRect.anchoredPosition = new Vector2(-11f, 0f);
-		FluentRoundedGraphic track = trackObject.GetComponent<FluentRoundedGraphic>();
+		LegacyFluentSurface track = LegacyFluentSurface.Attach(
+			trackObject,
+			_theme.SurfaceRaised.ToUnity(),
+			_theme.BorderStrong.ToUnity(),
+			_theme.RadiusControl,
+			borderThickness: 1f);
 
 		GameObject thumbObject = CreateRoundedChild(trackObject.transform, "SwitchThumb", new Vector2(16f, 16f), 8f);
 		RectTransform thumbRect = thumbObject.GetComponent<RectTransform>();
@@ -61,11 +70,17 @@ internal sealed class LegacyFluentControlFactory
 		FluentRoundedGraphic thumb = thumbObject.GetComponent<FluentRoundedGraphic>();
 		thumb.color = _theme.TextPrimary.ToUnity();
 
-		UnityAction<bool> visualListener = value => UpdateSwitch(value, track, thumbRect);
-		toggle.onValueChanged.AddListener(visualListener);
-		UpdateSwitch(toggle.isOn, track, thumbRect);
-
 		LegacyFluentControlHandle handle = new LegacyFluentControlHandle(root, surface);
+		handle.AddCleanup(track.Dispose);
+		UnityAction<bool> visualListener = value => UpdateSwitch(root, value, toggle.interactable,
+			track, thumbRect, thumb, animate: toggle.interactable, activeColor);
+		toggle.onValueChanged.AddListener(visualListener);
+		handle.InteractableChanged = interactable =>
+			UpdateSwitch(root, toggle.isOn, interactable, track, thumbRect, thumb,
+				animate: false, activeColor);
+		UpdateSwitch(root, toggle.isOn, toggle.interactable, track, thumbRect, thumb,
+			animate: false, activeColor);
+
 		handle.AddCleanup(() => toggle.onValueChanged.RemoveListener(visualListener));
 		return handle;
 	}
@@ -180,15 +195,73 @@ internal sealed class LegacyFluentControlFactory
 		return result;
 	}
 
-	private void UpdateSwitch(bool isOn, FluentRoundedGraphic track, RectTransform thumb)
+	private static GameObject CreateSurfaceRoot(Transform parent, string name, Vector2 size)
 	{
+		GameObject result = new GameObject(name, typeof(RectTransform), typeof(LayoutElement));
+		result.transform.SetParent(parent, false);
+		RectTransform rect = result.GetComponent<RectTransform>();
+		rect.sizeDelta = size;
+		result.GetComponent<LayoutElement>().ignoreLayout = true;
+		return result;
+	}
+
+	private void UpdateSwitch(
+		GameObject owner,
+		bool isOn,
+		bool interactable,
+		LegacyFluentSurface track,
+		RectTransform thumb,
+		FluentRoundedGraphic thumbGraphic,
+		bool animate,
+		Color? activeColor)
+	{
+		Color activeFill = activeColor ?? _theme.Accent.ToUnity();
+		Color activeBorder = activeColor ?? _theme.AccentHover.ToUnity();
+		Color disabledActiveFill = activeColor ?? _theme.AccentSoft.ToUnity();
+		disabledActiveFill.a = Mathf.Min(disabledActiveFill.a, 150f / 255f);
+		Color targetFill = interactable
+			? (isOn ? activeFill : _theme.SurfaceRaised.ToUnity())
+			: (isOn ? disabledActiveFill : _theme.SurfaceMuted.WithAlpha(150).ToUnity());
+		Color targetBorder = interactable
+			? (isOn ? activeBorder : _theme.BorderStrong.ToUnity())
+			: _theme.Border.WithAlpha(120).ToUnity();
+		Color targetThumb = interactable
+			? (isOn ? _theme.AccentText : _theme.TextPrimary).ToUnity()
+			: _theme.TextTertiary.WithAlpha(150).ToUnity();
+		Vector2 targetPosition = new Vector2(isOn ? 9f : -9f, 0f);
+		if (!animate || _motion == null || owner == null || !owner.activeInHierarchy)
+		{
+			track?.SetColors(targetFill, targetBorder);
+			if (thumb != null) thumb.anchoredPosition = targetPosition;
+			if (thumbGraphic != null)
+			{
+				thumbGraphic.color = Color.white;
+				thumbGraphic.canvasRenderer.SetColor(targetThumb);
+			}
+			return;
+		}
+
 		if (track != null)
 		{
-			track.color = (isOn ? _theme.Accent : _theme.SurfaceMuted).ToUnity();
+			Color startFill = track.CurrentFill;
+			Color startBorder = track.CurrentBorder;
+			_motion.Animate(owner, UiMotionChannel.SwitchTrack, UiMotionTokens.Hover, UiMotionEasingKind.EaseOutCubic,
+				progress => track.SetColors(
+					Color.LerpUnclamped(startFill, targetFill, progress),
+					Color.LerpUnclamped(startBorder, targetBorder, progress)));
 		}
 		if (thumb != null)
 		{
-			thumb.anchoredPosition = new Vector2(isOn ? 9f : -9f, 0f);
+			Vector2 startPosition = thumb.anchoredPosition;
+			_motion.Animate(owner, UiMotionChannel.SwitchThumb, UiMotionTokens.Switch, UiMotionEasingKind.EaseOutCubic,
+				progress => thumb.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, progress));
+		}
+		if (thumbGraphic != null)
+		{
+			Color startThumb = thumbGraphic.canvasRenderer.GetColor();
+			thumbGraphic.color = Color.white;
+			_motion.Animate(owner, UiMotionChannel.SwitchThumbColor, UiMotionTokens.Hover, UiMotionEasingKind.EaseOutCubic,
+				progress => thumbGraphic.canvasRenderer.SetColor(Color.LerpUnclamped(startThumb, targetThumb, progress)));
 		}
 	}
 }

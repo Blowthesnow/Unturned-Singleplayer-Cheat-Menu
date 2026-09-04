@@ -10,6 +10,11 @@ using UnityEngine;
 using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.AmmoRefill;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.Crafting;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.Decomposition;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Composition;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Runtime;
 using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Patches;
@@ -18,7 +23,7 @@ using UnturnedSingleplayerCheatMenu.UI;
 
 namespace UnturnedSingleplayerCheatMenu;
 
-[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.98.0")]
+[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.995.0")]
 [BepInProcess("Unturned.exe")]
 public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
@@ -26,7 +31,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
-	public const string PluginVersion = "1.98.0";
+	public const string PluginVersion = "1.995.0";
 	private const int CurrentMinimapSchemaVersion = 3;
 
 	private ConfigEntry<string> _language;
@@ -134,6 +139,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private ConfigEntry<bool> _autoPickupEnabled;
 	private ConfigEntry<bool> _infiniteStorageEnabled;
 	private ConfigEntry<bool> _infiniteStoragePickupPriority;
+	private ConfigEntry<bool> _infiniteStorageCraftingEnabled;
+	private ConfigEntry<bool> _infiniteStorageAmmoRefillEnabled;
+	private ConfigEntry<bool> _infiniteStorageDecompositionEnabled;
+	private ConfigEntry<bool> _infiniteStorageDestructionWarningAcknowledged;
 
 	private ConfigEntry<float> _autoPickupRange;
 
@@ -309,7 +318,9 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal MinimapFeature Minimap { get; private set; }
 
-	internal InfiniteStorageRuntime InfiniteStorage { get; private set; }
+	internal SnapshotInfiniteStorageRuntime InfiniteStorage { get; private set; }
+	private SnapshotModuleRegistry _snapshotStorageModules;
+	private SnapshotAmmoRefillModule _snapshotAmmoRefillModule;
 
 	internal CreatureHealthBarService CreatureHealthBars { get; private set; }
 
@@ -325,6 +336,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal bool IsInfiniteStorageOpen => _infiniteStorageOpen;
 
 	internal bool IsInfiniteStoragePickupPriorityEnabled => _infiniteStoragePickupPriority?.Value == true;
+	internal bool IsInfiniteStorageDestructionWarningAcknowledged =>
+		_infiniteStorageDestructionWarningAcknowledged?.Value == true;
 
 	internal string LastMainTab => _lastMainTab?.Value ?? "Character";
 
@@ -959,6 +972,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_autoPickupEnabled = base.Config.Bind("AutoPickup", "Enabled", defaultValue: false, "Enable automatic pickup in a true singleplayer world.");
 		_infiniteStorageEnabled = base.Config.Bind("InfiniteStorage", "Enabled", defaultValue: false, "Enable the persistent infinite storage. Disabled by default.");
 		_infiniteStoragePickupPriority = base.Config.Bind("InfiniteStorage", "PickupPriority", defaultValue: false, "Store automatically picked-up items in infinite storage before trying the carried inventory.");
+		_infiniteStorageCraftingEnabled = base.Config.Bind("InfiniteStorage", "CraftingAdapterEnabled", defaultValue: true, "Enable the same-DLL crafting adapter. Snapshot Core remains independent.");
+		_infiniteStorageAmmoRefillEnabled = base.Config.Bind("InfiniteStorage", "AmmoRefillAdapterEnabled", defaultValue: true, "Enable the same-DLL ammo refill adapter. Snapshot Core remains independent.");
+		_infiniteStorageDecompositionEnabled = base.Config.Bind("InfiniteStorage", "DecompositionAdapterEnabled", defaultValue: true, "Enable the same-DLL decomposition adapter. Snapshot Core remains independent.");
+		_infiniteStorageDestructionWarningAcknowledged = base.Config.Bind("InfiniteStorage", "DestructionWarningAcknowledged", defaultValue: false, "Remember that the one-time permanent-destruction warning was acknowledged.");
 		ConfigDefinition rangeDefinition = new ConfigDefinition("AutoPickup", "Range");
 		_autoPickupRange = base.Config.Bind(rangeDefinition, 40f, new ConfigDescription("Automatic pickup distance in meters, clamped to 1-1000."));
 		_autoPickupFrequencyHz = base.Config.Bind("AutoPickup", "FrequencyHz", 10f, "Drop scan frequency, clamped to 1-20 Hz.");
@@ -1120,7 +1137,21 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_nearbyItemIndex = new NearbyItemIndex();
 		AutoPickup = new AutoPickupFeature(base.Logger, GetAutoPickupSettings(), _autoPickupRulesPath.Value, _nearbyItemIndex);
 		Minimap = new MinimapFeature(base.Logger, _uiRoot, Teleports, _nearbyItemIndex, GetMinimapSettings(), HandleMinimapSettingsChanged);
-		InfiniteStorage = new InfiniteStorageRuntime(base.Logger) { Enabled = _infiniteStorageEnabled.Value };
+		_snapshotStorageModules = new SnapshotModuleRegistry();
+		InfiniteStorage = new SnapshotInfiniteStorageRuntime(base.Logger, _snapshotStorageModules)
+		{
+			Enabled = _infiniteStorageEnabled.Value
+		};
+		SnapshotCraftingModule craftingModule = new SnapshotCraftingModule(
+			InfiniteStorage, _infiniteStorageCraftingEnabled.Value);
+		_snapshotAmmoRefillModule = new SnapshotAmmoRefillModule(
+			InfiniteStorage, _infiniteStorageAmmoRefillEnabled.Value, base.Logger);
+		SnapshotDecompositionModule decompositionModule = new SnapshotDecompositionModule(
+			InfiniteStorage, _infiniteStorageDecompositionEnabled.Value);
+		_snapshotStorageModules.Register(craftingModule);
+		_snapshotStorageModules.Register(_snapshotAmmoRefillModule);
+		_snapshotStorageModules.Register(decompositionModule);
+		SnapshotCraftingPatch.Configure(craftingModule);
 		AutoPickupRuleDocument autoPickupRules = AutoPickup.Rules;
 		_autoPickupFilterMode.Value = autoPickupRules.Mode.ToString();
 		_ui = new CheatMenuOverlayUi(this, _uiRoot);
@@ -1507,6 +1538,9 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		PersistInterfaceState(_autoPickupMinimumQuality, Mathf.Clamp(value, AutoPickupSettings.MinQuality, AutoPickupSettings.MaxQuality));
 		RefreshAutoPickupSettings();
 	}
+
+	internal bool AcknowledgeInfiniteStorageDestructionWarning() =>
+		PersistInterfaceState(_infiniteStorageDestructionWarningAcknowledged, true);
 
 	internal void SetAutoPickupAllowedRarityMask(int value)
 	{
@@ -1944,6 +1978,9 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal void HandleAssetsRefreshed()
 	{
+		InventoryStateReader.InvalidateAmmoCompatibility();
+		InfiniteStorage?.RefreshAssetMetadata();
+		_snapshotAmmoRefillModule?.RefreshAssets();
 		Catalog.MarkDirty();
 		Icons.Clear();
 		if (_menuOpen || _infiniteStorageOpen)

@@ -2,76 +2,64 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SDG.Unturned;
+using UnturnedSingleplayerCheatMenu.ItemStacking;
 
 namespace UnturnedSingleplayerCheatMenu.Services;
 
 internal sealed class AmmoCompatibilityIndex
 {
     private readonly Dictionary<Guid, IReadOnlyList<ItemAsset>> _byGunGuid = new Dictionary<Guid, IReadOnlyList<ItemAsset>>();
-    private readonly HashSet<Guid> _ammoContainerGuids = new HashSet<Guid>();
+    private readonly HashSet<Guid> _ammoRelatedGuids = new HashSet<Guid>();
+    private readonly HashSet<Guid> _directSourceGuids = new HashSet<Guid>();
+    private readonly HashSet<Guid> _containerTargetGuids = new HashSet<Guid>();
+    private readonly Dictionary<string, ItemAsset> _itemsByGuid = new Dictionary<string, ItemAsset>(StringComparer.Ordinal);
+    private AmmoCompatibilityCatalog _catalog = AmmoCompatibilityCatalog.Empty;
 
     public void Rebuild(IReadOnlyList<ItemAsset> items)
     {
         _byGunGuid.Clear();
-        _ammoContainerGuids.Clear();
-        UnturnedSingleplayerCheatMenu.InfiniteStorage.ItemInstanceSemantics.SetAmmoContainerGuids(_ammoContainerGuids);
+        _ammoRelatedGuids.Clear();
+        _directSourceGuids.Clear();
+        _containerTargetGuids.Clear();
+        _itemsByGuid.Clear();
+        _catalog = AmmoCompatibilityCatalog.Empty;
         if (items == null)
         {
             return;
         }
 
-        List<ItemMagazineAsset> magazines = items.OfType<ItemMagazineAsset>().ToList();
-        foreach (ItemMagazineAsset magazine in magazines)
+        _catalog = UnturnedAmmoCompatibilityReader.BuildCatalog(items);
+        foreach (ItemAsset item in items.Where(value => value != null))
         {
-            _ammoContainerGuids.Add(magazine.GUID);
-            foreach (Blueprint blueprint in magazine.blueprints ?? new List<Blueprint>())
-            {
-                if (blueprint == null || blueprint.Operation != EBlueprintOperation.FillTargetItem || blueprint.supplies == null)
-                {
-                    continue;
-                }
-                foreach (BlueprintSupply supply in blueprint.supplies)
-                {
-                    if (supply?.FindItemAsset() is ItemSupplyAsset ammoSupply)
-                    {
-                        _ammoContainerGuids.Add(ammoSupply.GUID);
-                    }
-                }
-                foreach (BlueprintOutput output in blueprint.outputs ?? Array.Empty<BlueprintOutput>())
-                {
-                    if (output?.FindItemAsset() is ItemSupplyAsset ammoSupply)
-                    {
-                        _ammoContainerGuids.Add(ammoSupply.GUID);
-                    }
-                }
-            }
+            _itemsByGuid[AmmoRefillIdentity.NormalizeAssetGuid(item.GUID.ToString("N"))] = item;
         }
+        foreach (string assetGuid in _catalog.AmmoRelatedAssetGuids)
+        {
+            if (Guid.TryParseExact(assetGuid, "N", out Guid guid)) _ammoRelatedGuids.Add(guid);
+        }
+        foreach (string assetGuid in _catalog.DirectSourceAssetGuids)
+        {
+            if (Guid.TryParseExact(assetGuid, "N", out Guid guid)) _directSourceGuids.Add(guid);
+        }
+        foreach (string assetGuid in _catalog.ContainerAssetGuids)
+        {
+            if (Guid.TryParseExact(assetGuid, "N", out Guid guid)) _containerTargetGuids.Add(guid);
+        }
+        List<ItemMagazineAsset> magazines = items.OfType<ItemMagazineAsset>().ToList();
         foreach (ItemGunAsset gun in items.OfType<ItemGunAsset>())
         {
             HashSet<ushort> gunCalibers = new HashSet<ushort>(gun.magazineCalibers ?? new ushort[0]);
-            HashSet<ItemAsset> matches = new HashSet<ItemAsset>();
-            foreach (ItemMagazineAsset magazine in magazines)
-            {
-                if (magazine.calibers == null || !magazine.calibers.Any(gunCalibers.Contains))
-                {
-                    continue;
-                }
-                foreach (Blueprint blueprint in magazine.blueprints ?? new List<Blueprint>())
-                {
-                    if (blueprint == null || blueprint.Operation != EBlueprintOperation.FillTargetItem)
-                    {
-                        continue;
-                    }
-                    AddSupplies(matches, blueprint.supplies, magazine);
-                    AddOutputs(matches, blueprint.outputs, magazine);
-                }
-            }
-            _byGunGuid[gun.GUID] = matches
-                .Where(item => item != null && !(item is ItemMagazineAsset))
+            HashSet<string> compatibleMagazineGuids = new HashSet<string>(magazines
+                .Where(magazine => magazine.calibers != null && magazine.calibers.Any(gunCalibers.Contains))
+                .Select(magazine => magazine.GUID.ToString("N"))
+                .Select(AmmoRefillIdentity.NormalizeAssetGuid), StringComparer.Ordinal);
+            _byGunGuid[gun.GUID] = _catalog.ProjectDirectSources(compatibleMagazineGuids)
+                .Select(assetGuid => _itemsByGuid.TryGetValue(assetGuid, out ItemAsset item) ? item : null)
+                .Where(item => item != null && !compatibleMagazineGuids.Contains(
+                    AmmoRefillIdentity.NormalizeAssetGuid(item.GUID.ToString("N"))))
                 .OrderBy(item => item.FriendlyName, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
         }
-        UnturnedSingleplayerCheatMenu.InfiniteStorage.ItemInstanceSemantics.SetAmmoContainerGuids(_ammoContainerGuids);
     }
 
     public IReadOnlyList<ItemAsset> GetCompatibleAmmo(ItemGunAsset gun)
@@ -81,28 +69,25 @@ internal sealed class AmmoCompatibilityIndex
             : Array.Empty<ItemAsset>();
     }
 
-    public bool IsAmmoContainer(ItemAsset asset)
+    public bool IsAmmoRelated(ItemAsset asset)
     {
-        return asset != null && _ammoContainerGuids.Contains(asset.GUID);
+        return asset != null && _ammoRelatedGuids.Contains(asset.GUID);
     }
 
-    private static void AddSupplies(ISet<ItemAsset> matches, IEnumerable<BlueprintSupply> supplies, ItemAsset magazine)
+    public bool TryGetRefillRules(ItemAsset asset, out AmmoRefillAssetRules rules)
     {
-        if (supplies == null) return;
-        foreach (BlueprintSupply supply in supplies)
-        {
-            ItemAsset item = supply?.FindItemAsset();
-            if (item != null && item != magazine && !(item is ItemMagazineAsset)) matches.Add(item);
-        }
+        rules = null;
+        if (asset == null || !_catalog.IsAmmoRelated(asset.GUID.ToString("N"))) return false;
+        rules = _catalog.GetRules(asset.GUID.ToString("N"), asset is ItemMagazineAsset);
+        return true;
     }
 
-    private static void AddOutputs(ISet<ItemAsset> matches, IEnumerable<BlueprintOutput> outputs, ItemAsset magazine)
+    public bool TryGetAmmoContainerCapacity(ItemAsset asset, out int capacity)
     {
-        if (outputs == null) return;
-        foreach (BlueprintOutput output in outputs)
-        {
-            ItemAsset item = output?.FindItemAsset();
-            if (item != null && item != magazine && !(item is ItemMagazineAsset)) matches.Add(item);
-        }
+        capacity = -1;
+        if (!TryGetRefillRules(asset, out AmmoRefillAssetRules rules) ||
+            !(rules.IsMagazine || rules.IsDirectTarget)) return false;
+        return AmmoRefillIdentity.TryGetValidCapacity(asset.MaxAmount, out capacity);
     }
+
 }

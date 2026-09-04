@@ -318,7 +318,7 @@ internal sealed partial class CheatMenuOverlayUi
 			SetLayout(CreateButton(_workshopProtocolDrawerRoot.transform, label, delegate
 			{
 				_translationPresenter.SetApiProtocol(capturedProtocol);
-				HideWorkshopProtocolDrawer();
+				RunWithoutTransientMotion(HideWorkshopProtocolDrawer);
 				RefreshWorkshopLocalizationSettingsRegion();
 				RefreshWorkshopLocalizationPageValues();
 			}, string.Format(PluginLocalization.Translate("使用“{0}”协议连接翻译服务。"), label),
@@ -328,6 +328,7 @@ internal sealed partial class CheatMenuOverlayUi
 		LayoutRebuilder.ForceRebuildLayoutImmediate(_workshopProtocolDrawerPopup);
 		_workshopProtocolDrawerRoot.transform.SetAsLastSibling();
 		PositionWorkshopProtocolDrawer();
+		AnimatePopupEnter(_workshopProtocolDrawerRoot, _workshopProtocolDrawerPopup);
 	}
 
 	private void MaintainWorkshopProtocolDrawer()
@@ -364,7 +365,7 @@ internal sealed partial class CheatMenuOverlayUi
 			float max = component2.rect.xMax - sizeDelta.x * 0.5f - 8f;
 			float x = Mathf.Clamp(value, min, max);
 			float y = (flag ? localPoint2.y : localPoint.y);
-			_workshopProtocolDrawerPopup.anchoredPosition = new Vector2(x, y);
+			SetPopupMotionPosition(_workshopProtocolDrawerPopup, new Vector2(x, y));
 		}
 	}
 
@@ -373,9 +374,10 @@ internal sealed partial class CheatMenuOverlayUi
 		_workshopProtocolDrawerOpen = false;
 		if (_workshopProtocolDrawerRoot != null)
 		{
-			QueueForDestroy(_workshopProtocolDrawerRoot);
+			GameObject root = _workshopProtocolDrawerRoot;
+			_workshopProtocolDrawerRoot = null;
+			QueuePopupExit(root, root.transform);
 		}
-		_workshopProtocolDrawerRoot = null;
 		_workshopProtocolDrawerPopup = null;
 		_workshopProtocolTriggerButton = null;
 	}

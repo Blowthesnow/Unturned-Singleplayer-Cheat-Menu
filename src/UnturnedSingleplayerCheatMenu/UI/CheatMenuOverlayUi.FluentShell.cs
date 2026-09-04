@@ -16,6 +16,7 @@ internal sealed partial class CheatMenuOverlayUi
 		bool reopenShell = rebuildShell && _root.activeSelf;
 		bool rebuildInfiniteStorage = _infiniteStorageRoot != null;
 		bool reopenInfiniteStorage = rebuildInfiniteStorage && _infiniteStorageRoot.activeSelf;
+		RunWithoutTransientMotion(CloseTransientVisualSurfaces);
 		if (rebuildShell)
 		{
 			RebuildShellVisualTree(reopenShell);
@@ -28,7 +29,6 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private void RebuildShellVisualTree(bool reopen)
 	{
-		CloseTransientVisualSurfaces();
 		GameObject root = _root;
 		GameObject selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
 		bool replacePluginSelection = SelectionBelongsToRoot(selected, root);
@@ -250,13 +250,16 @@ internal sealed partial class CheatMenuOverlayUi
 		bool replacingView = invalidate || _activeTab != tab;
 		_activeTab = tab;
 		_shellPresenter.SetLastMainTab(tab.ToString());
-		HideHoverExplanation();
-		HidePointToolModeDrawer();
-		HideInventoryPresetDrawer();
-		HideInventoryScopeDrawer();
-		HideWorkshopProtocolDrawer();
-		HideAutoPickupBlacklistPicker();
-		HideAutoPickupRarityPicker();
+		RunWithoutTransientMotion(delegate
+		{
+			HideHoverExplanation();
+			HidePointToolModeDrawer();
+			HideInventoryPresetDrawer();
+			HideInventoryScopeDrawer();
+			HideWorkshopProtocolDrawer();
+			HideAutoPickupBlacklistPicker();
+			HideAutoPickupRarityPicker();
+		});
 		if (replacingView)
 		{
 			ResetCatalogPageViewReferences();

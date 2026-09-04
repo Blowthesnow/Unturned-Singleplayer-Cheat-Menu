@@ -1,5 +1,7 @@
 using UnturnedSingleplayerCheatMenu.Services;
 using UnturnedSingleplayerCheatMenu.Models;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel;
+using System.Text;
 using System.Text.RegularExpressions;
 
 AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs args)
@@ -52,6 +54,133 @@ Equal(
     "Flight mode: World Axis",
     string.Format(PluginLocalization.Translate("飞行模式：{0}"), PluginLocalization.Translate("世界轴")),
     "English flight-mode template and value");
+Equal("Infinite storage requires reconciliation; AutoPickup is paused globally.",
+    PluginLocalization.Translate("无限储存需人工对账，自动拾取已全局暂停"),
+    "AutoPickup global reconciliation state translation");
+Equal("Infinite storage requires reconciliation; the drop is quarantined and retry is locked.",
+    PluginLocalization.Translate("无限储存需人工对账，已隔离掉落并锁定重试"),
+    "AutoPickup drop-quarantine state translation");
+Equal("Native pickup outcome is uncertain; automatic retry for this drop is paused.",
+    PluginLocalization.Translate("原生拾取后态不确定，已暂停该掉落实例的自动重试"),
+    "AutoPickup uncertain-native state translation");
+Equal("Persistent snapshot reconciliation is required; all automatic pickup is paused.",
+    PluginLocalization.Translate("需要持久化快照对账；所有自动拾取已暂停。"),
+    "AutoPickup persistent reconciliation detail translation");
+Equal("Storage is authoritative; the unresolved world drop is quarantined and infinite storage is locked.",
+    PluginLocalization.Translate("储存副本为权威；未解决的世界掉落已隔离，且无限储存已锁定。"),
+    "AutoPickup storage-authoritative detail translation");
+Equal("Storage is authoritative and infinite storage is locked; world-drop quarantine also failed.",
+    PluginLocalization.Translate("储存副本为权威且无限储存已锁定；世界掉落隔离也失败。"),
+    "AutoPickup quarantine-failure detail translation");
+Equal("Infinite-storage compensation succeeded; the world drop remains for a later retry.",
+    PluginLocalization.Translate("无限储存补偿成功；世界掉落仍保留，稍后可重试。"),
+    "AutoPickup compensated-storage detail translation");
+Equal("Native pickup was not confirmed delivered, and Snapshot recovery failed.",
+    PluginLocalization.Translate("原生拾取未确认交付，且无限储存恢复失败。"),
+    "AutoPickup native-and-Snapshot double-failure detail translation");
+Equal("Composite inventory evidence confirmed native pickup delivery.",
+    PluginLocalization.Translate("背包复合证据已确认原生拾取交付。"),
+    "AutoPickup evidence-confirmed delivery detail translation");
+Equal("native-detail=E42; composite inventory evidence confirmed native pickup delivery.",
+    PluginLocalization.Translate("native-detail=E42；背包复合证据已确认原生拾取交付。"),
+    "AutoPickup preserved native detail plus evidence-confirmation translation");
+Equal("native-detail=E42\r\nstate=unchanged; composite inventory evidence confirmed native pickup delivery.",
+    PluginLocalization.Translate("native-detail=E42\r\nstate=unchanged；背包复合证据已确认原生拾取交付。"),
+    "AutoPickup multiline native detail plus evidence-confirmation translation");
+const string dynamicPatternCollisionPrefix = "无法读取系统字体列表：E42";
+const string multilineDynamicPatternPrefix = "无法读取系统字体列表：E42\r\nstate=unchanged";
+const string translatedEvidenceSuffix = "; composite inventory evidence confirmed native pickup delivery.";
+const string chineseEvidenceSuffix = "背包复合证据已确认原生拾取交付。";
+Equal(dynamicPatternCollisionPrefix + translatedEvidenceSuffix,
+    PluginLocalization.Translate(dynamicPatternCollisionPrefix + "；背包复合证据已确认原生拾取交付。"),
+    "AutoPickup evidence suffix must take priority over an older single-line dynamic pattern and preserve its prefix exactly");
+Equal(multilineDynamicPatternPrefix + translatedEvidenceSuffix,
+    PluginLocalization.Translate(multilineDynamicPatternPrefix + "；背包复合证据已确认原生拾取交付。"),
+    "AutoPickup evidence suffix must match multiline details and preserve their prefix exactly");
+Equal(multilineDynamicPatternPrefix,
+    PluginLocalization.Translate(multilineDynamicPatternPrefix),
+    "A multiline native detail without the evidence suffix must not be consumed by a single-line dynamic pattern");
+const string replacementMetacharacterPrefix =
+    "无法读取系统字体列表：$1\\native\\path；内部分隔\r\nstate=$1\\tail";
+string replacementMetacharacterTranslation = PluginLocalization.Translate(
+    replacementMetacharacterPrefix + "；" + chineseEvidenceSuffix);
+byte[] replacementMetacharacterPrefixUtf8 = Encoding.UTF8.GetBytes(replacementMetacharacterPrefix);
+byte[] replacementMetacharacterTranslationUtf8 = Encoding.UTF8.GetBytes(replacementMetacharacterTranslation);
+int replacementMetacharacterSuffixIndex = replacementMetacharacterTranslation.IndexOf(
+    translatedEvidenceSuffix, StringComparison.Ordinal);
+Equal(replacementMetacharacterPrefix + translatedEvidenceSuffix,
+    replacementMetacharacterTranslation,
+    "AutoPickup replacement metacharacters must remain literal while only the fixed evidence suffix is translated");
+Equal(true,
+    replacementMetacharacterTranslationUtf8.Length >= replacementMetacharacterPrefixUtf8.Length &&
+    replacementMetacharacterTranslationUtf8.Take(replacementMetacharacterPrefixUtf8.Length)
+        .SequenceEqual(replacementMetacharacterPrefixUtf8),
+    "AutoPickup replacement metacharacter prefix must remain byte-identical in UTF-8");
+Equal(true,
+    replacementMetacharacterSuffixIndex >= 0 &&
+    replacementMetacharacterSuffixIndex == replacementMetacharacterTranslation.LastIndexOf(
+        translatedEvidenceSuffix, StringComparison.Ordinal),
+    "AutoPickup translated evidence suffix must occur exactly once");
+Equal(false,
+    replacementMetacharacterTranslation.Contains(chineseEvidenceSuffix, StringComparison.Ordinal),
+    "AutoPickup translated detail must not retain the Chinese evidence suffix");
+
+SnapshotBucketMetadata snapshotMetadataSource = SnapshotBucketMetadata.Build(
+    new ItemSnapshot(363, 10, 73, new byte[] { 1, 2, 3, 4 }), count: 3, showQuality: true);
+SnapshotBucketMetadata ammoMetadataSource = SnapshotBucketMetadata.Build(
+    new ItemSnapshot(363, 0, 73, Array.Empty<byte>()), count: 1, showQuality: true,
+    SnapshotBucketDisplayFacts.AmmoContainer(capacity: 40));
+string snapshotHeaderSource = string.Format(
+    PluginLocalization.Translate("物品编号 {0} · 资产标识 {1}\n实例 {2} · 快照桶 {3}"),
+    363, "11111111-1111-1111-1111-111111111111", 3, 1);
+string[] snapshotCanonicalUiSamples =
+{
+    "快照运行时尚未初始化。",
+    "筛选物品组。",
+    "单实例 → 当前快照桶 → 当前物品组循环。",
+    "没有可存储物品、保存失败，或快照运行时未就绪。",
+    "每个背包物品均按原生编号、数量、品质和状态字节完整存储。",
+    "物品组 2 / 5；快照实例 3。原生数量字段始终保持不透明，内核不会拆分。",
+    "没有匹配的物品组。",
+    "未解析物品组（只读）",
+    "资产标识冲突的物品组（只读）",
+    "展开或收起快照桶。",
+    "资产缺失或编号到资产标识的映射不匹配；物品组被保留为只读且禁止取出。",
+    snapshotMetadataSource.Text,
+    ammoMetadataSource.Text,
+    "ID 330  ·  ×1/总2",
+    " · 默认满状态",
+    "取出所选精确快照桶。",
+    "资产不可解析或资产标识冲突，禁止取出。",
+    "取全部 ×3",
+    "取出此精确快照桶的全部实例。",
+    "已取出 3 个精确快照实例。",
+    "未取出：背包空间不足、资产冲突或保存失败。",
+    "一键填充弹药容器",
+    "独立弹药填充模块负责解释原生数量与填充目标物品的兼容关系；快照内核不解释弹量。",
+    "没有可安全填充的弹药来源或容器。",
+    "弹药容器已达到稳定状态。",
+    "已填充 2 个容器；弹量总和 30。",
+    "制作适配",
+    "独立制作模块负责解释所需物品总数与原生数量总和；快照内核不解释制作语义。",
+    "分解",
+    "独立分解模块负责解释原生分解配方；快照内核不读取蓝图。",
+    "已分解 2 个快照实例，生成 4 个实例。"
+};
+foreach (string sample in snapshotCanonicalUiSamples)
+{
+    string translated = PluginLocalization.Translate(sample);
+    if (Regex.IsMatch(translated, @"[\u4e00-\u9fff]"))
+        throw new InvalidOperationException($"Snapshot UI template was not translated: {sample} -> {translated}");
+}
+Equal("ID 363 · GUID 11111111-1111-1111-1111-111111111111\nInstances 3 · Buckets 1",
+    snapshotHeaderSource, "Snapshot ItemGroup header translation");
+Equal("Module failed: The selected snapshot could not be found.",
+    PluginLocalization.SnapshotModuleFailureMessage("snapshot-not-found"),
+    "Known Snapshot module errors should be localized without exposing internal error codes");
+Equal("Module failed: The module threw an internal exception.",
+    PluginLocalization.SnapshotModuleFailureMessage("module-threw:NullReferenceException"),
+    "Thrown Snapshot module errors should hide implementation type names from the UI");
 
 string[] dynamicUiSamples =
 {
@@ -272,6 +401,64 @@ Equal("EN", PluginLocalization.SwitchButtonLabel, "Chinese UI should offer the E
 Equal("语言已切换为中文。", PluginLocalization.LanguageChangedMessage(true), "Chinese switch success message");
 Equal("语言已切换为中文，但配置文件保存失败。", PluginLocalization.LanguageChangedMessage(false), "Chinese switch persistence failure message");
 Equal("位置 2", PluginLocalization.DefaultTeleportName(2), "Chinese default teleport name");
+
+SnapshotBucketMetadata chineseSnapshotMetadata = SnapshotBucketMetadata.Build(
+    new ItemSnapshot(363, 10, 73, new byte[] { 1, 2, 3, 4 }), count: 3, showQuality: true);
+if (Regex.IsMatch(chineseSnapshotMetadata.Text,
+        @"\b(?:amount|quality|state|total|Snapshot|Bucket|Core|adapter)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+    throw new InvalidOperationException("Chinese Snapshot bucket metadata leaked product-owned English: " +
+                                        chineseSnapshotMetadata.Text);
+foreach (string sample in snapshotCanonicalUiSamples)
+{
+    string translated = PluginLocalization.Translate(sample);
+    if (Regex.IsMatch(translated,
+            @"\b(?:Snapshot|Runtime|ItemGroup|Bucket|Core|adapter|amount|quality|state|Crafting|AmmoRefill|Decomposition|salvage|blueprint)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        throw new InvalidOperationException("Chinese Snapshot UI leaked product-owned English: " + translated);
+}
+string chineseKnownError = PluginLocalization.SnapshotModuleFailureMessage("snapshot-not-found");
+string chineseThrownError = PluginLocalization.SnapshotModuleFailureMessage("module-threw:NullReferenceException");
+if (chineseKnownError.Contains("snapshot-not-found", StringComparison.Ordinal) ||
+    chineseThrownError.Contains("module-threw", StringComparison.Ordinal) ||
+    chineseThrownError.Contains("NullReferenceException", StringComparison.Ordinal))
+    throw new InvalidOperationException("Chinese Snapshot errors exposed internal English codes or type names.");
+
+string infiniteStorageViewPath = Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu", "UI",
+    "CheatMenuOverlayUi.InfiniteStorageView.cs");
+string infiniteStorageViewSource = File.ReadAllText(infiniteStorageViewPath);
+HashSet<string> internalSnapshotLiterals = new(StringComparer.Ordinal)
+{
+    "single", "bucket", "asset", "decomposition", "InfiniteStorageResultsHost",
+    "InfiniteStorageGridColumn", "InfiniteStorageGrid"
+};
+foreach (Match match in Regex.Matches(infiniteStorageViewSource,
+             "(?<!\\\\)\\\"((?:\\\\.|[^\\\"\\\\])*)\\\""))
+{
+    string literal = match.Groups[1].Value;
+    if (internalSnapshotLiterals.Contains(literal)) continue;
+    string visibleLiteral = Regex.Replace(literal, @"\{[^{}]*\}", string.Empty);
+    if (Regex.IsMatch(visibleLiteral,
+            @"\b(?:Snapshot|Runtime|ItemGroup|Bucket|Core|adapter|amount|quality|state)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        throw new InvalidOperationException("Snapshot UI has a product-owned English literal in Chinese mode: " + literal);
+}
+
+foreach (string modulePath in Directory.EnumerateFiles(
+             Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu", "InfiniteStorage", "Adapters"),
+             "*.cs", SearchOption.AllDirectories))
+{
+    string moduleSource = File.ReadAllText(modulePath);
+    foreach (Match match in Regex.Matches(moduleSource,
+                 "public string (?:Label|Tooltip) => \\\"(?<text>(?:\\\\.|[^\\\"\\\\])*)\\\""))
+    {
+        string text = match.Groups["text"].Value;
+        if (Regex.IsMatch(text,
+                @"\b(?:Snapshot|Runtime|ItemGroup|Bucket|Core|adapter|amount|quality|state|Crafting|AmmoRefill|Decomposition|salvage|blueprint)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            throw new InvalidOperationException("Snapshot module UI text has product-owned English in Chinese mode: " + text);
+    }
+}
 
 string source = "<color=#FF0000><name_npc></color><br><pause> Meet <name_char>";
 WorkshopProtectedText protectedText = WorkshopRichTextProtector.Protect(source);

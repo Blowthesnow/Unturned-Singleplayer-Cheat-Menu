@@ -4,6 +4,7 @@ using BepInEx.Logging;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnturnedSingleplayerCheatMenu.UI.Motion;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
 
@@ -20,6 +21,7 @@ internal sealed class PluginUiRoot : IDisposable
 	private GameObject _selectionBeforeNativeUi;
 	private bool _nativeUiCoexistence;
 	private CanvasGroup _hudGroup;
+	private UiMotionDriver _motion;
 
 	internal GameObject Root { get; private set; }
 	internal Canvas Canvas { get; private set; }
@@ -30,6 +32,7 @@ internal sealed class PluginUiRoot : IDisposable
 	internal RectTransform HudLayer { get; private set; }
 	internal RectTransform ToastLayer { get; private set; }
 	internal UiToastService Toasts { get; private set; }
+	internal UiMotionDriver Motion => _motion;
 
 	private sealed class LayerSurface
 	{
@@ -59,6 +62,8 @@ internal sealed class PluginUiRoot : IDisposable
 		_layerStack.Clear();
 		Toasts?.Dispose();
 		Toasts = null;
+		if (_motion == null) _motion = new UiMotionDriver();
+		else _motion.CancelAll();
 		_ownedEventSystem = null;
 		_boundEventSystem = null;
 		Root = new GameObject("UnturnedSingleplayerCheatMenu.UiRoot", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -81,7 +86,7 @@ internal sealed class PluginUiRoot : IDisposable
 		PopupLayer = CreateLayer("PopupLayer");
 		TooltipLayer = CreateLayer("TooltipLayer");
 		ToastLayer = CreateLayer("ToastLayer");
-		Toasts = new UiToastService(ToastLayer, _log);
+		Toasts = new UiToastService(ToastLayer, _log, _motion);
 		EnsureEventSystem();
 		_log?.LogInfo("[UI] single UiRoot created with WindowLayer, ModalLayer, PopupLayer, TooltipLayer, HudLayer, and ToastLayer.");
 	}
@@ -161,6 +166,7 @@ internal sealed class PluginUiRoot : IDisposable
 		Toasts?.Pump();
 		PruneLayerStack();
 		OverlaySelectableVisual.PumpAll();
+		_motion?.Pump(Time.unscaledDeltaTime);
 		bool canvasRebuilding = CanvasUpdateRegistry.IsRebuildingLayout() || CanvasUpdateRegistry.IsRebuildingGraphics();
 		while (_hudDestroyQueue.TryDequeueReady(Time.frameCount, canvasRebuilding, out GameObject retiredHud))
 		{
@@ -182,6 +188,7 @@ internal sealed class PluginUiRoot : IDisposable
 	{
 		if (target != null)
 		{
+			_motion?.Cancel(target, includeChildren: true);
 			_hudDestroyQueue.Enqueue(target, Time.frameCount, item => item.SetActive(false));
 		}
 	}
@@ -377,6 +384,8 @@ internal sealed class PluginUiRoot : IDisposable
 
 	internal void HandleSceneChanged()
 	{
+		// Scene changes must settle pending transient exits so their completion cleanup runs.
+		_motion?.SnapAll();
 		EnsureInitialized();
 		EnsureEventSystem();
 	}
@@ -402,6 +411,8 @@ internal sealed class PluginUiRoot : IDisposable
 		_layerStack.Clear();
 		Toasts?.Dispose();
 		Toasts = null;
+		_motion?.Dispose();
+		_motion = null;
 		if (_ownedEventSystem != null)
 		{
 			UnityEngine.Object.Destroy(_ownedEventSystem);

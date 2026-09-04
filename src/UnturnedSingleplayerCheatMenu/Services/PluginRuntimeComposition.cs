@@ -1,5 +1,6 @@
 using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Runtime;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.UI;
@@ -30,7 +31,7 @@ internal sealed class PluginRuntimeComposition
 		NearbyItemIndex nearbyItemIndex,
 		AutoPickupFeature autoPickup,
 		MinimapFeature minimap,
-		InfiniteStorageRuntime infiniteStorage,
+		SnapshotInfiniteStorageRuntime infiniteStorage,
 		CreatureHealthBarService creatureHealthBars,
 		WorkshopLocalizationService workshopLocalization)
 	{
@@ -71,7 +72,7 @@ internal sealed class PluginRuntimeComposition
 	internal NearbyItemIndex NearbyItemIndex { get; }
 	internal AutoPickupFeature AutoPickup { get; }
 	internal MinimapFeature Minimap { get; }
-	internal InfiniteStorageRuntime InfiniteStorage { get; }
+	internal SnapshotInfiniteStorageRuntime InfiniteStorage { get; }
 	internal CreatureHealthBarService CreatureHealthBars { get; }
 	internal WorkshopLocalizationService WorkshopLocalization { get; }
 }

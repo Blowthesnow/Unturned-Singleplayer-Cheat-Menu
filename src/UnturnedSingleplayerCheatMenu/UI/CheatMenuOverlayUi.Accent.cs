@@ -30,7 +30,7 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		_accentColor = _teleportColorDraft;
 		CheatMenuStyle.ApplyAccent(_accentColor);
-		HideTeleportColorPicker();
+		RunWithoutTransientMotion(HideTeleportColorPicker);
 		RebuildVisualTreesPreservingVisibility();
 		SetStatus("强调色已应用；仅在本次游戏会话生效。", 4f, StatusKind.Success);
 	}
@@ -38,7 +38,7 @@ internal sealed partial class CheatMenuOverlayUi
 	private void ApplyTeleportMarkerColorDraft()
 	{
 		_teleportMarkerColor = _teleportColorDraft;
-		HideTeleportColorPicker();
+		RunWithoutTransientMotion(HideTeleportColorPicker);
 		ShowTab(MenuTab.Teleports);
 	}
 }

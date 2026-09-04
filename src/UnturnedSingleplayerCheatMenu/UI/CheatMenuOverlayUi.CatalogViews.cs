@@ -425,7 +425,7 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private void ShowItemFilterPanel(bool forFavorites)
 	{
-		HideItemFilterPanel();
+		PrepareModalOpen();
 		_itemFilterForInfiniteStorage = false;
 		_itemFilterForFavorites = forFavorites;
 		_itemFilterDraft = (_itemFilterForInfiniteStorage ? _infiniteStorageFilter : (forFavorites ? _favoriteItemFilter : _itemFilter)).Clone();
@@ -434,7 +434,7 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private void ShowInfiniteStorageFilterPanel()
 	{
-		HideItemFilterPanel();
+		PrepareModalOpen();
 		_itemFilterForInfiniteStorage = true;
 		_itemFilterDraft = _infiniteStorageFilter.Clone();
 		BuildItemFilterPanel();
@@ -568,6 +568,7 @@ internal sealed partial class CheatMenuOverlayUi
 		}, "清除筛选面板中的高级条件；点击应用后才会影响结果。", 90f);
 		CreateButton(gameObject3.transform, "取消", HideItemFilterPanel, "放弃筛选面板中尚未应用的更改。", 90f);
 		CreateButton(gameObject3.transform, "应用", ApplyItemFilterPanel, "应用面板中的筛选条件并刷新当前物品结果。", 90f, 36f, CheatMenuStyle.Accent);
+		AnimateModalEnter(_itemFilterRoot, gameObject.transform);
 	}
 
 	private void CreateFilterOptionGrid(Transform parent, string title, IReadOnlyList<string> labels, int columns, Action<int> select, Func<int, bool> selected)
@@ -599,11 +600,14 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		if (!(_itemFilterRoot == null))
 		{
-			_ = _itemFilterForFavorites;
-			GameObject itemFilterRoot = _itemFilterRoot;
-			_itemFilterRoot = null;
-			QueueForDestroy(itemFilterRoot);
-			BuildItemFilterPanel();
+			RunWithoutTransientMotion(delegate
+			{
+				_ = _itemFilterForFavorites;
+				GameObject itemFilterRoot = _itemFilterRoot;
+				_itemFilterRoot = null;
+				QueueForDestroy(itemFilterRoot);
+				BuildItemFilterPanel();
+			});
 		}
 	}
 
@@ -612,7 +616,7 @@ internal sealed partial class CheatMenuOverlayUi
 		ItemFilterState obj = _itemFilterForInfiniteStorage ? _infiniteStorageFilter : (_itemFilterForFavorites ? _favoriteItemFilter : _itemFilter);
 		obj.CopyFrom(_itemFilterDraft);
 		ItemFilterService.NormalizeForCategory(obj);
-		HideItemFilterPanel();
+		RunWithoutTransientMotion(HideItemFilterPanel);
 		_itemFilterForInfiniteStorage = false;
 		BuildItemResults();
 		BuildFavoriteResults();
@@ -631,9 +635,10 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		if (!(_itemFilterRoot == null))
 		{
-			QueueForDestroy(_itemFilterRoot);
+			GameObject root = _itemFilterRoot;
 			_itemFilterRoot = null;
 			_itemFilterDraft = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
 	}
 
@@ -1143,11 +1148,11 @@ internal sealed partial class CheatMenuOverlayUi
 		handler.Initialize(page, pageCount,
 			delegate
 			{
-				if (page > 0) { HideHoverExplanation(); changePage(page - 1); }
+				if (page > 0) { RunWithoutTransientMotion(HideHoverExplanation); changePage(page - 1); }
 			},
 			delegate
 			{
-				if (page < pageCount - 1) { HideHoverExplanation(); changePage(page + 1); }
+				if (page < pageCount - 1) { RunWithoutTransientMotion(HideHoverExplanation); changePage(page + 1); }
 			});
 	}
 

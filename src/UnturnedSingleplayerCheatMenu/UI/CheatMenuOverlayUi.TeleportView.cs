@@ -256,6 +256,7 @@ internal sealed partial class CheatMenuOverlayUi
 		Canvas.ForceUpdateCanvases();
 		LayoutRebuilder.ForceRebuildLayoutImmediate(_teleportMarkerDrawerPopup);
 		PositionTeleportMarkerDrawer();
+		AnimatePopupEnter(_teleportMarkerDrawerRoot, _teleportMarkerDrawerPopup);
 	}
 
 	private void PositionTeleportMarkerDrawer()
@@ -278,7 +279,7 @@ internal sealed partial class CheatMenuOverlayUi
 			teleportMarkerDrawerPopup.anchorMin = anchorMin;
 			bool flag = localPoint.y - component2.rect.yMin < _teleportMarkerDrawerPopup.rect.height + 8f;
 			_teleportMarkerDrawerPopup.pivot = (flag ? new Vector2(0f, 0f) : new Vector2(0f, 1f));
-			_teleportMarkerDrawerPopup.anchoredPosition = (flag ? localPoint2 : localPoint);
+			SetPopupMotionPosition(_teleportMarkerDrawerPopup, flag ? localPoint2 : localPoint);
 		}
 	}
 
@@ -287,9 +288,10 @@ internal sealed partial class CheatMenuOverlayUi
 		_teleportMarkerDrawerOpen = false;
 		if (_teleportMarkerDrawerRoot != null)
 		{
-			QueueForDestroy(_teleportMarkerDrawerRoot);
+			GameObject root = _teleportMarkerDrawerRoot;
+			_teleportMarkerDrawerRoot = null;
+			QueuePopupExit(root, root.transform);
 		}
-		_teleportMarkerDrawerRoot = null;
 		_teleportMarkerDrawerPopup = null;
 		_teleportMarkerTriggerButton = null;
 	}
@@ -314,7 +316,7 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private void ShowTeleportDeleteConfirmation(TeleportPoint point)
 	{
-		HideConfirmDialog();
+		PrepareModalOpen();
 		_confirmRoot = CreateObject("ConfirmOverlay", _uiRoot.ModalLayer, typeof(Image));
 		_fluentHandles.RegisterScope(_confirmRoot);
 		Stretch(_confirmRoot.GetComponent<RectTransform>());
@@ -350,14 +352,16 @@ internal sealed partial class CheatMenuOverlayUi
 			}
 		}, string.Format(PluginLocalization.Translate("永久删除传送点“{0}”。"), point.Name), 100f, 34f, CheatMenuStyle.Danger);
 		_uiRoot.RegisterModal(_confirmRoot, HideConfirmDialog, button.gameObject);
+		AnimateModalEnter(_confirmRoot, gameObject.transform);
 	}
 
 	private void HideConfirmDialog()
 	{
 		if (!(_confirmRoot == null))
 		{
-			QueueForDestroy(_confirmRoot);
+			GameObject root = _confirmRoot;
 			_confirmRoot = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
 	}
 }

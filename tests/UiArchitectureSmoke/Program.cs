@@ -193,8 +193,22 @@ string toolsShell = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.Tool
 string catalogViews = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.CatalogViews.cs"));
 string autoPickupToolsView = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.AutoPickupToolsView.cs"));
 string infiniteStorageView = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.InfiniteStorageView.cs"));
-string infiniteStorageRuntimeSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "InfiniteStorageRuntime.cs"));
-string infiniteStorageDecompositionSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "InfiniteStorageDecomposition.cs"));
+string infiniteStorageRuntimeSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "Runtime", "SnapshotInfiniteStorageRuntime.cs"));
+string infiniteStorageDecompositionSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "Adapters", "Decomposition", "SnapshotDecompositionModule.cs"));
+string infiniteStorageAmmoRefillSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "Adapters", "AmmoRefill", "SnapshotAmmoRefillModule.cs"));
+string infiniteStorageModuleRegistrySource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "Composition", "SnapshotModuleRegistry.cs"));
+string snapshotPersistenceSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "SnapshotKernel", "SnapshotPersistence.cs"));
+string snapshotPresentationSource = Read(Path.Combine(sourceRoot, "InfiniteStorage", "SnapshotKernel", "SnapshotPresentation.cs"));
+string ammoCompatibilityIndexSource = Read(Path.Combine(sourceRoot, "Services", "AmmoCompatibilityIndex.cs"));
+string assetHoverDetailsBuilderSource = Read(Path.Combine(sourceRoot, "Services", "AssetHoverDetailsBuilder.cs"));
+string legacyRichTextSanitizerSource = Read(Path.Combine(sourceRoot, "Services", "LegacyRichTextSanitizer.cs"));
+string inventoryStateReaderSource = Read(Path.Combine(sourceRoot, "InventoryArrange", "InventoryStateReader.cs"));
+string inventoryArrangeFeatureSource = Read(Path.Combine(sourceRoot, "InventoryArrange", "InventoryArrangeFeature.cs"));
+string inventoryArrangePlannerSource = Read(Path.Combine(sourceRoot, "InventoryArrange", "InventoryArrangePlanner.cs"));
+string inventoryStackingSemanticsSource = Read(Path.Combine(sourceRoot, "InventoryArrange", "InventoryStackingSemantics.cs"));
+string unturnedAmmoCompatibilityReaderSource = Read(Path.Combine(sourceRoot, "ItemStacking", "UnturnedAmmoCompatibilityReader.cs"));
+string ammoFillBlueprintPolicySource = Read(Path.Combine(sourceRoot, "ItemStacking", "AmmoFillBlueprintPolicy.cs"));
+string ammoRefillAllocatorSource = Read(Path.Combine(sourceRoot, "ItemStacking", "AmmoRefillAllocator.cs"));
 string overlayIconBinder = Read(Path.Combine(sourceRoot, "UI", "OverlayIconBinder.cs"));
 string cheatMenuStyleSource = Read(Path.Combine(sourceRoot, "UI", "CheatMenuStyle.cs"));
 string uiStateStoreSource = Read(Path.Combine(sourceRoot, "UI", "UiStateStore.cs"));
@@ -206,8 +220,18 @@ string hudFrameSource = Read(Path.Combine(sourceRoot, "UI", "HudFrameStyle.cs"))
 string pointToolHudSource = Read(Path.Combine(sourceRoot, "UI", "PointToolHud.cs"));
 string creatureHealthBarHudSource = Read(creatureHealthBarHudPath);
 string pluginLocalizationSource = Read(Path.Combine(sourceRoot, "Services", "PluginLocalization.cs"));
+string uiMotionDriverSource = Read(Path.Combine(sourceRoot, "UI", "Motion", "UiMotionDriver.cs"));
+string uiMotionHandleSource = Read(Path.Combine(sourceRoot, "UI", "Motion", "UiMotionHandle.cs"));
+string uiTransientMotionSource = Read(Path.Combine(sourceRoot, "UI", "Motion", "UiTransientMotion.cs"));
+string overlayMotionSource = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.Motion.cs"));
+string overlaySelectableSource = Read(Path.Combine(sourceRoot, "UI", "OverlaySelectableVisual.cs"));
+string uiToastSource = Read(Path.Combine(sourceRoot, "UI", "UiToastService.cs"));
 
 CheckNoMixedLayoutGroupsOnSameCreation(sourceFiles, repoRoot);
+Check(autoPickupToolsView.Contains("bool whitelistEnabled = document.Enabled;", StringComparison.Ordinal) &&
+      !autoPickupToolsView.Contains("bool whitelistEnabled = whitelist || document.Enabled;", StringComparison.Ordinal) &&
+      autoPickupToolsView.Contains("名单为空，当前仍按黑名单路径拾取", StringComparison.Ordinal),
+    "Whitelist cards must not enable the whitelist toggle; the UI must explain the two-condition activation contract.");
 string responsiveEnsureShell = ReadMethodBody(overlay, "private void EnsureShell()");
 Check(responsiveEnsureShell.Contains("_wideBodyLayout = _shellBody.AddComponent<HorizontalLayoutGroup>()", StringComparison.Ordinal) &&
       responsiveEnsureShell.Contains("_narrowBodyLayout = _narrowShellBody.AddComponent<VerticalLayoutGroup>()", StringComparison.Ordinal) &&
@@ -267,6 +291,66 @@ Check(fluentThemeSource.Contains("TooltipBorder =>", StringComparison.Ordinal) &
       fluentAdapterSource.Contains("StyleTooltipSurface", StringComparison.Ordinal) &&
       overlay.Contains("StyleTooltipSurface(_hoverExplanationRoot", StringComparison.Ordinal),
     "Hover explanations do not use the dedicated brighter two-pixel tooltip border.");
+Check(source.Contains("_motion?.Pump(Time.unscaledDeltaTime)", StringComparison.Ordinal) &&
+      !string.Join("\n", Directory.EnumerateFiles(Path.Combine(sourceRoot, "UI", "Motion"), "*.cs").Select(Read))
+          .Contains("Time.deltaTime", StringComparison.Ordinal),
+    "UI motion is not driven by the shared unscaled-time pump.");
+Check(ReadMethodBody(uiMotionDriverSource, "internal void Pump(float unscaledDeltaTime)")
+          .Contains("finished && !handle.IsActive && _handles.Remove(handle)", StringComparison.Ordinal) &&
+      ReadMethodBody(uiMotionDriverSource, "internal void SnapAll()")
+          .IndexOf("_handles.RemoveAt(index)", StringComparison.Ordinal) <
+      ReadMethodBody(uiMotionDriverSource, "internal void SnapAll()")
+          .IndexOf("handle?.SnapToEnd()", StringComparison.Ordinal),
+    "Motion completion re-entry can remove a retargeted handle or corrupt SnapAll iteration.");
+Check(ReadMethodBody(uiMotionHandleSource, "internal void SnapToEnd()")
+          .Contains("if (Owner == null)", StringComparison.Ordinal),
+    "Destroyed Unity owners can execute stale motion apply/completion callbacks.");
+Check(!ReadMethodBody(overlaySelectableSource, "private void RefreshFluent(bool animate)")
+          .Contains("transform.localScale", StringComparison.Ordinal) &&
+      ReadMethodBody(overlaySelectableSource, "private void RefreshFluent(bool animate)")
+          .Contains("previousState == state && !targetsChanged", StringComparison.Ordinal),
+    "Selectable feedback changes the hit target geometry or restarts equivalent state transitions.");
+Check(fluentFactorySource.Contains("UiMotionChannel.SwitchThumbColor", StringComparison.Ordinal) &&
+      fluentFactorySource.Contains("animate: toggle.interactable", StringComparison.Ordinal) &&
+      fluentFactorySource.Contains("_theme.SurfaceRaised", StringComparison.Ordinal) &&
+      fluentFactorySource.Contains("_theme.BorderStrong", StringComparison.Ordinal) &&
+      !ReadMethodBody(overlay, "private void CreateToggleAction(").Contains("SetBaseColor(value ?", StringComparison.Ordinal),
+    "Toggle motion does not preserve the neutral row, visible OFF track, independent thumb channel, and disabled snap contract.");
+Check(ReadMethodBody(fluentAdapterSource, "private FluentSelectablePalette ResolveTogglePalette()")
+          .Contains("_context.Theme.SurfaceHover", StringComparison.Ordinal) &&
+      !ReadMethodBody(fluentAdapterSource, "private FluentSelectablePalette ResolveTogglePalette()")
+          .Contains("FocusSoft", StringComparison.Ordinal),
+    "Toggle keyboard focus still covers the row with an accent-derived fill.");
+Check(uiToastSource.Contains("UiMotionChannel.ToastHeight", StringComparison.Ordinal) &&
+      uiToastSource.Contains("blocksRaycasts = false", StringComparison.Ordinal) &&
+      uiToastSource.Contains("layout.childControlWidth = true", StringComparison.Ordinal) &&
+      uiToastSource.Contains("layout.childControlHeight = true", StringComparison.Ordinal) &&
+      overlaySelectableSource.Contains("DetailedTooltipDelaySeconds = 0.45f", StringComparison.Ordinal) &&
+      overlaySelectableSource.Contains("TooltipWarmWindowSeconds = 0.70f", StringComparison.Ordinal),
+    "Toast reflow/click-through or tooltip warm-navigation motion is incomplete.");
+Check(overlayMotionSource.Contains("Dictionary<int, GameObject> _closingTransientSurfaces", StringComparison.Ordinal) &&
+      ReadMethodBody(overlayMotionSource, "private void RunWithoutTransientMotion(Action action)")
+          .Contains("FlushClosingTransientSurfaces();", StringComparison.Ordinal) &&
+      !ReadMethodBody(overlayMotionSource, "private void QueueTransientExit(")
+          .Contains("UnregisterLayerSurface", StringComparison.Ordinal) &&
+      uiTransientMotionSource.Contains("Vector3 restScale", StringComparison.Ordinal) &&
+      uiTransientMotionSource.Contains("class UiPopupMotionOffset", StringComparison.Ordinal) &&
+      overlay.Split("SetPopupMotionPosition(", StringSplitOptions.None).Length - 1 >= 6,
+    "Transient close/focus/forced-flush/rest-target lifecycle is incomplete.");
+Check(ReadMethodBody(overlayMotionSource, "private void QueuePopupExit(")
+          .Contains("_uiRoot.UnregisterLayerSurface(root)", StringComparison.Ordinal),
+    "Popup exit no longer restores its trigger synchronously.");
+Check(!overlay.Contains("InfiniteStorageDecomposeScopeDrawer", StringComparison.Ordinal),
+    "The retired Infinite Storage decomposition drawer still participates in popup lifecycle.");
+string closeMenuMotionBody = ReadMethodBody(overlay, "public void OnClosed()");
+foreach (string modalClose in new[]
+{
+    "HideConfirmDialog();", "HideAboutDialog();", "HideFontPicker();", "HideShortcutDialog();",
+    "HideTeleportColorPicker();", "HideVehicleThumbnailSettings();", "HideItemFilterPanel();",
+    "HideAutoPickupBlacklistPicker();", "HideAutoPickupRarityPicker();"
+})
+    Check(closeMenuMotionBody.Contains(modalClose, StringComparison.Ordinal),
+        "Menu close leaves a global ModalLayer surface alive: " + modalClose);
 Check(cheatMenuStyleSource.Contains("CategorySidebarWidth = 176f", StringComparison.Ordinal) &&
       cheatMenuStyleSource.Contains("CategoryButtonHeight = 40f", StringComparison.Ordinal) &&
       catalogViews.Contains("CheatMenuStyle.CategorySidebarWidth", StringComparison.Ordinal) &&
@@ -285,7 +369,7 @@ Check(!responsiveColumnsBody.Contains("windowWidth - 235f", StringComparison.Ord
 string refreshWindowGeometryBody = ReadMethodBody(overlay, "private void RefreshWindowGeometry(");
 string refreshInfiniteStorageGeometryBody = ReadMethodBody(overlay, "private void RefreshInfiniteStorageGeometry(");
 Check(overlay.Contains("PreferredWindowWidth = 1280f", StringComparison.Ordinal) &&
-	  overlay.Contains("PreferredInfiniteStorageWindowWidth = 1120f", StringComparison.Ordinal) &&
+	  overlay.Contains("PreferredInfiniteStorageWindowWidth = 1080f", StringComparison.Ordinal) &&
 	  refreshWindowGeometryBody.Contains("new Vector2(PreferredWindowWidth, PreferredWindowHeight)", StringComparison.Ordinal) &&
 	  !refreshWindowGeometryBody.Contains("PreferredInfiniteStorageWindowWidth", StringComparison.Ordinal) &&
 	  refreshInfiniteStorageGeometryBody.Contains("new Vector2(PreferredInfiniteStorageWindowWidth, PreferredWindowHeight)", StringComparison.Ordinal) &&
@@ -294,14 +378,22 @@ Check(overlay.Contains("PreferredWindowWidth = 1280f", StringComparison.Ordinal)
 	  cheatMenuStyleSource.Contains("CardHeight = 158f", StringComparison.Ordinal) &&
 	  catalogViews.Split("new Vector2(CheatMenuStyle.CardWidth, CheatMenuStyle.CardHeight)", StringSplitOptions.None).Length - 1 == 3 &&
 	  !catalogViews.Contains("new Vector2(155f, 158f)", StringComparison.Ordinal),
-	"Catalog density fix does not preserve 155x158 cards, a five-column-capable 1280 main window, or the 1120 Infinite Storage width.");
+	"Catalog density fix does not preserve 155x158 cards, a five-column-capable 1280 main window, or the content-fitted 1080 Infinite Storage width.");
 string infiniteStorageGridBody = ReadMethodBody(infiniteStorageView, "private void BuildInfiniteStorageGrid(");
-Check(infiniteStorageGridBody.Contains("layout.constraintCount = 5", StringComparison.Ordinal) &&
-	  infiniteStorageGridBody.Contains("entries.Count / 15f", StringComparison.Ordinal) &&
-	  infiniteStorageGridBody.Contains("_infiniteStoragePage * 15", StringComparison.Ordinal) &&
-	  infiniteStorageGridBody.Contains("start + 15", StringComparison.Ordinal) &&
-	  infiniteStorageGridBody.Contains("layout.cellSize = new Vector2(155f, 158f)", StringComparison.Ordinal),
-	"Infinite Storage no longer preserves five 155x158 columns and 15 entries per page.");
+Check(infiniteStorageGridBody.Contains("GridLayoutGroup", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("const int columnCount = 5", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("const int rowCount = 3", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("const int pageSize = 15", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("layout.childAlignment = TextAnchor.UpperCenter", StringComparison.Ordinal) &&
+	  !infiniteStorageGridBody.Contains("GetResponsiveCardColumnCount()", StringComparison.Ordinal) &&
+	  !infiniteStorageGridBody.Contains("GetResponsiveCardRowCount()", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("mergeHiddenQuality = resolved && !asset.showQuality && !_infiniteStorageDecomposeMode", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("SnapshotBucketDisplayAggregator.Build(group, mergeHiddenQuality)", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("cards.Count / pageSize", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("CheatMenuStyle.CardWidth", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("CheatMenuStyle.CardHeight", StringComparison.Ordinal) &&
+	  infiniteStorageGridBody.Contains("CreateInfiniteStorageBucketCard(grid.transform", StringComparison.Ordinal),
+	"Infinite Storage must render exactly five columns by three rows without borrowing the wider main-page responsive count.");
 Check(hudFrameSource.Contains("new Color(0f, 0f, 0f, 0.8f)", StringComparison.Ordinal) ||
       cheatMenuStyleSource.Contains("new Color(0f, 0f, 0f, 0.8f)", StringComparison.Ordinal),
     "HUD backdrop is not black at 80% opacity.");
@@ -332,6 +424,8 @@ Check(minimapHud.Contains("RefreshAccentVisuals();", StringComparison.Ordinal) &
 string toggleFactoryBody = ReadMethodBody(overlay, "private void CreateToggleAction(");
 Check(toggleFactoryBody.Contains("localizedLabel = PluginLocalization.Translate(label)", StringComparison.Ordinal) &&
       toggleFactoryBody.Contains("localize: false", StringComparison.Ordinal) &&
+	  overlay.Contains("Color? activeColor = null", StringComparison.Ordinal) &&
+	  toggleFactoryBody.Contains("tooltip, activeColor", StringComparison.Ordinal) &&
       !toggleFactoryBody.Contains("label + \"  \" +", StringComparison.Ordinal),
     "Initial Toggle labels can still bypass per-label localization and produce mixed-language UI.");
 string infiniteStoragePanelBody = ReadMethodBody(infiniteStorageView, "private void BuildInfiniteStoragePanel(");
@@ -339,42 +433,159 @@ Check(infiniteStoragePanelBody.Contains("\"搜索\", 13, CheatMenuStyle.Text, 64
       infiniteStoragePanelBody.Contains("CheatMenuStyle.InfiniteStorageWithdrawLabelWidth", StringComparison.Ordinal) &&
       cheatMenuStyleSource.Contains("InfiniteStorageWithdrawLabelWidth = 132f", StringComparison.Ordinal),
     "Infinite Storage Search/Withdraw semantic labels remain too narrow for English.");
-Check(infiniteStoragePanelBody.Contains("分解模式", StringComparison.Ordinal) &&
-      infiniteStoragePanelBody.Contains("ToggleInfiniteStorageDecomposeScopeDrawer", StringComparison.Ordinal) &&
-      infiniteStoragePanelBody.Contains("InfiniteStorageDecomposeScopeLabel", StringComparison.Ordinal),
-    "Infinite Storage is missing the decomposition-mode button and its adjacent range drawer.");
-string infiniteStorageCardBody = ReadMethodBody(infiniteStorageView, "private void CreateInfiniteStorageCard(");
-Check(infiniteStorageCardBody.Contains("bool canDecompose = _infiniteStoragePresenter.CanDecompose(entry.EntryId)", StringComparison.Ordinal) &&
-      infiniteStorageCardBody.Contains("_infiniteStoragePresenter.Decompose(entry.EntryId, _infiniteStorageDecomposeScope)", StringComparison.Ordinal) &&
-      infiniteStorageCardBody.Contains("button.interactable = canDecompose", StringComparison.Ordinal) &&
-      infiniteStorageCardBody.Contains("_fluentControls.MarkDestructiveHover(button)", StringComparison.Ordinal) &&
-      infiniteStorageCardBody.Contains("if (!_infiniteStorageDecomposeMode)", StringComparison.Ordinal),
-    "Infinite Storage cards do not restrict red-hover decomposition to supported non-material candidates.");
-string decomposeDrawerBody = ReadMethodBody(infiniteStorageView, "private void BuildInfiniteStorageDecomposeScopeDrawer(");
-Check(infiniteStorageView.Contains("InfiniteStorageDecomposeScope.SingleItem", StringComparison.Ordinal) &&
-      infiniteStorageView.Contains("InfiniteStorageDecomposeScope.AssetId", StringComparison.Ordinal) &&
-      infiniteStorageView.Contains("InfiniteStorageDecomposeScope.Stack", StringComparison.Ordinal) &&
-      decomposeDrawerBody.Contains("foreach (InfiniteStorageDecomposeScope scope in InfiniteStorageDecomposeScopes)", StringComparison.Ordinal) &&
-      decomposeDrawerBody.Contains("_uiRoot.RegisterPopup", StringComparison.Ordinal),
-    "The decomposition range drawer does not expose Single item, ID, and Stack through the popup lifecycle.");
+Check(infiniteStoragePanelBody.Contains("snapshot.ModuleActions", StringComparison.Ordinal) &&
+      infiniteStoragePanelBody.Contains("SnapshotModuleKind.GlobalAction", StringComparison.Ordinal) &&
+	  infiniteStoragePanelBody.IndexOf("CreateInfiniteStorageDestructionModeToggle", StringComparison.Ordinal) <
+	      infiniteStoragePanelBody.IndexOf("CreateInfiniteStorageDecompositionModeToggle", StringComparison.Ordinal) &&
+	  !infiniteStorageView.Contains("_snapshotDestructionScope", StringComparison.Ordinal) &&
+	  !infiniteStoragePanelBody.Contains("破坏范围：", StringComparison.Ordinal) &&
+	  !infiniteStorageView.Contains("DestructionScopeLabel", StringComparison.Ordinal) &&
+	  !infiniteStorageView.Contains("ParseDestructionScope", StringComparison.Ordinal) &&
+	  infiniteStoragePanelBody.Contains("CreateInfiniteStorageDecompositionModeToggle", StringComparison.Ordinal) &&
+      infiniteStoragePanelBody.Contains("分解范围：", StringComparison.Ordinal) &&
+      !infiniteStoragePanelBody.Contains("LegacyAmbiguous", StringComparison.Ordinal),
+	"Infinite Storage does not expose its decomposition-mode/range controls and enabled module actions, or still exposes retired migration UI.");
+string destructionModeToggleBody = ReadMethodBody(infiniteStorageView,
+    "private void CreateInfiniteStorageDestructionModeToggle(");
+Check(destructionModeToggleBody.Contains("CreateToggleAction", StringComparison.Ordinal) &&
+      destructionModeToggleBody.Contains("CheatMenuStyle.Danger", StringComparison.Ordinal) &&
+      !destructionModeToggleBody.Contains("CreateButton", StringComparison.Ordinal) &&
+      destructionModeToggleBody.Contains("ShowInfiniteStorageDestructionWarning", StringComparison.Ordinal),
+    "The destruction-mode control does not reuse the shared Toggle style with a fixed red active track and one-time warning.");
+string decompositionModeToggleBody = ReadMethodBody(infiniteStorageView,
+    "private void CreateInfiniteStorageDecompositionModeToggle(");
+Check(decompositionModeToggleBody.Contains("CreateToggleAction", StringComparison.Ordinal) &&
+      !decompositionModeToggleBody.Contains("CheatMenuStyle.Danger", StringComparison.Ordinal) &&
+      !decompositionModeToggleBody.Contains("CreateButton", StringComparison.Ordinal),
+    "The decomposition-mode control does not reuse the shared Toggle style and configured accent color.");
+string fluentAdaptToggleBody = ReadMethodBody(fluentAdapterSource, "internal LegacyFluentControlHandle AdaptToggle(");
+string fluentFactoryToggleBody = ReadMethodBody(fluentFactorySource, "internal LegacyFluentControlHandle AdaptToggle(");
+string fluentUpdateSwitchBody = ReadMethodBody(fluentFactorySource, "private void UpdateSwitch(");
+Check(fluentAdapterSource.Contains("Color? activeColor = null", StringComparison.Ordinal) &&
+      fluentFactorySource.Contains("Color? activeColor = null", StringComparison.Ordinal) &&
+      fluentUpdateSwitchBody.Contains("activeColor ?? _theme.Accent.ToUnity()", StringComparison.Ordinal),
+    "The shared Toggle track cannot opt into a fixed semantic color while retaining the configured accent by default.");
+string destructionWarningBody = ReadMethodBody(infiniteStorageView,
+    "private void ShowInfiniteStorageDestructionWarning(");
+Check(destructionWarningBody.Contains("_infiniteStoragePresenter.DestructionWarningAcknowledged", StringComparison.Ordinal) &&
+      destructionWarningBody.Contains("_infiniteStoragePresenter.AcknowledgeDestructionWarning()", StringComparison.Ordinal) &&
+      destructionWarningBody.Contains("CheatMenuStyle.Danger", StringComparison.Ordinal) &&
+	  destructionWarningBody.Contains("破坏范围固定为 ID", StringComparison.Ordinal) &&
+	  destructionWarningBody.Contains("CancelInfiniteStorageDestructionWarning", StringComparison.Ordinal) &&
+      destructionWarningBody.Contains("此警告确认一次后不再弹出", StringComparison.Ordinal),
+    "Destruction mode does not show and persist the required one-time red warning dialog.");
+string cancelDestructionWarningBody = ReadMethodBody(infiniteStorageView,
+    "private void CancelInfiniteStorageDestructionWarning(");
+Check(cancelDestructionWarningBody.Contains("HideConfirmDialog()", StringComparison.Ordinal) &&
+      cancelDestructionWarningBody.Contains("RebuildInfiniteStoragePage()", StringComparison.Ordinal),
+    "Cancelling the one-time destruction warning can leave the Toggle visually enabled.");
+Check(plugin.Contains("Config.Bind(\"InfiniteStorage\", \"DestructionWarningAcknowledged\", defaultValue: false", StringComparison.Ordinal),
+    "The one-time destruction warning acknowledgement is not persisted disabled-by-default.");
+string infiniteStorageCardBody = ReadMethodBody(infiniteStorageView, "private void CreateInfiniteStorageBucketCard(");
+Check(infiniteStorageCardBody.Contains("group.AssetId", StringComparison.Ordinal) &&
+      infiniteStorageCardBody.Contains("group.AssetGuid", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("SnapshotBucketMetadata.Build", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("BuildInfiniteStorageCardMeta(group.AssetId, displayGroup.TotalCount, group.TotalCount)", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("TryGetAmmoContainerCapacity", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("SnapshotBucketDisplayFacts.AmmoContainer", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("AssetHoverDetailsBuilder.BuildItem", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("AddCardContents", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("_infiniteStorageDecomposeMode", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("_infiniteStorageDestructionMode", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("DestroyInfiniteStorageBucket", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("MarkDestructiveHover", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("ExecuteModule", StringComparison.Ordinal) &&
+	  infiniteStorageCardBody.Contains("WithdrawInfiniteStorageBuckets(group.Identity, displayGroup.Buckets", StringComparison.Ordinal) &&
+	  infiniteStorageView.Contains("SnapshotModuleKind.BucketAction", StringComparison.Ordinal),
+	"Infinite Storage cards do not preserve exact SnapshotBucket selection, item-page visuals, hover details, or decomposition-mode module actions.");
+string withdrawInfiniteStorageBucketsBody = ReadMethodBody(infiniteStorageView,
+    "private void WithdrawInfiniteStorageBuckets(");
+Check(withdrawInfiniteStorageBucketsBody.Contains("foreach (SnapshotBucketView bucket in buckets", StringComparison.Ordinal) &&
+      withdrawInfiniteStorageBucketsBody.Contains("_infiniteStoragePresenter.Withdraw(identity, bucket.Snapshot, target)", StringComparison.Ordinal),
+    "An aggregated hidden-quality card cannot withdraw its exact backing buckets without changing native payloads.");
+string infiniteStorageCardMetaBody = ReadMethodBody(infiniteStorageView,
+    "private static string BuildInfiniteStorageCardMeta(");
+Check(infiniteStorageCardMetaBody.Contains("groupTotal > bucketCount", StringComparison.Ordinal) &&
+      infiniteStorageCardMetaBody.Contains("×{bucketCount:N0}/总{groupTotal:N0}", StringComparison.Ordinal),
+    "Infinite Storage cards do not distinguish exact-bucket quantity from the same-ID total inventory.");
+string destroyInfiniteStorageBucketBody = ReadMethodBody(infiniteStorageView,
+    "private void DestroyInfiniteStorageBucket(");
+Check(destroyInfiniteStorageBucketBody.Contains("SnapshotDestructionScope.AssetId", StringComparison.Ordinal) &&
+      !destroyInfiniteStorageBucketBody.Contains("ParseDestructionScope", StringComparison.Ordinal),
+    "Destruction mode is not fixed to the item-ID scope.");
+string ammoContainerCapacityBody = ReadMethodBody(ammoCompatibilityIndexSource,
+    "public bool TryGetAmmoContainerCapacity(");
+Check(ammoContainerCapacityBody.Contains("rules.IsMagazine || rules.IsDirectTarget", StringComparison.Ordinal) &&
+      ammoContainerCapacityBody.Contains("AmmoRefillIdentity.TryGetValidCapacity", StringComparison.Ordinal),
+    "Snapshot hover metadata can label non-container ammo-related items as ammunition.");
+Check(snapshotPresentationSource.Contains("弹药 ", StringComparison.Ordinal) &&
+      snapshotPresentationSource.Contains("原生数量 ", StringComparison.Ordinal) &&
+      !snapshotPresentationSource.Contains("原生总量", StringComparison.Ordinal),
+    "Snapshot hover metadata still exposes a redundant amount-times-instance total or lacks separate ammo/native labels.");
+Check(assetHoverDetailsBuilderSource.Contains("LegacyRichTextSanitizer.Normalize", StringComparison.Ordinal) &&
+      legacyRichTextSanitizerSource.Contains("openColorDepth", StringComparison.Ordinal) &&
+      legacyRichTextSanitizerSource.Contains("</color>", StringComparison.Ordinal) &&
+      overlay.Contains("_hoverExplanationText.supportRichText = true", StringComparison.Ordinal),
+    "Malformed native color tags such as the vanilla Snare description can still disable tooltip rich-text colors.");
 string destructiveHoverBody = ReadMethodBody(fluentAdapterSource, "internal void MarkDestructiveHover(");
 Check(destructiveHoverBody.Contains("_context.Theme.Error", StringComparison.Ordinal) &&
       destructiveHoverBody.Contains("standard.NormalFill", StringComparison.Ordinal),
     "Decomposition mode does not preserve a neutral card until pointer hover turns it red.");
-string runtimeDecomposeBody = ReadMethodBody(infiniteStorageRuntimeSource, "internal InfiniteStorageDecomposeResult Decompose(");
-Check(runtimeDecomposeBody.Contains("InfiniteStorageDecomposer.Execute", StringComparison.Ordinal) &&
-      runtimeDecomposeBody.Contains("Commit", StringComparison.Ordinal),
-    "Infinite Storage decomposition bypasses the storage transaction/persistence boundary.");
-Check(infiniteStorageDecompositionSource.Contains("asset.type == EItemType.SUPPLY", StringComparison.Ordinal) &&
-      infiniteStorageDecompositionSource.Contains("entry.UnitKind != StackUnitKind.ResourceUnits", StringComparison.Ordinal) &&
-      infiniteStorageDecompositionSource.Contains("MaterialNotDecomposable", StringComparison.Ordinal),
-    "Material/SUPPLY entries can still enter Infinite Storage decomposition.");
-Check(!infiniteStorageDecompositionSource.Contains("blueprint.outputs.All(output => InfiniteStorageDecomposeEligibility.IsMaterialAsset", StringComparison.Ordinal) &&
-      !infiniteStorageDecompositionSource.Contains("if (!InfiniteStorageDecomposeEligibility.IsMaterialAsset(outputAsset))", StringComparison.Ordinal) &&
-      !infiniteStorageDecompositionSource.Contains("|| blueprint.transferState", StringComparison.Ordinal) &&
+Check(infiniteStorageRuntimeSource.Contains("SnapshotStorageSession", StringComparison.Ordinal) &&
+      infiniteStorageRuntimeSource.Contains("SnapshotStoragePath.Resolve", StringComparison.Ordinal) &&
+      infiniteStorageRuntimeSource.Contains("SnapshotAssetGuard.Evaluate", StringComparison.Ordinal) &&
+      infiniteStorageRuntimeSource.Contains("SnapshotKernelTransaction", StringComparison.Ordinal) &&
+      !infiniteStorageRuntimeSource.Contains("VirtualStorage", StringComparison.Ordinal) &&
+      snapshotPersistenceSource.Contains("CurrentSchemaVersion = 1", StringComparison.Ordinal) &&
+      snapshotPersistenceSource.Contains("primary-drift", StringComparison.Ordinal),
+    "Snapshot Runtime can still reach retired storage or bypasses schema-1 identity/persistence gates.");
+Check(infiniteStorageAmmoRefillSource.Contains("SnapshotAmmoRole.Source", StringComparison.Ordinal) &&
+      infiniteStorageAmmoRefillSource.Contains("SnapshotAmmoRole.Target", StringComparison.Ordinal) &&
+      infiniteStorageAmmoRefillSource.Contains("SnapshotAmmoRefillPlanner.TryPlan", StringComparison.Ordinal) &&
+      ammoCompatibilityIndexSource.Contains("UnturnedAmmoCompatibilityReader.BuildCatalog", StringComparison.Ordinal) &&
+      ammoCompatibilityIndexSource.Contains("ProjectDirectSources", StringComparison.Ordinal) &&
+      ammoCompatibilityIndexSource.Contains("TryGetRefillRules", StringComparison.Ordinal) &&
+      !ammoCompatibilityIndexSource.Contains("!(item is ItemMagazineAsset)", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("FrozenBudget", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("source.RemainingRounds -= amount", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("assetsWithCurrentCrossAssetTargets", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("lot.IsTargetContainer", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("unsafeBridgeLots", StringComparison.Ordinal) &&
+      plugin.Contains("InventoryStateReader.InvalidateAmmoCompatibility()", StringComparison.Ordinal) &&
+      plugin.Contains("_snapshotAmmoRefillModule?.RefreshAssets()", StringComparison.Ordinal),
+    "Snapshot AmmoRefill does not preserve explicit source/target roles or the shared compatibility allocator/index.");
+Check(inventoryArrangePlannerSource.Contains("item.IsAmmoSource && item.IsFungible", StringComparison.Ordinal) &&
+      inventoryArrangePlannerSource.Contains("AmmoRefillLot.SourceOnly", StringComparison.Ordinal) &&
+      inventoryArrangePlannerSource.Contains("refillPlan.SourceRemainders", StringComparison.Ordinal) &&
+      inventoryArrangePlannerSource.Contains("HashSet<string> sourceOnlyKeys", StringComparison.Ordinal) &&
+      inventoryArrangePlannerSource.Contains("sourceOnlyKeys.Contains(value.SourceLotKey)", StringComparison.Ordinal),
+    "Inventory arrange does not adapt mapped fungible Supply ammo into the shared source-only donor pool.");
+Check(inventoryStackingSemanticsSource.Contains("unsafeBridgeItemKeys", StringComparison.Ordinal) &&
+      inventoryStackingSemanticsSource.Contains("value.IsAmmoContainer", StringComparison.Ordinal) &&
+      inventoryStackingSemanticsSource.Contains("unsafeBridgeItemKeys.Contains(source.ItemKey)", StringComparison.Ordinal),
+    "Inventory arrange ledger validation does not independently reject persistent bridge-container outflow.");
+Check(inventoryStateReaderSource.Contains("AmmoRefillIdentity.TryGetValidCapacity(asset.MaxAmount", StringComparison.Ordinal) &&
+      !inventoryStateReaderSource.Contains("Math.Max(1, asset.MaxAmount)", StringComparison.Ordinal) &&
+	  unturnedAmmoCompatibilityReaderSource.Contains("target = hasExplicitTarget ? blueprint.TargetItem.FindItemAsset() : owner", StringComparison.Ordinal) &&
+	  unturnedAmmoCompatibilityReaderSource.Contains("AmmoFillBlueprintPolicy.TryGetDirectEdge", StringComparison.Ordinal) &&
+	  unturnedAmmoCompatibilityReaderSource.Contains("graph.AddDirectTransfer", StringComparison.Ordinal) &&
+	  ammoFillBlueprintPolicySource.Contains("facts.SupplyCount != 1", StringComparison.Ordinal) &&
+	  ammoFillBlueprintPolicySource.Contains("facts.PrimaryCountsTotalAmount", StringComparison.Ordinal) &&
+	  ammoFillBlueprintPolicySource.Contains("facts.PrimaryAmount <= 0", StringComparison.Ordinal),
+    "Ammo refill production readers can still coerce zero capacity or accept a non-1:1/indirect FillTargetItem blueprint.");
+Check(inventoryArrangeFeatureSource.Contains("string expectedFingerprint = InventoryStackingSemantics.BuildConservationFingerprint", StringComparison.Ordinal) &&
+      inventoryArrangeFeatureSource.Contains("_journalAfterFingerprint = capturedInventory.Fingerprint", StringComparison.Ordinal) &&
+      inventoryArrangeFeatureSource.Contains("captured.Fingerprint, _journalAfterFingerprint", StringComparison.Ordinal) &&
+      inventoryArrangeFeatureSource.Contains("restored.Fingerprint, _journalBefore.Fingerprint", StringComparison.Ordinal),
+    "Inventory arrange post-apply or undo gates do not validate ammo payload fingerprints.");
+Check(infiniteStorageDecompositionSource.Contains("sourceAsset is ItemSupplyAsset", StringComparison.Ordinal) &&
+      infiniteStorageDecompositionSource.Contains("sourceAsset.type == EItemType.SUPPLY", StringComparison.Ordinal) &&
+      infiniteStorageDecompositionSource.Contains("material-not-decomposable", StringComparison.Ordinal) &&
       infiniteStorageDecompositionSource.Contains("if (blueprint.transferState)", StringComparison.Ordinal) &&
-      infiniteStorageDecompositionSource.Contains("CreateTransferredPayload", StringComparison.Ordinal),
-    "Valid native salvage is still rejecting non-SUPPLY outputs or StateTransfer recipes such as Farmer Hat -> Wheat.");
+      infiniteStorageDecompositionSource.Contains("CreateTransferredSnapshot", StringComparison.Ordinal) &&
+      infiniteStorageDecompositionSource.Contains("SnapshotDecompositionPlanner.TryPlan", StringComparison.Ordinal) &&
+      infiniteStorageModuleRegistrySource.Contains("module-threw:", StringComparison.Ordinal),
+    "Snapshot Decomposition or module failure containment bypasses the independent adapter boundary.");
 Check(catalogViews.Split("CheatMenuStyle.ToolbarFieldLabelWidth", StringSplitOptions.None).Length - 1 == 3 &&
       cheatMenuStyleSource.Contains("ToolbarFieldLabelWidth = 64f", StringComparison.Ordinal),
     "Catalog Amount labels can still be clipped in English.");
@@ -430,7 +641,7 @@ Check(cardContents.Contains("new Vector2(0.04f, 0.09f)", StringComparison.Ordina
 Check(ReadMethodBody(catalogViews, "private void CreateItemCard(").Contains("AddCardContents(", StringComparison.Ordinal) &&
       ReadMethodBody(catalogViews, "private void CreateVehicleCard(").Contains("AddCardContents(", StringComparison.Ordinal) &&
       ReadMethodBody(autoPickupToolsView, "private void CreateAutoPickupItemCard(").Contains("AddCardContents(", StringComparison.Ordinal) &&
-      ReadMethodBody(infiniteStorageView, "private void CreateInfiniteStorageCard(").Contains("AddCardContents(", StringComparison.Ordinal),
+      ReadMethodBody(infiniteStorageView, "private void CreateInfiniteStorageBucketCard(").Contains("AddCardContents(", StringComparison.Ordinal),
     "A catalog, favorite, auto-pickup, or infinite-storage card bypasses the shared layout contract.");
 Check(overlayIconBinder.Contains("_aspectFitter.aspectRatio", StringComparison.Ordinal) &&
       overlayIconBinder.Contains("texture2D.width", StringComparison.Ordinal) &&

@@ -12,6 +12,17 @@ Check(text.StartsWith("Rifle\n", StringComparison.Ordinal), "Tooltip title shoul
 Check(text.Contains("Description", StringComparison.Ordinal), "Original description should be retained.");
 Check(!text.Contains("GUID", StringComparison.OrdinalIgnoreCase), "Tooltip model should not add asset identifiers.");
 
+string malformedSnareDescription =
+    "具有强咬合力的陷阱。<br><color=#FF0000>攻击附带骨折效果<color><br><color=#00FF00>Id: 1113</color>";
+string repairedSnareDescription = LegacyRichTextSanitizer.Normalize(malformedSnareDescription);
+Check(repairedSnareDescription.Contains("<color=#FF0000>攻击附带骨折效果</color>", StringComparison.Ordinal) &&
+      !repairedSnareDescription.Contains("骨折效果<color>", StringComparison.Ordinal) &&
+      repairedSnareDescription.Contains("<color=#00FF00>Id: 1113</color>", StringComparison.Ordinal),
+    "Malformed vanilla Snare color markup must be repaired without changing valid color tags.");
+Check(LegacyRichTextSanitizer.Normalize("<color=#4B64FA>稀有</color>") ==
+      "<color=#4B64FA>稀有</color>",
+    "Valid rich-text color markup must remain byte-for-byte unchanged.");
+
 Check(AmmoTooltipText.Format(true, Array.Empty<string>(), english: false) == "弹药：无限子弹",
     "Infinite-ammo guns should be labeled explicitly even without Ammo blueprint relations.");
 Check(AmmoTooltipText.Format(true, new[] { "Ammo Box" }, english: true) == "Ammo: Infinite",

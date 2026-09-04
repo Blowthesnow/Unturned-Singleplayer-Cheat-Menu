@@ -20,6 +20,7 @@ internal class LegacyFluentControlHandle : IDisposable
 	internal GameObject Root { get; private set; }
 	internal LegacyFluentSurface Surface { get; }
 	internal bool IsDisposed => _disposed;
+	internal Action<bool> InteractableChanged { get; set; }
 
 	internal void AddCleanup(Action cleanup)
 	{
@@ -48,6 +49,7 @@ internal class LegacyFluentControlHandle : IDisposable
 		}
 		_cleanup.Clear();
 		Surface?.Dispose();
+		InteractableChanged = null;
 		Root = null;
 	}
 }

@@ -96,7 +96,7 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateButton(gameObject5.transform, "仅归并", delegate
 		{
 			ShowInventoryArrangeResult(InventoryArrangeScope.CurrentContext, InventoryArrangeAction.Merge, preview: false);
-		}, "只归并兼容堆叠，不重排无关物品；弹匣和弹药箱会按兼容组重新分配总弹量。", 120f, 34f, CheatMenuStyle.Surface, 13);
+		}, "只归并兼容堆叠，不重排无关物品；只按相同容器身份或直接 FillTargetItem 来源→目标关系补弹。", 120f, 34f, CheatMenuStyle.Surface, 13);
 		CreateLabel(gameObject5.transform, "快捷键可在窗口右下角的全局快捷键中设置。", 12, CheatMenuStyle.Muted);
 	}
 
@@ -165,6 +165,7 @@ internal sealed partial class CheatMenuOverlayUi
 		LayoutRebuilder.ForceRebuildLayoutImmediate(_inventoryPresetDrawerPopup);
 		_inventoryPresetDrawerRoot.transform.SetAsLastSibling();
 		PositionInventoryPresetDrawer();
+		AnimatePopupEnter(_inventoryPresetDrawerRoot, _inventoryPresetDrawerPopup);
 	}
 
 	private void MaintainInventoryPresetDrawer()
@@ -201,7 +202,7 @@ internal sealed partial class CheatMenuOverlayUi
 			float max = component2.rect.xMax - sizeDelta.x * 0.5f - 8f;
 			float x = Mathf.Clamp(value, min, max);
 			float y = (flag ? localPoint2.y : localPoint.y);
-			_inventoryPresetDrawerPopup.anchoredPosition = new Vector2(x, y);
+			SetPopupMotionPosition(_inventoryPresetDrawerPopup, new Vector2(x, y));
 		}
 	}
 
@@ -210,9 +211,10 @@ internal sealed partial class CheatMenuOverlayUi
 		_inventoryPresetDrawerOpen = false;
 		if (_inventoryPresetDrawerRoot != null)
 		{
-			QueueForDestroy(_inventoryPresetDrawerRoot);
+			GameObject root = _inventoryPresetDrawerRoot;
+			_inventoryPresetDrawerRoot = null;
+			QueuePopupExit(root, root.transform);
 		}
-		_inventoryPresetDrawerRoot = null;
 		_inventoryPresetDrawerPopup = null;
 		_inventoryPresetTriggerButton = null;
 	}
@@ -289,6 +291,7 @@ internal sealed partial class CheatMenuOverlayUi
 		LayoutRebuilder.ForceRebuildLayoutImmediate(_inventoryScopeDrawerPopup);
 		_inventoryScopeDrawerRoot.transform.SetAsLastSibling();
 		PositionInventoryScopeDrawer();
+		AnimatePopupEnter(_inventoryScopeDrawerRoot, _inventoryScopeDrawerPopup);
 	}
 
 	private void MaintainInventoryScopeDrawer()
@@ -325,7 +328,7 @@ internal sealed partial class CheatMenuOverlayUi
 			float maxX = root.rect.xMax - size.x * 0.5f - 8f;
 			float x = Mathf.Clamp(centerX, minX, maxX);
 			float y = placeBelow ? localTop.y : localBottom.y;
-			_inventoryScopeDrawerPopup.anchoredPosition = new Vector2(x, y);
+			SetPopupMotionPosition(_inventoryScopeDrawerPopup, new Vector2(x, y));
 		}
 	}
 
@@ -334,9 +337,10 @@ internal sealed partial class CheatMenuOverlayUi
 		_inventoryScopeDrawerOpen = false;
 		if (_inventoryScopeDrawerRoot != null)
 		{
-			QueueForDestroy(_inventoryScopeDrawerRoot);
+			GameObject root = _inventoryScopeDrawerRoot;
+			_inventoryScopeDrawerRoot = null;
+			QueuePopupExit(root, root.transform);
 		}
-		_inventoryScopeDrawerRoot = null;
 		_inventoryScopeDrawerPopup = null;
 		_inventoryScopeTriggerButton = null;
 	}
@@ -346,7 +350,7 @@ internal sealed partial class CheatMenuOverlayUi
 		return preset switch
 		{
 			InventorySortPreset.Compatibility => "按类型、占用格数和名称整理，适合平时的一键整理。",
-			InventorySortPreset.Compact => "尽量把物品挤到前面，保持原来的先后顺序；每次整理仍会自动补齐兼容弹匣和弹药箱。",
+			InventorySortPreset.Compact => "尽量把物品挤到前面，保持原来的先后顺序；每次整理仍会按直接 FillTargetItem 关系安全补弹。",
 			InventorySortPreset.Type => "把同类物品放在一起，例如武器、衣服、食物和工具。",
 			InventorySortPreset.Name => "按物品名称从 A 到 Z 排列，方便按名字找东西。",
 			InventorySortPreset.LargeFirst => "先放大件，再用小件填空位，适合整理占格较大的物品。",

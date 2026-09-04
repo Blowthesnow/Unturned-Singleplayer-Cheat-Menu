@@ -32,14 +32,18 @@ internal sealed class AutoPickupRuleStore
 			AutoPickupRuleDocument input = File.Exists(_filePath)
 				? JsonConvert.DeserializeObject<AutoPickupRuleDocument>(File.ReadAllText(_filePath)) ?? new AutoPickupRuleDocument()
 				: new AutoPickupRuleDocument();
-			bool whitelistEnabled = input.Enabled && (input.Mode == AutoPickupFilterMode.WhitelistOnly || input.Mode == AutoPickupFilterMode.WhitelistThenBlacklist);
-			AutoPickupFilterMode mode = whitelistEnabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly;
-			AutoPickupRuleLoadResult result = matcher.Replace(whitelistEnabled, mode, input.Rules, out IReadOnlyList<ItemFilterRule> accepted);
+			bool whitelistRequested = input.Enabled &&
+				(input.Mode == AutoPickupFilterMode.WhitelistOnly || input.Mode == AutoPickupFilterMode.WhitelistThenBlacklist);
+			AutoPickupFilterMode requestedMode = whitelistRequested
+				? AutoPickupFilterMode.WhitelistThenBlacklist
+				: AutoPickupFilterMode.BlacklistOnly;
+			AutoPickupRuleLoadResult result = matcher.Replace(
+				whitelistRequested, requestedMode, input.Rules, out IReadOnlyList<ItemFilterRule> accepted);
 			Document = new AutoPickupRuleDocument
 			{
 				Version = 2,
-				Enabled = whitelistEnabled,
-				Mode = mode,
+				Enabled = whitelistRequested,
+				Mode = requestedMode,
 				Rules = accepted.Select(rule => rule.Clone()).ToList()
 			};
 			_logInfo?.Invoke($"[AutoPickup] 已读取 {result.Accepted} 条过滤规则，跳过 {result.Rejected} 条无效或重复规则。文件={_filePath}");
@@ -55,14 +59,18 @@ internal sealed class AutoPickupRuleStore
 
 	public AutoPickupRuleLoadResult ReplaceAndSave(bool enabled, AutoPickupFilterMode mode, IEnumerable<ItemFilterRule> rules, ItemFilterMatcher matcher)
 	{
-		bool whitelistEnabled = enabled && (mode == AutoPickupFilterMode.WhitelistOnly || mode == AutoPickupFilterMode.WhitelistThenBlacklist);
-		AutoPickupFilterMode normalizedMode = whitelistEnabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly;
-		AutoPickupRuleLoadResult result = matcher.Replace(whitelistEnabled, normalizedMode, rules, out IReadOnlyList<ItemFilterRule> accepted);
+		bool whitelistRequested = enabled &&
+			(mode == AutoPickupFilterMode.WhitelistOnly || mode == AutoPickupFilterMode.WhitelistThenBlacklist);
+		AutoPickupFilterMode requestedMode = whitelistRequested
+			? AutoPickupFilterMode.WhitelistThenBlacklist
+			: AutoPickupFilterMode.BlacklistOnly;
+		AutoPickupRuleLoadResult result = matcher.Replace(
+			whitelistRequested, requestedMode, rules, out IReadOnlyList<ItemFilterRule> accepted);
 		Document = new AutoPickupRuleDocument
 		{
 			Version = 2,
-			Enabled = whitelistEnabled,
-			Mode = normalizedMode,
+			Enabled = whitelistRequested,
+			Mode = requestedMode,
 			Rules = accepted.Select(rule => rule.Clone()).ToList()
 		};
 		try

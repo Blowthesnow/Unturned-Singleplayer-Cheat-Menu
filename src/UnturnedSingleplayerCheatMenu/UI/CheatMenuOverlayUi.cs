@@ -15,6 +15,7 @@ using UnturnedSingleplayerCheatMenu.Models;
 using UnturnedSingleplayerCheatMenu.Services;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Controls;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
+using UnturnedSingleplayerCheatMenu.UI.Motion;
 using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
 using InputField = UnityEngine.UI.InputField;
 
@@ -79,7 +80,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private const int OverlaySortingOrder = 29900;
 
 	private const float PreferredWindowWidth = 1280f;
-	private const float PreferredInfiniteStorageWindowWidth = 1120f;
+	private const float PreferredInfiniteStorageWindowWidth = 1080f;
 	private const float PreferredWindowHeight = 790f;
 	private const float MinimumWindowWidth = 900f;
 	private const float MinimumWindowHeight = 620f;
@@ -567,7 +568,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_fluentContext = new LegacyFluentUiContext(CheatMenuStyle.Theme, () => _font ?? _shellPresenter.ResolveFont());
 		_fluentHandles = new LegacyFluentHandleRegistry();
 		_fluentTooltips = new LegacyFluentTooltipBridge(ShowHoverExplanation, HideHoverExplanation);
-		_fluentControls = new LegacyFluentControlAdapter(_fluentContext, _fluentHandles, _fluentTooltips);
+		_fluentControls = new LegacyFluentControlAdapter(_fluentContext, _fluentHandles, _fluentTooltips, _uiRoot.Motion);
 		_activeTab = ParseMenuTab(plugin.LastMainTab);
 		_teleportView = ParseTeleportView(plugin.LastTeleportView);
 	}
@@ -602,9 +603,11 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	internal void CloseInfiniteStorage()
 	{
-		HideInfiniteStorageDecomposeScopeDrawer();
-		HideItemFilterPanel();
-		HideHoverExplanation();
+		RunWithoutTransientMotion(delegate
+		{
+			HideItemFilterPanel();
+			HideHoverExplanation();
+		});
 		if (_infiniteStorageRoot != null)
 		{
 			_infiniteStorageRoot.SetActive(value: false);
@@ -613,21 +616,24 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	public void OnClosed()
 	{
-		HideConfirmDialog();
-		HideAboutDialog();
-		HideShortcutDialog();
-		HideTeleportMarkerDrawer();
-		HideTeleportColorPicker();
-		HidePointToolModeDrawer();
-		HideInventoryPresetDrawer();
-		HideInventoryScopeDrawer();
-		HideWorkshopProtocolDrawer();
-		HideInfiniteStorageDecomposeScopeDrawer();
-		HideItemFilterPanel();
-		HideAutoPickupBlacklistPicker();
-		HideAutoPickupRarityPicker();
-		HideHoverExplanation();
-		HideVehicleThumbnailSettings();
+		RunWithoutTransientMotion(delegate
+		{
+			HideConfirmDialog();
+			HideAboutDialog();
+			HideFontPicker();
+			HideShortcutDialog();
+			HideTeleportMarkerDrawer();
+			HideTeleportColorPicker();
+			HidePointToolModeDrawer();
+			HideInventoryPresetDrawer();
+			HideInventoryScopeDrawer();
+			HideWorkshopProtocolDrawer();
+			HideItemFilterPanel();
+			HideAutoPickupBlacklistPicker();
+			HideAutoPickupRarityPicker();
+			HideHoverExplanation();
+			HideVehicleThumbnailSettings();
+		});
 		if (_root != null)
 		{
 			_root.SetActive(value: false);
@@ -785,6 +791,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	internal void HandleSceneChanged()
 	{
+		RunWithoutTransientMotion(CloseTransientVisualSurfaces);
 		if (_root != null)
 		{
 			RebuildShellVisualTree(_root.activeSelf);
@@ -879,10 +886,10 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_autoPickupRangeDebouncer.Dispose();
 		_autoPickupFrequencyDebouncer.Dispose();
 		_minimapSettingsDebouncer.Dispose();
+		RunWithoutTransientMotion(CloseTransientVisualSurfaces);
 		DisposeSearchInputs();
 		PumpDeferredDestroy();
 		HideHoverExplanation();
-		DisposeInfiniteStorageDecomposeScopeDrawer();
 		_pageViewHost?.DetachForAncestorDestroy();
 		_pageViewHost = null;
 		_toolsPageViewHost?.DetachForAncestorDestroy();
@@ -1188,9 +1195,11 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			return;
 		}
-		HideHoverExplanation();
-		HideItemFilterPanel();
-		HideInfiniteStorageDecomposeScopeDrawer();
+		RunWithoutTransientMotion(delegate
+		{
+			HideHoverExplanation();
+			HideItemFilterPanel();
+		});
 		if (_infiniteStorageContentHost != null)
 		{
 			QueueForDestroy(_infiniteStorageContentHost);
@@ -1220,7 +1229,6 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			RebuildInfiniteStoragePage();
 		}
-		MaintainInfiniteStorageDecomposeScopeDrawer();
 	}
 
 	private GameObject GetActiveOverlayRoot()
@@ -1364,11 +1372,12 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 
 
-	private void CreateToggleAction(Transform parent, string label, bool current, Action<bool> change, string tooltip = null)
+	private void CreateToggleAction(Transform parent, string label, bool current, Action<bool> change,
+		string tooltip = null, Color? activeColor = null)
 	{
 		GameObject gameObject = CreateObject("Toggle", parent, typeof(Image), typeof(Toggle));
 		Image component = gameObject.GetComponent<Image>();
-		Color baseColor = current ? CheatMenuStyle.Accent : CheatMenuStyle.Surface;
+		Color baseColor = CheatMenuStyle.Surface;
 		component.color = baseColor;
 		Outline outline = gameObject.AddComponent<Outline>();
 		outline.effectColor = CheatMenuStyle.ToggleBorder;
@@ -1405,14 +1414,11 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		component4.sizeDelta = new Vector2(0f, 3f);
 		gameObject2.SetActive(value: false);
 		component2.isOn = current;
-		OverlaySelectableVisual toggleVisual = null;
 		_fluentControls.AdaptToggle(gameObject, component2, component, text2, text.gameObject, gameObject2, outline, baseColor, delegate(bool value)
 		{
-			toggleVisual?.SetBaseColor(value ? CheatMenuStyle.Accent : CheatMenuStyle.Surface);
 			text2.text = PluginLocalization.Translate(label) + "  " + (value ? "ON" : "OFF");
 			change?.Invoke(value);
-		}, tooltip);
-		toggleVisual = gameObject.GetComponent<OverlaySelectableVisual>();
+		}, tooltip, activeColor);
 		SetLayout(gameObject, -1f, 40f, 1f);
 	}
 
@@ -1741,7 +1747,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void ShowVehicleThumbnailSettings()
 	{
-		HideVehicleThumbnailSettings();
+		PrepareModalOpen();
 		VehicleThumbnailRenderSettings vehicleThumbnailSettings = _catalogPresenter.VehicleThumbnailSettings;
 		_vehicleThumbnailDraftWidth = vehicleThumbnailSettings?.Width ?? 128;
 		_vehicleThumbnailDraftFraming = vehicleThumbnailSettings?.Framing ?? 1f;
@@ -1827,6 +1833,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 			HideVehicleThumbnailSettings();
 			SetStatus(flag ? "车辆缩略图设置已应用并保存。" : "车辆缩略图设置已应用，但配置文件保存失败。", 5f, flag ? StatusKind.Success : StatusKind.Warning);
 		}, "保存缩略图尺寸和取景倍率；后续车辆卡片使用新设置。", 96f, 36f, CheatMenuStyle.Accent);
+		AnimateModalEnter(_vehicleThumbnailSettingsRoot, gameObject.transform);
 	}
 
 	private void UpdateVehicleThumbnailFramingText()
@@ -1841,10 +1848,11 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	{
 		if (!(_vehicleThumbnailSettingsRoot == null))
 		{
-			QueueForDestroy(_vehicleThumbnailSettingsRoot);
+			GameObject root = _vehicleThumbnailSettingsRoot;
 			_vehicleThumbnailSettingsRoot = null;
 			_vehicleThumbnailFramingSlider = null;
 			_vehicleThumbnailFramingText = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
 	}
 
@@ -1855,7 +1863,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 
 	private void ShowColorPicker(ColorPickerPurpose purpose)
 	{
-		HideTeleportColorPicker();
+		PrepareModalOpen();
 		_colorPickerPurpose = purpose;
 		bool accentPicker = purpose == ColorPickerPurpose.Accent;
 		_teleportColorDraft = accentPicker ? _accentColor : _teleportMarkerColor;
@@ -2026,6 +2034,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		{
 			EventSystem.current.SetSelectedGameObject(_teleportColorHexInput.gameObject);
 		}
+		AnimateModalEnter(_teleportColorPickerRoot, gameObject.transform);
 	}
 
 	private void HideTeleportColorPicker()
@@ -2033,11 +2042,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		GameObject pickerRoot = _teleportColorPickerRoot;
 		if (pickerRoot != null)
 		{
-			if (EventSystem.current != null && SelectionBelongsToRoot(EventSystem.current.currentSelectedGameObject, pickerRoot))
-			{
-				EventSystem.current.SetSelectedGameObject(null);
-			}
-			QueueForDestroy(pickerRoot);
+			QueueModalExit(pickerRoot, ResolveModalVisual(pickerRoot));
 		}
 		_teleportColorPickerRoot = null;
 		_teleportColorPreview = null;
@@ -2311,6 +2316,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 			component2.raycastTarget = false;
 			_fluentControls.StyleTooltipSurface(_hoverExplanationRoot, component2, CheatMenuStyle.Theme.RadiusField);
 			_hoverExplanationText = CreateText(_hoverExplanationRoot.transform, string.Empty, 12, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
+			_hoverExplanationText.supportRichText = true;
 			_hoverExplanationText.horizontalOverflow = HorizontalWrapMode.Wrap;
 			_hoverExplanationText.verticalOverflow = VerticalWrapMode.Overflow;
 			_hoverExplanationText.raycastTarget = false;
@@ -2393,7 +2399,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		}
 		RectTransformUtility.ScreenPointToLocalPointInRectangle(activeRoot.GetComponent<RectTransform>(), screenPoint, null, out var localPoint);
 		component2.anchoredPosition = localPoint;
-		_hoverExplanationRoot.SetActive(value: true);
+		ShowHoverExplanationVisual(component2);
 	}
 
 	private static float GetHoverExplanationOverlapArea(Rect left, Rect right)
@@ -2401,14 +2407,6 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		float num = Mathf.Max(0f, Mathf.Min(left.xMax, right.xMax) - Mathf.Max(left.xMin, right.xMin));
 		float num2 = Mathf.Max(0f, Mathf.Min(left.yMax, right.yMax) - Mathf.Max(left.yMin, right.yMin));
 		return num * num2;
-	}
-
-	private void HideHoverExplanation()
-	{
-		if (_hoverExplanationRoot != null)
-		{
-			_hoverExplanationRoot.SetActive(value: false);
-		}
 	}
 
 	private Button CreateButton(Transform parent, string label, System.Action action, string tooltip, float width = 0f, float height = 36f, Color? color = null, int fontSize = 13, bool delayTooltip = false)
@@ -2601,16 +2599,6 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		rect.anchorMax = Vector2.one;
 		rect.offsetMin = new Vector2(left, bottom);
 		rect.offsetMax = new Vector2(0f - right, 0f - top);
-	}
-
-	private void QueueForDestroy(GameObject target)
-	{
-		if (!(target == null))
-		{
-			_fluentHandles.DisposeSubtree(target);
-			_uiRoot.UnregisterLayerSurface(target);
-			_deferredDestroy.Enqueue(target, Time.frameCount, item => item.SetActive(value: false));
-		}
 	}
 
 	internal void PumpDeferredDestroy()

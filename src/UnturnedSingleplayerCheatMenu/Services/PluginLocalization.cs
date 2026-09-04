@@ -138,6 +138,42 @@ internal static class PluginLocalization
 		return source;
 	}
 
+	public static string SnapshotModuleFailureMessage(string errorCode)
+	{
+		return string.Format(Translate("模块失败：{0}"), SnapshotErrorMessage(errorCode));
+	}
+
+	public static string SnapshotErrorMessage(string errorCode)
+	{
+		string normalized = (errorCode ?? string.Empty).Trim();
+		string source = normalized switch
+		{
+			"module-unavailable" => "模块未启用或不可用。",
+			"module-not-applicable" => "当前选择不适用于此模块。",
+			"module-returned-null" => "模块没有返回有效结果。",
+			"runtime-hook-only" => "制作模块由原生制作流程自动调用。",
+			"storage-unavailable" or "session-not-operational" => "无限储存尚未就绪或已锁定。",
+			"transaction-missing" => "储存事务尚未建立。",
+			"invalid-ammo-candidate" => "弹药来源或容器数据无效。",
+			"allocation-failed" => "弹药分配计划无法完成。",
+			"invalid-requirement" => "制作需求数据无效。",
+			"snapshot-not-found" or "snapshot-missing" => "找不到所选快照。",
+			"insufficient-units" => "可用数量不足。",
+			"group-not-found" => "找不到所选物品组。",
+			"output-asset-unavailable" => "无法解析产物资产。",
+			"source-asset-unavailable" => "无法解析来源资产。",
+			"material-not-decomposable" => "材料物品不能继续分解。",
+			"salvage-blueprint-missing" => "该物品没有原生分解配方。",
+			"salvage-blueprint-unsupported" => "原生分解配方不符合安全支持条件。",
+			"invalid-decomposition-request" => "分解请求无效。",
+			"output-transform-invalid" => "分解产物状态转换失败。",
+			"arithmetic-overflow" => "数量计算超出安全范围。",
+			_ when normalized.StartsWith("module-threw:", StringComparison.Ordinal) => "模块内部发生异常。",
+			_ => "模块操作未完成；请查看日志中的错误详情。"
+		};
+		return Translate(source);
+	}
+
 	public static string DefaultTeleportName(int number)
 	{
 		if (CurrentLanguage != PluginLanguage.English)
@@ -682,9 +718,16 @@ internal static class PluginLocalization
 		dictionary["整理所有随身页，不处理当前储物箱；默认保护装备和热键。"] = "Arrange all carried pages, excluding the open storage; equipped and hotkey items are protected by default.";
 		dictionary["只压缩空间并保持相对顺序；不按普通预设重排，自动补弹仍会执行。"] = "Compact space while keeping relative order; no normal preset reorder, but automatic ammo redistribution still runs.";
 		dictionary["撤销最近一次成功整理；外部改变库存后撤销会失效。"] = "Undo the latest successful arrange; undo expires after external inventory changes.";
-		dictionary["只归并兼容堆叠，不重排无关物品；弹匣和弹药箱会按兼容组重新分配总弹量。"] = "Merge compatible stacks without reordering unrelated items; magazines and ammo boxes redistribute total ammo by compatibility group.";
+		dictionary["只归并兼容堆叠，不重排无关物品；只按相同容器身份或直接 FillTargetItem 来源→目标关系补弹。"] = "Merge compatible stacks without reordering unrelated items; refill ammo only within identical container identities or direct FillTargetItem source-to-target relations.";
+		dictionary["整理计划改变了物品实例、品质、状态或容器容量，已取消。"] = "The arrange plan changed item instances, quality, state, or container capacity, so it was cancelled.";
+		dictionary["整理计划未保持弹药总量，已取消。"] = "The arrange plan did not preserve total ammo, so it was cancelled.";
+		dictionary["整理计划包含无效弹药转移记录，已取消。"] = "The arrange plan contains invalid ammo-transfer ledger entries, so it was cancelled.";
+		dictionary["整理计划尝试使用未获直接 FillTargetItem 授权的来源，或让桥接容器跨资产外流，已取消。"] = "The arrange plan attempted an unconfirmed FillTargetItem source or cross-asset bridge-container outflow, so it was cancelled.";
+		dictionary["整理计划复用了本轮刚收到的弹药或超出来源快照预算，已取消。"] = "The arrange plan reused rounds received during this operation or exceeded the frozen source budget, so it was cancelled.";
+		dictionary["整理计划的跨资产弹量变化与逐笔有向转移记录不一致，已取消。"] = "Cross-asset ammo changes do not match the directed transfer ledger, so the arrange plan was cancelled.";
+		dictionary["整理计划改变了弹药资源来源的身份或扣减量，已取消。"] = "The arrange plan changed an ammo-resource source identity or deducted the wrong amount, so it was cancelled.";
 		dictionary["按类型、占用格数和名称整理，适合平时的一键整理。"] = "Sort by type, occupied space, and name for everyday one-click arranging.";
-		dictionary["尽量把物品挤到前面，保持原来的先后顺序；每次整理仍会自动补齐兼容弹匣和弹药箱。"] = "Push items forward while keeping their order; compatible magazines and ammo boxes are still refilled every time.";
+		dictionary["尽量把物品挤到前面，保持原来的先后顺序；每次整理仍会按直接 FillTargetItem 关系安全补弹。"] = "Push items forward while keeping their order; every arrange safely refills ammo through direct FillTargetItem relations.";
 		dictionary["把同类物品放在一起，例如武器、衣服、食物和工具。"] = "Put similar items together, such as weapons, clothing, food, and tools.";
 		dictionary["按物品名称从 A 到 Z 排列，方便按名字找东西。"] = "Sort item names from A to Z so they are easier to find.";
 		dictionary["先放大件，再用小件填空位，适合整理占格较大的物品。"] = "Place large items first, then fill gaps with small items.";
@@ -851,10 +894,85 @@ internal static class PluginLocalization
 		dictionary["准星交互工具已开启。"] = "Point interaction tool enabled.";
 		dictionary["无限储存"] = "Infinite Storage";
 		dictionary["无限储存不可用"] = "Infinite storage unavailable";
+		dictionary["快照运行时尚未初始化。"] = "The Snapshot Runtime has not initialized.";
+		dictionary["取出实例数"] = "Instances to withdraw";
+		dictionary["每次少取一个完全相同的原生快照实例。"] = "Withdraw one fewer identical native snapshot instance.";
+		dictionary["每次多取一个完全相同的原生快照实例。"] = "Withdraw one more identical native snapshot instance.";
+		dictionary["筛选物品组。"] = "Filter ItemGroups.";
+		dictionary["自动拾取优先存入"] = "Prioritize storage for auto pickup";
+		dictionary["分解范围："] = "Decomposition scope: ";
+		dictionary["单实例 → 当前快照桶 → 当前物品组循环。"] = "Cycle through single instance, current bucket, and current ItemGroup.";
+		dictionary["没有可存储物品、保存失败，或快照运行时未就绪。"] = "No items were stored, persistence failed, or the Snapshot Runtime is not ready.";
+		dictionary["每个背包物品均按原生编号、数量、品质和状态字节完整存储。"] = "Store every carried item with its native ID, amount, quality, and state bytes intact.";
+		dictionary["模块失败：{0}"] = "Module failed: {0}";
+		dictionary["筛选 "] = "Filters ";
+		dictionary["没有匹配的物品组。"] = "No matching ItemGroups.";
+		dictionary["新路径首次启用时仓库为空；旧格式不会被读取。"] = "The new path starts empty; retired formats are never read.";
+		dictionary["未解析物品组（只读）"] = "Unresolved ItemGroup (read-only)";
+		dictionary["资产标识冲突的物品组（只读）"] = "Asset-identity conflict ItemGroup (read-only)";
+		dictionary["展开或收起快照桶。"] = "Expand or collapse snapshot buckets.";
+		dictionary["资产缺失或编号到资产标识的映射不匹配；物品组被保留为只读且禁止取出。"] = "The asset is missing or its ID-to-identity mapping conflicts; the group is retained read-only and withdrawal is disabled.";
+		dictionary["收起 ▲"] = "Collapse ▲";
+		dictionary["展开 ▼"] = "Expand ▼";
+		dictionary[" · 默认满状态"] = " · default full state";
+		dictionary["取出所选精确快照桶。"] = "Withdraw from the selected exact snapshot bucket.";
+		dictionary["资产不可解析或资产标识冲突，禁止取出。"] = "Withdrawal is disabled because the asset is unresolved or its identity conflicts.";
+		dictionary["取出此精确快照桶的全部实例。"] = "Withdraw every instance from this exact snapshot bucket.";
+		dictionary["取出此卡片中全部原始精确快照实例。"] = "Withdraw every original exact snapshot represented by this card.";
+		dictionary["取全部 ×"] = "Withdraw all ×";
+		dictionary["未取出：背包空间不足、资产冲突或保存失败。"] = "Nothing was withdrawn: inventory full, asset conflict, or persistence failure.";
+		dictionary["当前快照桶"] = "Current Bucket";
+		dictionary["物品组"] = "ItemGroup";
+		dictionary["单实例"] = "Single Instance";
+		dictionary["分解"] = "Decompose";
+		dictionary["独立弹药填充模块负责解释原生数量与填充目标物品的兼容关系；快照内核不解释弹量。"] = "The independent ammo-refill module interprets native amount and FillTargetItem compatibility; the snapshot kernel has no ammo semantics.";
+		dictionary["独立制作模块负责解释所需物品总数与原生数量总和；快照内核不解释制作语义。"] = "The independent crafting module interprets total-item and total-amount requirements; the snapshot kernel has no crafting semantics.";
+		dictionary["独立分解模块负责解释原生分解配方；快照内核不读取蓝图。"] = "The independent decomposition module interprets native salvage recipes; the snapshot kernel never reads blueprints.";
+		dictionary["制作适配"] = "Crafting Adapter";
+		dictionary["物品编号 {0} · 资产标识 {1}\n实例 {2} · 快照桶 {3}"] = "ID {0} · GUID {1}\nInstances {2} · Buckets {3}";
+		dictionary["模块未启用或不可用。"] = "The module is disabled or unavailable.";
+		dictionary["当前选择不适用于此模块。"] = "The current selection is not applicable to this module.";
+		dictionary["模块没有返回有效结果。"] = "The module returned no valid result.";
+		dictionary["制作模块由原生制作流程自动调用。"] = "The crafting module is invoked automatically by the native crafting flow.";
+		dictionary["无限储存尚未就绪或已锁定。"] = "Infinite storage is not ready or is locked.";
+		dictionary["储存事务尚未建立。"] = "The storage transaction was not created.";
+		dictionary["弹药来源或容器数据无效。"] = "Ammo source or container data is invalid.";
+		dictionary["弹药分配计划无法完成。"] = "The ammo allocation plan could not be completed.";
+		dictionary["制作需求数据无效。"] = "Crafting requirement data is invalid.";
+		dictionary["找不到所选快照。"] = "The selected snapshot could not be found.";
+		dictionary["可用数量不足。"] = "The available quantity is insufficient.";
+		dictionary["找不到所选物品组。"] = "The selected ItemGroup could not be found.";
+		dictionary["无法解析产物资产。"] = "An output asset could not be resolved.";
+		dictionary["无法解析来源资产。"] = "The source asset could not be resolved.";
+		dictionary["材料物品不能继续分解。"] = "Material items cannot be decomposed further.";
+		dictionary["原生分解配方不符合安全支持条件。"] = "The native salvage recipe does not satisfy the supported safety contract.";
+		dictionary["分解请求无效。"] = "The decomposition request is invalid.";
+		dictionary["分解产物状态转换失败。"] = "The decomposition output state could not be transformed.";
+		dictionary["数量计算超出安全范围。"] = "The quantity calculation exceeded the safe range.";
+		dictionary["模块内部发生异常。"] = "The module threw an internal exception.";
+		dictionary["模块操作未完成；请查看日志中的错误详情。"] = "The module operation did not complete; check the log for error details.";
+		dictionary["没有可安全填充的弹药来源或容器。"] = "No compatible ammo source or target container is available.";
+		dictionary["弹药容器已达到稳定状态。"] = "Ammo containers are already in a stable state.";
 		dictionary["储存运行时尚未初始化。"] = "The storage runtime has not finished initializing.";
 		dictionary["启用无限储存"] = "Enable infinite storage";
 		dictionary["拾取优先存入无限储存"] = "Prioritize Infinite Storage for Pickup";
 		dictionary["分解模式"] = "Decomposition Mode";
+		dictionary["破坏模式"] = "Destruction Mode";
+		dictionary["确认开启破坏模式？"] = "Enable destruction mode?";
+		dictionary["破坏会永久删除无限储存中同一物品 ID 的全部精确快照，无法撤销。破坏范围固定为 ID。"] = "Destruction permanently deletes every exact snapshot with the same item ID from infinite storage and cannot be undone. The destruction scope is fixed to ID.";
+		dictionary["破坏成功后，该物品 ID 会自动加入自动拾取黑名单。此警告确认一次后不再弹出。"] = "After successful destruction, the item ID is automatically added to the auto-pickup blacklist. This warning is shown only until acknowledged.";
+		dictionary["取消"] = "Cancel";
+		dictionary["确认开启"] = "Enable";
+		dictionary["保持破坏模式关闭并关闭警告。"] = "Keep destruction mode disabled and close this warning.";
+		dictionary["确认理解永久删除和自动加入黑名单的行为，并开启破坏模式。"] = "Confirm permanent deletion and automatic blacklisting, then enable destruction mode.";
+		dictionary["开启后点击物品卡片会永久破坏同一 ID 的全部精确快照，并把该物品 ID 加入自动拾取黑名单。"] = "When enabled, clicking an item card permanently destroys every exact snapshot with the same item ID and adds that ID to the auto-pickup blacklist.";
+		dictionary["点击卡片会永久破坏同一物品 ID 的全部精确快照；成功后该 ID 会自动加入自动拾取黑名单。"] = "Clicking the card permanently destroys every exact snapshot with the same item ID; on success that ID is automatically added to the auto-pickup blacklist.";
+		dictionary["破坏模式已关闭。"] = "Destruction mode disabled.";
+		dictionary["破坏模式已开启；点击红色悬停卡片将永久破坏快照并自动加入黑名单。"] = "Destruction mode enabled; clicking a red-hover card permanently destroys snapshots and automatically blacklists the item.";
+		dictionary["破坏模式警告确认状态保存失败；破坏模式仍保持关闭。"] = "Could not save the destruction warning acknowledgement; destruction mode remains disabled.";
+		dictionary["破坏结果需要对账；自动拾取黑名单已保留，无限储存已停止继续变更。"] = "Destruction requires reconciliation; the auto-pickup blacklist was kept and further infinite-storage mutations are locked.";
+		dictionary["破坏失败且自动拾取黑名单回滚失败；仓库物品仍保留，请手动检查黑名单。"] = "Destruction failed and the auto-pickup blacklist rollback failed; the stored item remains, so inspect the blacklist manually.";
+		dictionary["破坏失败；仓库快照和自动拾取黑名单均保持原状。"] = "Destruction failed; stored snapshots and the auto-pickup blacklist remain unchanged.";
 		dictionary["分解范围"] = "Decomposition Scope";
 		dictionary["单物品"] = "Single Item";
 		dictionary["堆叠"] = "Stack";
@@ -882,6 +1000,13 @@ internal static class PluginLocalization
 		dictionary["存储当前携带物品"] = "Store Current Carried Items";
 		dictionary["没有可存储的物品，或无限储存未启用。"] = "No items can be stored, or infinite storage is disabled.";
 		dictionary["将当前背包中的物品存入无限储存。"] = "Store the current backpack items in infinite storage.";
+		dictionary["一键填充弹药容器"] = "Refill Ammo Containers";
+		dictionary["相同容器身份可安全整理；直接 FillTargetItem 来源→目标只是兼容必要条件，bridge 安全门还会收窄执行，桥接容器不会跨资产外流。"] = "Identical container identities can be safely consolidated. A direct FillTargetItem source-to-target edge is only a necessary compatibility condition; the bridge safety gate further narrows execution, and bridge containers do not donate rounds across assets.";
+		dictionary["无限储存中没有可安全填充的弹药容器。"] = "Infinite Storage has no ammo containers that can be safely refilled.";
+		dictionary["已达到安全稳定状态；桥接容器不会跨资产外流。"] = "Safe stable state reached; bridge containers will not donate rounds across assets.";
+		dictionary["弹药容器填充结果保存失败，存储已回滚。"] = "Saving the ammo-container refill failed, and storage was rolled back.";
+		dictionary["弹药容器数据无效，填充操作已取消。"] = "Ammo-container data is invalid, so the refill was cancelled.";
+		dictionary["弹药容器填充失败，未修改无限储存。"] = "Ammo-container refill failed without modifying Infinite Storage.";
 		dictionary["当前分类没有已存储物品。"] = "No stored items in the current category.";
 		dictionary["存储物品后会显示在这里。"] = "Stored items will appear here.";
 		dictionary["无状态"] = "No state";
@@ -942,6 +1067,7 @@ internal static class PluginLocalization
 		dictionary["物品按 ID 自动去重；点击卡片加入白名单，悬停卡片可查看完整物品详情。"] = "Items are deduplicated by ID. Click a card to whitelist it, or hover for full item details.";
 		dictionary["白名单已启用；现在只拾取白名单物品。"] = "Whitelist enabled; only whitelisted items will be picked up.";
 		dictionary["白名单已停用；黑名单仍然生效。"] = "Whitelist disabled; the blacklist remains active.";
+		dictionary["白名单开关已打开；名单为空，当前仍按黑名单路径拾取，添加至少一项后自动生效。"] = "Whitelist toggle enabled; the list is empty, so pickups still follow the blacklist path. Add at least one item to activate it automatically.";
 		dictionary["保存白名单状态失败："] = "Failed to save whitelist state: ";
 		dictionary["黑名单"] = "Blacklist";
 		dictionary["管理黑名单"] = "Manage blacklist";
@@ -963,6 +1089,18 @@ internal static class PluginLocalization
 		dictionary["玩家死亡，已暂停"] = "Paused while dead";
 		dictionary["菜单打开，已暂停"] = "Paused while menu is open";
 		dictionary["运行中"] = "Running";
+		dictionary["无限储存需人工对账，自动拾取已全局暂停"] = "Infinite storage requires reconciliation; AutoPickup is paused globally.";
+		dictionary["无限储存需人工对账，已隔离掉落并锁定重试"] = "Infinite storage requires reconciliation; the drop is quarantined and retry is locked.";
+		dictionary["原生拾取后态不确定，已暂停该掉落实例的自动重试"] = "Native pickup outcome is uncertain; automatic retry for this drop is paused.";
+		dictionary["需要持久化快照对账；所有自动拾取已暂停。"] = "Persistent snapshot reconciliation is required; all automatic pickup is paused.";
+		dictionary["掉落已存入无限储存。"] = "The drop was stored in infinite storage.";
+		dictionary["储存副本为权威；未解决的世界掉落已隔离，且无限储存已锁定。"] = "Storage is authoritative; the unresolved world drop is quarantined and infinite storage is locked.";
+		dictionary["储存副本为权威且无限储存已锁定；世界掉落隔离也失败。"] = "Storage is authoritative and infinite storage is locked; world-drop quarantine also failed.";
+		dictionary["持久化对账标记创建失败；当前进程仍保持锁定。"] = "Persistent reconciliation marker creation failed; the current process remains locked.";
+		dictionary["无限储存补偿成功；世界掉落仍保留，稍后可重试。"] = "Infinite-storage compensation succeeded; the world drop remains for a later retry.";
+		dictionary["原生拾取未确认交付，且无限储存恢复失败。"] = "Native pickup was not confirmed delivered, and Snapshot recovery failed.";
+		dictionary["原生拾取未确认交付，且未执行无限储存恢复。"] = "Native pickup was not confirmed delivered, and Snapshot recovery was not attempted.";
+		dictionary["背包复合证据已确认原生拾取交付。"] = "Composite inventory evidence confirmed native pickup delivery.";
 		dictionary["背包空间不足，已暂停请求"] = "Inventory full; pickup requests paused";
 		dictionary["每次扫描最多发送的原生拾取请求数，范围 1-16。"] = "Maximum native pickup requests per scan, from 1 to 16.";
 		dictionary["诊断："] = "Diagnostics: ";
@@ -1146,6 +1284,7 @@ internal static class PluginLocalization
 		Chinese = new Dictionary<string, string>(StringComparer.Ordinal) { ["Workshop"] = "创意工坊" };
 		EnglishPatterns = new PatternTranslation[]
 		{
+			new PatternTranslation("^([\\s\\S]+)；背包复合证据已确认原生拾取交付。$", "$1; composite inventory evidence confirmed native pickup delivery."),
 			new PatternTranslation("^每轮 ([\\d,]+) 个请求$", "$1 requests per tick"),
 			new PatternTranslation("^显示 ([\\d,]+) 辆已加载收藏车辆。$", "Showing $1 loaded favorite vehicles."),
 			new PatternTranslation("^最大距离 ([\\d,.]+)m$", "Maximum range: $1m"),
@@ -1167,7 +1306,9 @@ internal static class PluginLocalization
 			new PatternTranslation("^该字体缺少简体中文字符 U\\+([0-9A-Fa-f]+)：(.+)$", "The font is missing Simplified Chinese character U+$1: $2"),
 			new PatternTranslation("^加载系统字体失败：(.+)$", "Failed to load the system font: $1"),
 			new PatternTranslation("^预览：移动 (\\d+)，归并 (\\d+)，跨页 (\\d+)。$", "Preview: $1 moves, $2 merges, $3 cross-page placements."),
+			new PatternTranslation("^预览：移动 (\\d+)，归并 (\\d+)，跨页 (\\d+)，弹药调整 (\\d+)。$", "Preview: $1 moves, $2 merges, $3 cross-page placements, $4 ammo payload changes."),
 			new PatternTranslation("^已整理：移动 (\\d+)，归并 (\\d+)，跨页 (\\d+)。$", "Arranged: $1 moves, $2 merges, $3 cross-page placements."),
+			new PatternTranslation("^已整理：移动 (\\d+)，归并 (\\d+)，跨页 (\\d+)，弹药调整 (\\d+)。$", "Arranged: $1 moves, $2 merges, $3 cross-page placements, $4 ammo payload changes."),
 			new PatternTranslation("^同物品跨箱集中完成：已转移 (\\d+) 件。$", "Cross-container consolidation complete: moved $1 items."),
 			new PatternTranslation("^整理未完成，已恢复执行前库存：(.+)$", "Arrangement did not complete; the pre-operation inventory was restored: $1"),
 			new PatternTranslation("^整理失败且恢复失败；请停止继续操作并查看 BepInEx 日志。原因：(.+?)；恢复：(.+)$", "Arrangement and restoration both failed; stop further operations and check the BepInEx log. Cause: $1; restoration: $2"),
@@ -1232,13 +1373,39 @@ internal static class PluginLocalization
 			new PatternTranslation("^ID (\\d+)  ·  点击取消黑名单$", "ID $1  ·  click to remove from blacklist"),
 			new PatternTranslation("^ID (\\d+)  ·  点击加入黑名单$", "ID $1  ·  click to add to blacklist"),
 			new PatternTranslation("^已将 (.+) 加入白名单。$", "Added $1 to the whitelist."),
+			new PatternTranslation("^已将 (.+) 加入白名单；白名单路径现已生效。$", "Added $1 to the whitelist; whitelist filtering is now active."),
+			new PatternTranslation("^已将 (.+) 加入白名单；白名单开关未开启，暂不限制拾取。$", "Added $1 to the whitelist; the whitelist toggle is off, so whitelist filtering remains inactive."),
 			new PatternTranslation("^已取消物品 ID (\\d+) 的白名单。$", "Removed item ID $1 from the whitelist."),
 			new PatternTranslation("^已将 (.+) 加入黑名单。$", "Added $1 to the blacklist."),
 			new PatternTranslation("^已取消物品 ID (\\d+) 的黑名单。$", "Removed item ID $1 from the blacklist."),
 			new PatternTranslation("^当前背包去重后 (\\d+) 件  ·  第 (\\d+)/(\\d+) 页$", "$1 unique backpack items  ·  page $2/$3"),
 			new PatternTranslation("^已存储 (\\d+) 个背包格。$", "Stored $1 inventory slots."),
+			new PatternTranslation("^已存储 ([\\d,]+) 个原生物品快照。$", "Stored $1 native item snapshots."),
+			new PatternTranslation("^物品组 ([\\d,]+) / ([\\d,]+)；快照实例 ([\\d,]+)。原生数量字段始终保持不透明，内核不会拆分。$", "ItemGroups $1 / $2; snapshot instances: $3. The kernel always keeps native amount opaque."),
+			new PatternTranslation("^取全部 ×([\\d,]+)$", "Withdraw all ×$1"),
+			new PatternTranslation("^原生数量 ([\\d,]+) · 实例 ×([\\d,]+) · 品质 ([\\d,]+) · 状态 空$", "amount $1 · instances ×$2 · quality $3 · state empty"),
+			new PatternTranslation("^原生数量 ([\\d,]+) · 实例 ×([\\d,]+) · 品质 ([\\d,]+) · 状态指纹 ([0-9A-F]+)$", "amount $1 · instances ×$2 · quality $3 · state fingerprint $4"),
+			new PatternTranslation("^原生数量 ([\\d,]+) · 实例 ×([\\d,]+) · 状态 空$", "amount $1 · instances ×$2 · state empty"),
+			new PatternTranslation("^原生数量 ([\\d,]+) · 实例 ×([\\d,]+) · 状态指纹 ([0-9A-F]+)$", "amount $1 · instances ×$2 · state fingerprint $3"),
+			new PatternTranslation("^弹药 ([\\d,]+)/([\\d,]+) · 实例 ×([\\d,]+) · 品质 ([\\d,]+) · 状态 空$", "ammo $1/$2 · instances ×$3 · quality $4 · state empty"),
+			new PatternTranslation("^弹药 ([\\d,]+)/([\\d,]+) · 实例 ×([\\d,]+) · 品质 ([\\d,]+) · 状态指纹 ([0-9A-F]+)$", "ammo $1/$2 · instances ×$3 · quality $4 · state fingerprint $5"),
+			new PatternTranslation("^弹药 ([\\d,]+)/([\\d,]+) · 实例 ×([\\d,]+) · 状态 空$", "ammo $1/$2 · instances ×$3 · state empty"),
+			new PatternTranslation("^弹药 ([\\d,]+)/([\\d,]+) · 实例 ×([\\d,]+) · 状态指纹 ([0-9A-F]+)$", "ammo $1/$2 · instances ×$3 · state fingerprint $4"),
+			new PatternTranslation("^已取出 ([\\d,]+) 个精确快照实例。$", "Withdrew $1 exact snapshot instances."),
+			new PatternTranslation("^已填充 ([\\d,]+) 个容器；弹量总和 ([\\d,]+)。$", "Refilled $1 containers; total rounds: $2."),
+			new PatternTranslation("^已分解 ([\\d,]+) 个快照实例，生成 ([\\d,]+) 个实例。$", "Decomposed $1 snapshot instances and produced $2 instances."),
+			new PatternTranslation("^ID ([\\d,]+)  ·  ×([\\d,]+)/总([\\d,]+)$", "ID $1  ·  ×$2/Total $3"),
+			new PatternTranslation("^当前卡片精确快照 ×([\\d,]+)；同 ID 总库存 ×([\\d,]+)。$", "Exact snapshots on this card: ×$1; total inventory for this ID: ×$2."),
+			new PatternTranslation("^当前卡片显示实例 ×([\\d,]+)；同 ID 总库存 ×([\\d,]+)。$", "Displayed instances on this card: ×$1; total inventory for this ID: ×$2."),
+			new PatternTranslation("^品质分别按 ([\\d,]+) 个精确快照桶保留。$", "Quality is preserved in $1 separate exact snapshot buckets."),
+			new PatternTranslation("^已破坏 ([\\d,]+) 个快照实例；物品 ID ([\\d,]+) 已加入自动拾取黑名单。$", "Destroyed $1 snapshot instances; item ID $2 was added to the auto-pickup blacklist."),
+			new PatternTranslation("^已破坏 ([\\d,]+) 个快照实例；物品 ID ([\\d,]+) 已在自动拾取黑名单中。$", "Destroyed $1 snapshot instances; item ID $2 was already on the auto-pickup blacklist."),
 			new PatternTranslation("^点击按“(.+)”范围分解；产物会直接存回无限储存。$", "Click to salvage using the '$1' scope; outputs are stored directly in infinite storage."),
 			new PatternTranslation("^已分解 ([\\d,]+) 个物品；([\\d,]+) 个产物单位（([\\d,]+) 种）已存入无限储存。$", "Salvaged $1 items; $2 output units across $3 types were stored in infinite storage."),
+			new PatternTranslation("^已安全填充 ([\\d,]+) / ([\\d,]+) 个弹药容器；([\\d,]+) 个容器身份组；弹药来源与容器合计 ([\\d,]+) 发弹药。$", "Safely refilled $1 / $2 ammo containers; $3 container-identity groups; ammo sources and containers total $4 rounds."),
+			new PatternTranslation("^已安全填充 ([\\d,]+) / ([\\d,]+) 个弹药容器；([\\d,]+) 个容器身份组；弹药来源与容器合计 ([\\d,]+) 发弹药；另跳过 ([\\d,]+) 个异常条目。$", "Safely refilled $1 / $2 ammo containers; $3 container-identity groups; ammo sources and containers total $4 rounds; skipped $5 invalid entries."),
+			new PatternTranslation("^弹药容器或 FillTargetItem 数据异常，已跳过 ([\\d,]+) 个条目。$", "Ammo-container or FillTargetItem data was invalid; skipped $1 entries."),
+			new PatternTranslation("^已跳过 ([\\d,]+) 个异常条目；其余弹药容器已达到安全稳定状态。$", "Skipped $1 invalid entries; the remaining ammo containers are in a safe stable state."),
 			new PatternTranslation("^检测到 ([\\d,]+) 条待处理旧存档记录。$", "Detected $1 pending legacy records."),
 			new PatternTranslation("^显示 ([\\d,]+) / ([\\d,]+) 条目；资源 ([\\d,]+)，完整物品 ([\\d,]+) 个。$", "Showing $1 / $2 entries; resource units $3, complete items $4."),
 			new PatternTranslation("^库存 ([\\d,]+)$", "Stored $1"),

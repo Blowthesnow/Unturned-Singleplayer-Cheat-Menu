@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using BepInEx.Logging;
 using SDG.Unturned;
+using UnturnedSingleplayerCheatMenu.ItemStacking;
 using UnturnedSingleplayerCheatMenu.Services;
 
 namespace UnturnedSingleplayerCheatMenu.InventoryArrange;
@@ -71,6 +72,8 @@ internal sealed class InventoryArrangeFeature
 
 	private string _journalAfterLayoutFingerprint;
 
+	private string _journalAfterFingerprint;
+
 	private List<byte> _journalPages;
 
 	private InventoryArrangeScope _journalScope;
@@ -125,6 +128,12 @@ internal sealed class InventoryArrangeFeature
 		{
 			return Publish(success: false, inventoryArrangePlan.FailureReason, inventoryArrangePlan);
 		}
+		if (!InventoryArrangeExecutionPolicy.RequiresInventoryRebuild(inventoryArrangePlan, key =>
+			captured.SourceItems.TryGetValue(key, out Item original) ? original.amount : -1))
+		{
+			_log?.LogInfo("背包整理跳过原生库存重建：布局与物品载荷均未变化。");
+			return Publish(success: true, Describe(inventoryArrangePlan, "已整理"), inventoryArrangePlan);
+		}
 		PlayerInventory inventory = Player.LocalPlayer.inventory;
 		bool flag = false;
 		_isRunning = true;
@@ -140,7 +149,9 @@ internal sealed class InventoryArrangeFeature
 			}
 			flag = true;
 			CapturedInventory capturedInventory = Capture(inventory, GetPages(inventory, scope, inventoryArrangeSettings), inventoryArrangeSettings);
-			if (!string.Equals(captured.Fingerprint, capturedInventory.Fingerprint, StringComparison.Ordinal))
+			string expectedFingerprint = InventoryStackingSemantics.BuildConservationFingerprint(
+				inventoryArrangePlan.Placements.Select(value => value.Item));
+			if (!string.Equals(expectedFingerprint, capturedInventory.Fingerprint, StringComparison.Ordinal))
 			{
 				string text2 = (Restore(inventory, captured, out var reason3)
 					? "整理后校验发现物品指纹变化，已恢复执行前库存。"
@@ -152,6 +163,7 @@ internal sealed class InventoryArrangeFeature
 			_journalPages = captured.Containers.Select((InventoryArrangeContainer container) => (byte)container.Page).Distinct().ToList();
 			_journalBefore = captured;
 			_journalAfterLayoutFingerprint = capturedInventory.LayoutFingerprint;
+			_journalAfterFingerprint = capturedInventory.Fingerprint;
 			_journalScope = scope;
 			_log?.LogInfo("背包整理完成：来源=" + source + "；" + Describe(inventoryArrangePlan, "执行") + "。");
 			return Publish(success: true, Describe(inventoryArrangePlan, "已整理"), inventoryArrangePlan);
@@ -460,11 +472,13 @@ internal sealed class InventoryArrangeFeature
 		{
 			return Publish(success: false, reason, null);
 		}
-		if (!string.Equals(captured.LayoutFingerprint, _journalAfterLayoutFingerprint, StringComparison.Ordinal))
+		if (!string.Equals(captured.LayoutFingerprint, _journalAfterLayoutFingerprint, StringComparison.Ordinal) ||
+			!string.Equals(captured.Fingerprint, _journalAfterFingerprint, StringComparison.Ordinal))
 		{
 			_journalBefore = null;
 			_journalPages = null;
 			_journalAfterLayoutFingerprint = null;
+			_journalAfterFingerprint = null;
 			return Publish(success: false, "撤销已失效：整理后的库存已被外部操作改变。", null);
 		}
 		_isRunning = true;
@@ -474,9 +488,13 @@ internal sealed class InventoryArrangeFeature
 			{
 				return Publish(success: false, "撤销失败，无法恢复原始位置：" + PluginLocalization.Translate(reason), null);
 			}
-			bool flag = string.Equals(Capture(Player.LocalPlayer.inventory, _journalPages, _settings?.Invoke() ?? new InventoryArrangeSettings()).LayoutFingerprint, _journalBefore.LayoutFingerprint, StringComparison.Ordinal);
+			CapturedInventory restored = Capture(Player.LocalPlayer.inventory, _journalPages,
+				_settings?.Invoke() ?? new InventoryArrangeSettings());
+			bool flag = string.Equals(restored.LayoutFingerprint, _journalBefore.LayoutFingerprint, StringComparison.Ordinal) &&
+				string.Equals(restored.Fingerprint, _journalBefore.Fingerprint, StringComparison.Ordinal);
 			_journalBefore = null;
 			_journalAfterLayoutFingerprint = null;
+			_journalAfterFingerprint = null;
 			_journalPages = null;
 			return Publish(flag, flag ? "已撤销上次整理。" : "撤销后校验失败，请查看 BepInEx 日志。", null);
 		}
@@ -594,8 +612,10 @@ internal sealed class InventoryArrangeFeature
 					bool flag = selected?.Invoke(page, item) ?? true;
 					string text = page + ":" + b;
 					bool flag2 = settings.ProtectEquipped && Player.LocalPlayer.equipment != null && Player.LocalPlayer.equipment.checkSelection(page, item.x, item.y);
-					bool flag3 = InventoryStateReader.TryReadAmmoContainerMetadata(itemAsset, out var isMagazine, out var capacity, out var group);
+					InventoryStateReader.TryReadAmmoContainerMetadata(itemAsset, out var capacity, out AmmoRefillAssetRules ammoRules);
 					bool flag4 = InventoryStateReader.TryReadAmmoCount(itemAsset, item2, out var ammoCount);
+					ItemStackingKind stackingKind = UnturnedItemStackingClassifier.Classify(itemAsset, item2,
+						ammoRules?.IsDirectSource == true, ammoRules?.IsDirectTarget == true);
 					string text2 = page + ":" + item.x + ":" + item.y;
 					bool flag5 = hashSet.Contains(text2);
 					inventoryArrangeContainer.Items.Add(new InventoryArrangeItem
@@ -610,11 +630,14 @@ internal sealed class InventoryArrangeFeature
 						Width = item.size_x,
 						Height = item.size_y,
 						Amount = item2.amount,
+						OriginalAmount = item2.amount,
 						MaxAmount = Math.Max(1, itemAsset.MaxAmount),
-						IsMagazine = isMagazine,
-						IsAmmoSource = (flag3 && !isMagazine),
+						StackingKind = stackingKind,
+						IsMagazine = ammoRules?.IsMagazine ?? false,
+						IsAmmoSource = ammoRules?.IsDirectSource ?? false,
+						IsAmmoTarget = ammoRules?.IsDirectTarget ?? false,
 						AmmoCapacity = capacity,
-						AmmoGroup = group,
+						AmmoDirectSourceAssetGuids = ammoRules?.DirectSourceAssetGuids.ToArray() ?? Array.Empty<string>(),
 						AmmoCount = (flag4 ? ammoCount : (-1)),
 						Quality = item2.quality,
 						SourcePage = page,
@@ -644,7 +667,8 @@ internal sealed class InventoryArrangeFeature
 			}
 			capturedInventory.Containers.Add(inventoryArrangeContainer);
 		}
-		capturedInventory.Fingerprint = Fingerprint(capturedInventory.SourceItems.Values);
+		capturedInventory.Fingerprint = InventoryStackingSemantics.BuildConservationFingerprint(
+			capturedInventory.Containers.SelectMany(container => container.Items));
 		capturedInventory.LayoutFingerprint = LayoutFingerprint(capturedInventory.Containers);
 		return capturedInventory;
 	}
@@ -698,10 +722,12 @@ internal sealed class InventoryArrangeFeature
 				hotkeyBinding.Hotkey.y = (byte)inventoryArrangePlacement.Y;
 			}
 		}
-		if (num2 > 0)
+		if (InventoryArrangeExecutionPolicy.RequiresHotkeyDisplayRefresh(
+			inventoryWasRebuilt: true, capturedBindingCount: captured.HotkeyBindings.Count))
 		{
 			Player.LocalPlayer?.equipment?.onHotkeysUpdated?.Invoke();
-			_log?.LogInfo("[InventoryArrangeHotkeys] Updated " + num2 + " of " + captured.HotkeyBindings.Count + " bound shortcut coordinates.");
+			_log?.LogInfo("[InventoryArrangeHotkeys] Refreshed " + captured.HotkeyBindings.Count +
+				" bound shortcut displays; relocated coordinates=" + num2 + ".");
 		}
 		return true;
 	}
@@ -740,7 +766,8 @@ internal sealed class InventoryArrangeFeature
 				hotkeyBinding.Hotkey.x = hotkeyBinding.OriginalX;
 				hotkeyBinding.Hotkey.y = hotkeyBinding.OriginalY;
 			}
-			if (updatedHotkeyCount > 0)
+			if (InventoryArrangeExecutionPolicy.RequiresHotkeyDisplayRefresh(
+				inventoryWasRebuilt: true, capturedBindingCount: captured.HotkeyBindings.Count))
 			{
 				Player.LocalPlayer?.equipment?.onHotkeysUpdated?.Invoke();
 			}
@@ -775,7 +802,8 @@ internal sealed class InventoryArrangeFeature
 
 	private static string Describe(InventoryArrangePlan plan, string prefix)
 	{
-		return $"{prefix}：移动 {plan.MoveCount}，归并 {plan.MergeCount}，跨页 {plan.CrossPageCount}。";
+		string ammo = plan.AmmoChangedContainerCount > 0 ? $"，弹药调整 {plan.AmmoChangedContainerCount}" : string.Empty;
+		return $"{prefix}：移动 {plan.MoveCount}，归并 {plan.MergeCount}，跨页 {plan.CrossPageCount}{ammo}。";
 	}
 
 	private static Item Clone(Item source)
@@ -804,11 +832,6 @@ internal sealed class InventoryArrangeFeature
 			stringBuilder.Append(b.ToString("X2"));
 		}
 		return stringBuilder.ToString();
-	}
-
-	private static string Fingerprint(IEnumerable<Item> items)
-	{
-		return string.Join(";", items.Select((Item item) => item.id + "|" + item.amount + "|" + item.quality + "|" + HashState(item.state)).OrderBy<string, string>((string value) => value, StringComparer.Ordinal));
 	}
 
 	private static string LayoutFingerprint(IEnumerable<InventoryArrangeContainer> containers)

@@ -40,6 +40,16 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private void ShowToolsTab(ToolsTab tab, bool invalidate)
 	{
+		RunWithoutTransientMotion(delegate
+		{
+			HideHoverExplanation();
+			HidePointToolModeDrawer();
+			HideInventoryPresetDrawer();
+			HideInventoryScopeDrawer();
+			HideWorkshopProtocolDrawer();
+			HideAutoPickupBlacklistPicker();
+			HideAutoPickupRarityPicker();
+		});
 		_activeToolsTab = tab;
 		_toolsPageViewHost.Activate(tab, invalidate);
 		foreach (KeyValuePair<ToolsTab, Button> pair in _toolsTabButtons)
@@ -131,12 +141,15 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			return;
 		}
-		HidePointToolModeDrawer();
-		HideInventoryPresetDrawer();
-		HideInventoryScopeDrawer();
-		HideWorkshopProtocolDrawer();
-		HideAutoPickupBlacklistPicker();
-		HideAutoPickupRarityPicker();
+		RunWithoutTransientMotion(delegate
+		{
+			HidePointToolModeDrawer();
+			HideInventoryPresetDrawer();
+			HideInventoryScopeDrawer();
+			HideWorkshopProtocolDrawer();
+			HideAutoPickupBlacklistPicker();
+			HideAutoPickupRarityPicker();
+		});
 		ClearResultHost(_toolsPageContentHost);
 		BuildActiveToolsPageContent(_activeToolsTab, _toolsPageContentHost.transform);
 		RebuildWorkshopLocalizationScrollLayout();

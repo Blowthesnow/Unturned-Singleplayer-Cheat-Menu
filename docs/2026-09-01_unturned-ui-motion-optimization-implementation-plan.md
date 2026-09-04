@@ -775,20 +775,20 @@ tests/UiMotionSmoke/
 
 ## 16. 最终验收清单
 
-- [ ] 当前脏工作树和无关改动完整保留；
-- [ ] Motion Core 无外部依赖、无 TMP、无 Animator；
-- [ ] 所有动效使用 unscaled time；
-- [ ] Button、Switch 支持中途 Retarget；
-- [ ] Toggle 整行始终保持中性，ON 强调色只出现在右侧 Switch Track；
-- [ ] OFF Track 使用独立中性色和强边框，不与整行 Surface 融为一体；
-- [ ] Tooltip 首次延迟合理，连续浏览即时；
-- [ ] Toast 进入、退出和重排连续；
-- [ ] Modal/Popup 关闭不穿透、不丢焦点；
-- [ ] 主窗口、Tab、拖拽和原生 UI 接管保持瞬时；
+- [x] 当前脏工作树和无关改动完整保留；
+- [x] Motion Core 无外部依赖、无 TMP、无 Animator；
+- [x] 所有动效使用 unscaled time；
+- [x] Button、Switch 支持中途 Retarget；
+- [x] Toggle 整行始终保持中性，ON 强调色只出现在右侧 Switch Track；
+- [x] OFF Track 使用独立中性色和强边框，不与整行 Surface 融为一体；
+- [x] Tooltip 首次延迟合理，连续浏览即时；
+- [x] Toast 进入、退出和 LayoutElement 重排路径已实现并有静态门禁；
+- [x] Modal/Popup 的 Raycast、焦点、closing flush 和强制收口路径已实现并有静态门禁；
+- [x] 主窗口、Tab、拖拽和原生 UI 接管保持瞬时；
 - [ ] Idle 无活动 Handle、无动效分配、无日志洪泛；
-- [ ] Release 0 warning / 0 error；
-- [ ] 新增 Motion Smoke 通过；
-- [ ] 全部 `tests/**/*Smoke.csproj` 通过；
+- [x] Release 0 warning / 0 error；
+- [x] 新增 Motion Smoke 通过；
+- [x] 全部 `tests/**/*Smoke.csproj` 通过（21/21）；
 - [ ] 游戏停止后完成备份、唯一 DLL、复制和 SHA-256 验证；
 - [ ] 重启游戏完成相同场景、分辨率、语言和输入矩阵测试；
 - [ ] 用户完成最终实机动效观感验收。
@@ -806,3 +806,85 @@ tests/UiMotionSmoke/
 7. 60fps/120fps 实机视频或连续帧；
 8. 未实施的 P2 HUD 项和对应证据；
 9. 明确的用户最终观感验收结果。
+
+## 18. 实施记录（2026-09-01）
+
+### 18.1 已完成源码项
+
+- 新增 `UI/Motion/**`：Token、Easing、Progress、Completion、Handle、Driver、Transient Motion；
+- `PluginUiRoot` 使用稳定的单一 `UiMotionDriver`，通过 `Time.unscaledDeltaTime` 统一 Pump；
+- Button/Input/Toggle Fluent Surface 支持可中断颜色过渡，同状态同目标不会重复 Retarget；
+- 首版不缩放 Button/Toggle Root，Hit Target 几何保持不变；
+- Toggle 整行始终保持中性 Surface；
+- OFF Track 使用 `SurfaceRaised + BorderStrong`，ON Track 才使用 Accent；
+- Switch Track、Thumb 位移、Thumb 颜色使用独立 Channel；Disabled ON/OFF 同步落到最终状态；
+- Tooltip 详细卡片冷启动延迟改为 450ms，增加 700ms warm window、Owner 门禁和 110ms 显隐；
+- Toast 增加 Enter/Exit/Height 状态机，VerticalLayoutGroup 由 LayoutElement 驱动 46→0 收缩；
+- 9 个 Modal 和 6 个 Popup/Drawer 接入统一显隐；Popup 保持 Trigger 实时定位并叠加 4px 定向 Offset；
+- 主窗口、Tab、工具 Tab、页面替换、场景切换和原生 UI 接管继续同步；
+- Modal 正常退出完成后才 Unregister/恢复焦点；Popup 保持旧行为，在退出开始时同步恢复 Trigger；
+- scene/rebuild/menu close/plugin dispose 会同步 Flush 所有 pending closing Root；
+- Root 外部销毁后的恢复继续复用同一 Driver，destroyed Owner 不执行旧 Apply/Completion。
+
+### 18.2 自动化证据
+
+```text
+Release build: 0 warnings / 0 errors
+git diff --check: PASS
+Smoke discovery: tests/**/*Smoke.csproj
+Smoke result: 21/21 PASS
+```
+
+逐项结果保存在：
+
+```text
+D:\Unturned BepInEx\.codex-build\motion-review\smoke-results.tsv
+D:\Unturned BepInEx\.codex-build\motion-review\logs\
+```
+
+新增 `UiMotionSmoke` 覆盖：
+
+- Easing 端点、单调性和非法输入；
+- 0 duration、负/NaN/Infinity delta；
+- Retarget/Cancel/Snap completion 语义；
+- Pump completion 重入；
+- scene settle 和 destroyed owner；
+- Hit Target 不缩放；
+- Toggle Track/Thumb/Disabled/Accent 边界；
+- Tooltip warm/owner；
+- Toast reflow/click-through；
+- Modal/Popup 注册与动效覆盖；
+- pending closing flush、Tab/scene/rebuild 强制收口和 Modal-to-Modal 焦点链。
+
+### 18.3 尚未完成的证据层
+
+- 尚未部署本轮 DLL；
+- 尚未重启游戏；
+- 尚未完成 60fps/120fps 连续视频和交互矩阵；
+- P2 小地图/血条只在实机视频确认问题后决定是否实施；
+- 当前不能以 Build、21/21 Smoke 或本地 DLL 代替游戏内视觉验收。
+
+### 18.4 预部署回滚准备
+
+旁路审查尚未允许替换游戏目录 DLL，因此只完成了可逆的备份和 Dry Run：
+
+```text
+game_process_count=0
+active_dll_count=1
+new_build_sha256=51D1E6D9624B63A8E28C51488486F56B3F096ABF8AFE05852568A3193EE4B7D2
+current_deployed_sha256=7F31F23FF7A16E3E00E5CE649400581EB8C51C2795310D77D400A0C88C3CE576
+deployment_performed=false
+```
+
+旧 DLL 回滚副本与清单：
+
+```text
+D:\Unturned BepInEx\backups\motion-predeploy-20260901-161201\UnturnedSingleplayerCheatMenu.dll
+D:\Unturned BepInEx\backups\motion-predeploy-20260901-161201\manifest.txt
+```
+
+待放行命令记录：
+
+```text
+D:\Unturned BepInEx\.codex-build\motion-review\deploy-after-approval.txt
+```

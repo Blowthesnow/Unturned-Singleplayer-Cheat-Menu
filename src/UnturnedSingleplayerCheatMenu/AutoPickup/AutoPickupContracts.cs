@@ -45,7 +45,8 @@ internal enum AutoPickupResultKind
 	RejectedByCapacity,
 	StaleDrop,
 	RateLimited,
-	UnknownFailure
+	UnknownFailure,
+	ReconciliationRequired
 }
 
 internal sealed class AutoPickupSettings

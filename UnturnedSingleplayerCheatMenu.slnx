@@ -1,8 +1,13 @@
 <Solution>
   <Project Path="src/UnturnedSingleplayerCheatMenu/UnturnedSingleplayerCheatMenu.csproj" />
   <Project Path="tests/AutoPickupSmoke/AutoPickupSmoke.csproj" />
+  <Project Path="tests/SnapshotKernelSmoke/SnapshotKernelSmoke.csproj" />
+  <Project Path="tests/SnapshotCraftingAdapterSmoke/SnapshotCraftingAdapterSmoke.csproj" />
+  <Project Path="tests/SnapshotAmmoRefillAdapterSmoke/SnapshotAmmoRefillAdapterSmoke.csproj" />
+  <Project Path="tests/SnapshotDecompositionAdapterSmoke/SnapshotDecompositionAdapterSmoke.csproj" />
+  <Project Path="tests/SnapshotModuleRegistrySmoke/SnapshotModuleRegistrySmoke.csproj" />
+  <Project Path="tests/SnapshotRuntimeIntegrationSmoke/SnapshotRuntimeIntegrationSmoke.csproj" />
   <Project Path="tests/MinimapSmoke/MinimapSmoke.csproj" />
-  <Project Path="tests/InfiniteStorageSmoke/InfiniteStorageSmoke.csproj" />
   <Project Path="tests/CreatureHealthBarSmoke/CreatureHealthBarSmoke.csproj" />
   <Project Path="tests/ConfigInitializationSmoke/ConfigInitializationSmoke.csproj" />
   <Project Path="tests/AssemblyMetadataSmoke/AssemblyMetadataSmoke.csproj" />
@@ -17,6 +22,8 @@
   <Project Path="tests/ShortcutToggleSmoke/ShortcutToggleSmoke.csproj" />
   <Project Path="tests/TeleportSerializationSmoke/TeleportSerializationSmoke.csproj" />
   <Project Path="tests/UiArchitectureSmoke/UiArchitectureSmoke.csproj" />
+  <Project Path="tests/UiControlLibrarySmoke/UiControlLibrarySmoke.csproj" />
+  <Project Path="tests/UiMotionSmoke/UiMotionSmoke.csproj" />
   <Project Path="tests/VehicleThumbnailSettingsSmoke/VehicleThumbnailSettingsSmoke.csproj" />
   <Project Path="tests/WorkshopLocalizationSmoke/WorkshopLocalizationSmoke.csproj" />
 </Solution>

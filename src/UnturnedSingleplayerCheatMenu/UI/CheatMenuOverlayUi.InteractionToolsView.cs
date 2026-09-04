@@ -178,6 +178,7 @@ internal sealed partial class CheatMenuOverlayUi
 		Canvas.ForceUpdateCanvases();
 		LayoutRebuilder.ForceRebuildLayoutImmediate(_pointToolModeDrawerPopup);
 		PositionPointToolModeDrawer();
+		AnimatePopupEnter(_pointToolModeDrawerRoot, _pointToolModeDrawerPopup);
 	}
 
 	private void MaintainPointToolModeDrawer()
@@ -212,7 +213,7 @@ internal sealed partial class CheatMenuOverlayUi
 			pointToolModeDrawerPopup.anchorMin = anchorMin;
 			bool flag = localPoint.y - component2.rect.yMin < _pointToolModeDrawerPopup.rect.height + 8f;
 			_pointToolModeDrawerPopup.pivot = (flag ? new Vector2(0f, 0f) : new Vector2(0f, 1f));
-			_pointToolModeDrawerPopup.anchoredPosition = (flag ? localPoint2 : localPoint);
+			SetPopupMotionPosition(_pointToolModeDrawerPopup, flag ? localPoint2 : localPoint);
 		}
 	}
 
@@ -221,9 +222,10 @@ internal sealed partial class CheatMenuOverlayUi
 		_pointToolModeDrawerOpen = false;
 		if (_pointToolModeDrawerRoot != null)
 		{
-			QueueForDestroy(_pointToolModeDrawerRoot);
+			GameObject root = _pointToolModeDrawerRoot;
+			_pointToolModeDrawerRoot = null;
+			QueuePopupExit(root, root.transform);
 		}
-		_pointToolModeDrawerRoot = null;
 		_pointToolModeDrawerPopup = null;
 		_pointToolModeTriggerButton = null;
 	}

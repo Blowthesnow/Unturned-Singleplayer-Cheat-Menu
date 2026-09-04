@@ -11,7 +11,14 @@
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupContracts.cs" Link="AutoPickupContracts.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupScheduler.cs" Link="AutoPickupScheduler.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupRuleStore.cs" Link="AutoPickupRuleStore.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\InfiniteStorageDestructionCoordinator.cs" Link="InfiniteStorageDestructionCoordinator.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotDestruction.cs" Link="SnapshotDestruction.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotContracts.cs" Link="SnapshotContracts.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotKey.cs" Link="SnapshotKey.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotKernel.cs" Link="SnapshotKernel.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotTransaction.cs" Link="SnapshotTransaction.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\ItemFilterMatcher.cs" Link="ItemFilterMatcher.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotPersistence.cs" Link="SnapshotPersistence.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -8,13 +8,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\ItemStacking\ItemStackingClassifier.cs" Link="ItemStackingClassifier.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\ItemStacking\AmmoCompatibilityGraph.cs" Link="AmmoCompatibilityGraph.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\ItemStacking\AmmoRefillAllocator.cs" Link="AmmoRefillAllocator.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeAction.cs" Link="InventoryArrangeAction.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeContainer.cs" Link="InventoryArrangeContainer.cs" />
+	<Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryHotkeyBindingPolicy.cs" Link="InventoryHotkeyBindingPolicy.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeItem.cs" Link="InventoryArrangeItem.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangePlacement.cs" Link="InventoryArrangePlacement.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangePlan.cs" Link="InventoryArrangePlan.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangePlanner.cs" Link="InventoryArrangePlanner.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryArrangeSettings.cs" Link="InventoryArrangeSettings.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventoryStackingSemantics.cs" Link="InventoryStackingSemantics.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortDirection.cs" Link="InventorySortDirection.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortKey.cs" Link="InventorySortKey.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InventoryArrange\InventorySortKeySpec.cs" Link="InventorySortKeySpec.cs" />

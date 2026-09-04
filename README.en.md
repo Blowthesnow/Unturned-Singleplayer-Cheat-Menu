@@ -2,7 +2,7 @@
 
 [中文说明](README.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
-A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `1.98.0`; v1.98 adds a Fluent Legacy uGUI control library and responsive shell, Infinite Storage decomposition, automatic-pickup rarity filtering, and expanded minimap orientation, layout-input isolation, rarity visuals, and cross-region zombie retention.
+A bilingual Chinese/English BepInEx 5 in-game menu built specifically for **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `1.995.0`; v1.995 introduces exact-snapshot Infinite Storage with same-DLL crafting/ammo/decomposition adapters, strengthens AutoPickup and inventory-arrange consistency, and adds Legacy uGUI motion, flight-viewmodel, and rich-text compatibility fixes.
 
 > **Singleplayer without BattlEye only.** This project does not disable, modify, or bypass BattlEye and does not support multiplayer servers.
 
@@ -64,7 +64,7 @@ The map setup checkbox named **singleplayer cheats** is not required. It control
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `1.98.0` |
+| Plugin | `1.995.0` |
 
 ## Installation
 
@@ -94,9 +94,13 @@ Files are created under `BepInEx/config` after first use:
 - `UnturnedSingleplayerCheatMenu.favorites.json`
 - `UnturnedSingleplayerCheatMenu.teleports.json`
 - `AutoPickup.rules.json`
-- `UnturnedSingleplayerCheatMenu/InfiniteStorage/<world>/<player>.json`
+- `UnturnedSingleplayerCheatMenu/InfiniteStorageSnapshots/v1/<first-24-hex-world-hash>/<first-24-hex-player-hash>/snapshot.json` (96-bit directory prefixes keep Unity Mono sidecars below its path limit; the document still validates the full world/player identity)
 
 The default shortcut is `End` and can be changed through `ToggleShortcut`.
+
+The never-released `UnturnedSingleplayerCheatMenu/InfiniteStorage/` format is retired. The current runtime does not read, claim, migrate, move, or delete files in that tree. If the new path is absent, Infinite Storage starts empty.
+
+If `snapshot.json.reconciliation-required` exists beside a Snapshot document, Infinite Storage and AutoPickup remain locked to contain an unproven native/storage state. Inspect the primary, `.bak`, retained temporary candidates, and world-drop incident using the living reference before manually clearing the marker and restarting; do not overwrite the save blindly.
 
 The top-right `EN` / `中文` button switches the language immediately and writes the choice back to `Interface.Language`; no restart is required.
 

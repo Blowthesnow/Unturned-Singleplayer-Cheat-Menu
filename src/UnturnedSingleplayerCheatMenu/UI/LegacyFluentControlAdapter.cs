@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Controls;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Runtime;
+using UnturnedSingleplayerCheatMenu.UI.Motion;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
 
@@ -15,16 +16,19 @@ internal sealed class LegacyFluentControlAdapter
 	private readonly LegacyFluentHandleRegistry _registry;
 	private readonly LegacyFluentTooltipBridge _tooltips;
 	private readonly LegacyFluentControlFactory _factory;
+	private readonly UiMotionDriver _motion;
 
 	internal LegacyFluentControlAdapter(
 		LegacyFluentUiContext context,
 		LegacyFluentHandleRegistry registry,
-		LegacyFluentTooltipBridge tooltips)
+		LegacyFluentTooltipBridge tooltips,
+		UiMotionDriver motion)
 	{
 		_context = context ?? throw new ArgumentNullException(nameof(context));
 		_registry = registry ?? throw new ArgumentNullException(nameof(registry));
 		_tooltips = tooltips ?? throw new ArgumentNullException(nameof(tooltips));
-		_factory = new LegacyFluentControlFactory(context.Theme, context.ResolveFont);
+		_motion = motion;
+		_factory = new LegacyFluentControlFactory(context.Theme, context.ResolveFont, motion);
 	}
 
 	internal LegacyFluentControlHandle AdaptButton(
@@ -48,7 +52,7 @@ internal sealed class LegacyFluentControlAdapter
 			handle.AddCleanup(() => button.onClick.RemoveListener(listener));
 		}
 		OverlaySelectableVisual visual = root.GetComponent<OverlaySelectableVisual>() ?? root.AddComponent<OverlaySelectableVisual>();
-		visual.Initialize(button, hitTarget, label, focusIndicator, legacyOutline, baseColor, handle.Surface,
+		visual.Initialize(button, hitTarget, label, focusIndicator, legacyOutline, baseColor, _motion, handle.Surface,
 			color => ResolvePalette(color, variant));
 		_tooltips.Attach(visual, tooltip, delayTooltip);
 		_registry.Track(root, handle);
@@ -82,7 +86,7 @@ internal sealed class LegacyFluentControlAdapter
 			}
 		}
 		OverlaySelectableVisual visual = root.GetComponent<OverlaySelectableVisual>() ?? root.AddComponent<OverlaySelectableVisual>();
-		visual.Initialize(input, hitTarget, text, focusIndicator, legacyOutline, _context.Theme.SurfaceMuted.ToUnity(), handle.Surface,
+		visual.Initialize(input, hitTarget, text, focusIndicator, legacyOutline, _context.Theme.SurfaceMuted.ToUnity(), _motion, handle.Surface,
 			color => _factory.ResolvePalette(FluentButtonVariant.Subtle, emphasized: false));
 		_tooltips.Attach(visual, tooltip, delay: false);
 		_registry.Track(root, handle);
@@ -99,9 +103,11 @@ internal sealed class LegacyFluentControlAdapter
 		Outline legacyOutline,
 		Color baseColor,
 		Action<bool> changed,
-		string tooltip)
+		string tooltip,
+		Color? activeColor = null)
 	{
-		LegacyFluentControlHandle handle = _factory.AdaptToggle(root, toggle, hitTarget, legacyCheck);
+		LegacyFluentControlHandle handle = _factory.AdaptToggle(root, toggle, hitTarget,
+			legacyCheck, activeColor);
 		if (changed != null)
 		{
 			UnityAction<bool> listener = changed.Invoke;
@@ -109,8 +115,13 @@ internal sealed class LegacyFluentControlAdapter
 			handle.AddCleanup(() => toggle.onValueChanged.RemoveListener(listener));
 		}
 		OverlaySelectableVisual visual = root.GetComponent<OverlaySelectableVisual>() ?? root.AddComponent<OverlaySelectableVisual>();
-		visual.Initialize(toggle, hitTarget, label, focusIndicator, legacyOutline, baseColor, handle.Surface,
-			color => ResolvePalette(color, FluentButtonVariant.Standard));
+		visual.Initialize(toggle, hitTarget, label, focusIndicator, legacyOutline, baseColor, _motion, handle.Surface,
+			_ => ResolveTogglePalette());
+		visual.SetInteractableChanged(handle.InteractableChanged);
+		handle.AddCleanup(() =>
+		{
+			if (visual != null) visual.SetInteractableChanged(null);
+		});
 		_tooltips.Attach(visual, tooltip, delay: false);
 		_registry.Track(root, handle);
 		return handle;
@@ -271,6 +282,24 @@ internal sealed class LegacyFluentControlAdapter
 			normal, soft, normal, soft, _context.Theme.SurfaceMuted.WithAlpha(150),
 			_context.Theme.BorderStrong, _context.Theme.Focus, _context.Theme.BorderStrong, _context.Theme.Focus,
 			_context.Theme.Border.WithAlpha(120), _context.Theme.TextPrimary, _context.Theme.TextTertiary.WithAlpha(150));
+	}
+
+	private FluentSelectablePalette ResolveTogglePalette()
+	{
+		FluentSelectablePalette standard = _factory.ResolvePalette(FluentButtonVariant.Standard, emphasized: false);
+		return new FluentSelectablePalette(
+			standard.NormalFill,
+			standard.HoverFill,
+			standard.PressedFill,
+			_context.Theme.SurfaceHover,
+			standard.DisabledFill,
+			standard.NormalBorder,
+			standard.HoverBorder,
+			standard.PressedBorder,
+			_context.Theme.Focus,
+			standard.DisabledBorder,
+			standard.NormalText,
+			standard.DisabledText);
 	}
 
 	private FluentSelectablePalette CreateCustomPalette(Color color)

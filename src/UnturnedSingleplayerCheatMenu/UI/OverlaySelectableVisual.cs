@@ -5,6 +5,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Core;
 using UnturnedSingleplayerCheatMenu.UI.ControlLibrary.Runtime;
+using UnturnedSingleplayerCheatMenu.UI.Motion;
 using Text = UnturnedSingleplayerCheatMenu.UI.UiText;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
@@ -12,6 +13,10 @@ namespace UnturnedSingleplayerCheatMenu.UI;
 internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHandler, IEventSystemHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler, ISelectHandler, IDeselectHandler
 {
 	private static readonly List<OverlaySelectableVisual> ActiveVisuals = new List<OverlaySelectableVisual>();
+	private const float DetailedTooltipDelaySeconds = 0.45f;
+	private const float TooltipWarmWindowSeconds = 0.70f;
+	private static OverlaySelectableVisual _tooltipOwner;
+	private static float _tooltipWarmUntil;
 
 	private Selectable _selectable;
 
@@ -28,6 +33,14 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 	private LegacyFluentSurface _fluentSurface;
 
 	private Func<Color, FluentSelectablePalette> _paletteResolver;
+	private UiMotionDriver _motion;
+	private VisualState _visualState;
+	private bool _hasVisualState;
+	private bool _hasTargetPalette;
+	private Color _targetFill;
+	private Color _targetBorder;
+	private Color _targetText;
+	private Action<bool> _interactableChanged;
 
 	private bool _hovered;
 
@@ -53,6 +66,15 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 
 	private Action _hideHoverExplanation;
 
+	private enum VisualState
+	{
+		Normal,
+		Hovered,
+		Pressed,
+		Focused,
+		Disabled
+	}
+
 	public void Initialize(
 		Selectable selectable,
 		Image background,
@@ -60,6 +82,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		GameObject focusIndicator,
 		Outline outline,
 		Color baseColor,
+		UiMotionDriver motion,
 		LegacyFluentSurface fluentSurface = null,
 		Func<Color, FluentSelectablePalette> paletteResolver = null)
 	{
@@ -69,16 +92,17 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		_focusIndicator = focusIndicator;
 		_outline = outline;
 		_baseColor = baseColor;
+		_motion = motion;
 		_fluentSurface = fluentSurface;
 		_paletteResolver = paletteResolver;
 		_lastInteractable = null;
-		Refresh();
+		Refresh(animate: false);
 	}
 
 	internal void SetPaletteResolver(Func<Color, FluentSelectablePalette> paletteResolver)
 	{
 		_paletteResolver = paletteResolver;
-		Refresh();
+		Refresh(animate: false);
 	}
 
 	public void SetHoverExplanation(string message, Action<string, RectTransform, Vector2> show, Action hide, bool delay = false)
@@ -107,16 +131,22 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		Refresh();
 	}
 
+	internal void SetInteractableChanged(Action<bool> changed)
+	{
+		_interactableChanged = changed;
+		if (_selectable != null) _interactableChanged?.Invoke(_selectable.interactable);
+	}
+
 	public void OnPointerEnter(PointerEventData eventData)
 	{
 		_hovered = true;
 		_hoverExplanationStartTime = Time.unscaledTime;
 		_hoverExplanationShown = false;
 		Refresh();
-		if (!_delayHoverExplanation && !string.IsNullOrWhiteSpace(_hoverExplanation))
+		bool warm = Time.unscaledTime < _tooltipWarmUntil;
+		if ((!_delayHoverExplanation || warm) && !string.IsNullOrWhiteSpace(_hoverExplanation))
 		{
-			_hoverExplanationShown = true;
-			_showHoverExplanation?.Invoke(_hoverExplanation, (_background != null) ? _background.rectTransform : null, eventData.position);
+			ShowHoverExplanationNow(eventData.position);
 		}
 	}
 
@@ -155,6 +185,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 	private void OnDisable()
 	{
 		ActiveVisuals.Remove(this);
+		_motion?.Cancel(gameObject, includeChildren: true);
 		_hovered = false;
 		_pressed = false;
 		_selected = false;
@@ -163,6 +194,8 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		{
 			_focusIndicator.SetActive(value: false);
 		}
+		_hasVisualState = false;
+		_hasTargetPalette = false;
 	}
 
 	private void OnEnable()
@@ -171,7 +204,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		{
 			ActiveVisuals.Add(this);
 		}
-		Refresh();
+		Refresh(animate: false);
 	}
 
 	internal static void PumpAll()
@@ -194,30 +227,46 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		{
 			Refresh();
 		}
-		if (_delayHoverExplanation && _hovered && !_hoverExplanationShown && !string.IsNullOrWhiteSpace(_hoverExplanation) && Time.unscaledTime - _hoverExplanationStartTime >= 2f)
+		if (_delayHoverExplanation && _hovered && !_hoverExplanationShown && !string.IsNullOrWhiteSpace(_hoverExplanation) &&
+			Time.unscaledTime - _hoverExplanationStartTime >= DetailedTooltipDelaySeconds)
 		{
-			_hoverExplanationShown = true;
-			_showHoverExplanation?.Invoke(_hoverExplanation, (_background != null) ? _background.rectTransform : null, Input.mousePosition);
+			ShowHoverExplanationNow(Input.mousePosition);
 		}
+	}
+
+	private void ShowHoverExplanationNow(Vector2 screenPosition)
+	{
+		_hoverExplanationShown = true;
+		_tooltipOwner = this;
+		_tooltipWarmUntil = Time.unscaledTime + TooltipWarmWindowSeconds;
+		_showHoverExplanation?.Invoke(_hoverExplanation, (_background != null) ? _background.rectTransform : null, screenPosition);
 	}
 
 	private void CancelHoverExplanation()
 	{
+		bool ownsTooltip = ReferenceEquals(_tooltipOwner, this);
+		if (_hoverExplanationShown) _tooltipWarmUntil = Time.unscaledTime + TooltipWarmWindowSeconds;
 		_hoverExplanationStartTime = 0f;
 		_hoverExplanationShown = false;
-		_hideHoverExplanation?.Invoke();
+		if (ownsTooltip)
+		{
+			_tooltipOwner = null;
+			_hideHoverExplanation?.Invoke();
+		}
 	}
 
-	private void Refresh()
+	private void Refresh(bool animate = true)
 	{
 		if (_selectable == null || _background == null)
 		{
 			return;
 		}
+		bool interactableChanged = _lastInteractable != _selectable.interactable;
 		_lastInteractable = _selectable.interactable;
+		if (interactableChanged) _interactableChanged?.Invoke(_selectable.interactable);
 		if (_fluentSurface != null && _paletteResolver != null)
 		{
-			RefreshFluent();
+			RefreshFluent(animate);
 			return;
 		}
 		if (!_selectable.interactable)
@@ -279,7 +328,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		}
 	}
 
-	private void RefreshFluent()
+	private void RefreshFluent(bool animate)
 	{
 		FluentSelectablePalette palette = _paletteResolver(_baseColor);
 		_background.color = Color.clear;
@@ -291,42 +340,90 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		Color fill;
 		Color border;
 		Color textColor;
+		VisualState state;
 		if (!_selectable.interactable)
 		{
+			state = VisualState.Disabled;
 			fill = palette.DisabledFill.ToUnity();
 			border = palette.DisabledBorder.ToUnity();
 			textColor = palette.DisabledText.ToUnity();
 		}
 		else if (_pressed)
 		{
+			state = VisualState.Pressed;
 			fill = palette.PressedFill.ToUnity();
 			border = palette.PressedBorder.ToUnity();
 			textColor = palette.NormalText.ToUnity();
 		}
 		else if (_hovered)
 		{
+			state = VisualState.Hovered;
 			fill = palette.HoverFill.ToUnity();
 			border = palette.HoverBorder.ToUnity();
 			textColor = palette.NormalText.ToUnity();
 		}
 		else if (_selected)
 		{
+			state = VisualState.Focused;
 			fill = palette.FocusedFill.ToUnity();
 			border = palette.FocusedBorder.ToUnity();
 			textColor = palette.NormalText.ToUnity();
 		}
 		else
 		{
+			state = VisualState.Normal;
 			fill = palette.NormalFill.ToUnity();
 			border = palette.NormalBorder.ToUnity();
 			textColor = palette.NormalText.ToUnity();
 		}
 
-		_fluentSurface.SetColors(fill, _showOutline ? border : Color.clear);
-		if (_label != null)
+		border = _showOutline ? border : Color.clear;
+		VisualState previousState = _visualState;
+		bool firstState = !_hasVisualState;
+		_visualState = state;
+		_hasVisualState = true;
+		bool immediate = !animate || firstState || state == VisualState.Disabled || _motion == null || !isActiveAndEnabled;
+		float duration = state == VisualState.Pressed
+			? UiMotionTokens.PressIn
+			: previousState == VisualState.Pressed ? UiMotionTokens.PressOut : UiMotionTokens.Hover;
+		bool targetsChanged = !_hasTargetPalette || !Approximately(_targetFill, fill) ||
+			!Approximately(_targetBorder, border) || !Approximately(_targetText, textColor);
+		_targetFill = fill;
+		_targetBorder = border;
+		_targetText = textColor;
+		_hasTargetPalette = true;
+		if (!firstState && previousState == state && !targetsChanged)
 		{
-			_label.color = textColor;
+			RefreshFocusIndicator();
+			return;
 		}
+
+		if (immediate)
+		{
+			_motion?.Cancel(gameObject);
+			_fluentSurface.SetColors(fill, border);
+			if (_label != null) _label.color = textColor;
+		}
+		else
+		{
+			Color startFill = _fluentSurface.CurrentFill;
+			Color startBorder = _fluentSurface.CurrentBorder;
+			_motion.Animate(gameObject, UiMotionChannel.FillColor, duration, UiMotionEasingKind.EaseOutCubic,
+				progress => _fluentSurface.SetColors(
+					Color.LerpUnclamped(startFill, fill, progress),
+					Color.LerpUnclamped(startBorder, border, progress)));
+			if (_label != null)
+			{
+				Color startText = _label.color;
+				_motion.Animate(gameObject, UiMotionChannel.TextColor, duration, UiMotionEasingKind.EaseOutCubic,
+					progress => _label.color = Color.LerpUnclamped(startText, textColor, progress));
+			}
+		}
+		RefreshFocusIndicator();
+	}
+
+	private void RefreshFocusIndicator()
+	{
 		if (_focusIndicator != null)
 		{
 			bool visible = _selectable.interactable && _showFocusIndicator && _selected;
@@ -336,5 +433,11 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 				_focusIndicator.transform.SetAsLastSibling();
 			}
 		}
+	}
+
+	private static bool Approximately(Color left, Color right)
+	{
+		return Mathf.Abs(left.r - right.r) < 0.001f && Mathf.Abs(left.g - right.g) < 0.001f &&
+			Mathf.Abs(left.b - right.b) < 0.001f && Mathf.Abs(left.a - right.a) < 0.001f;
 	}
 }

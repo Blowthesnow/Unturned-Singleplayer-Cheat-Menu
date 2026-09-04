@@ -1,4 +1,5 @@
 using System;
+using UnturnedSingleplayerCheatMenu.ItemStacking;
 
 namespace UnturnedSingleplayerCheatMenu.InventoryArrange;
 
@@ -22,7 +23,11 @@ internal sealed class InventoryArrangeItem
 
 	internal int Amount;
 
+	internal int OriginalAmount = -1;
+
 	internal int MaxAmount;
+
+	internal ItemStackingKind StackingKind;
 
 	internal int Quality;
 
@@ -40,9 +45,11 @@ internal sealed class InventoryArrangeItem
 
 	internal bool IsAmmoSource;
 
+	internal bool IsAmmoTarget;
+
 	internal int AmmoCapacity = -1;
 
-	internal string AmmoGroup;
+	internal string[] AmmoDirectSourceAssetGuids = Array.Empty<string>();
 
 	internal int SourceRotation;
 
@@ -54,17 +61,9 @@ internal sealed class InventoryArrangeItem
 
 	internal bool IsHotkeyBound;
 
-	internal bool IsAmmoContainer
-	{
-		get
-		{
-			if (!IsMagazine)
-			{
-				return IsAmmoSource;
-			}
-			return true;
-		}
-	}
+	internal bool IsAmmoContainer => StackingKind == ItemStackingKind.AmmoContainer;
+
+	internal bool IsFungible => StackingKind == ItemStackingKind.FungibleUnits;
 
 	internal int Area => Width * Height;
 
@@ -81,7 +80,9 @@ internal sealed class InventoryArrangeItem
 			Width = Width,
 			Height = Height,
 			Amount = amount,
+			OriginalAmount = OriginalAmount,
 			MaxAmount = MaxAmount,
+			StackingKind = StackingKind,
 			Quality = Quality,
 			AmmoCount = (IsAmmoContainer ? amount : AmmoCount),
 			SourcePage = SourcePage,
@@ -93,8 +94,9 @@ internal sealed class InventoryArrangeItem
 			IsRotatable = IsRotatable,
 			IsMagazine = IsMagazine,
 			IsAmmoSource = IsAmmoSource,
+			IsAmmoTarget = IsAmmoTarget,
 			AmmoCapacity = AmmoCapacity,
-			AmmoGroup = AmmoGroup,
+			AmmoDirectSourceAssetGuids = (string[])(AmmoDirectSourceAssetGuids?.Clone() ?? Array.Empty<string>()),
 			IsProtected = IsProtected,
 			IsHotkeyBound = IsHotkeyBound
 		};
@@ -102,7 +104,9 @@ internal sealed class InventoryArrangeItem
 
 	internal bool CanMergeWith(InventoryArrangeItem other)
 	{
-		if (other != null && !IsProtected && !other.IsProtected && MaxAmount > 1 && other.MaxAmount == MaxAmount && Quality == other.Quality && string.Equals(AssetGuid, other.AssetGuid, StringComparison.Ordinal))
+		if (other != null && IsFungible && other.IsFungible && !IsProtected && !other.IsProtected && !IsHotkeyBound &&
+			!other.IsHotkeyBound && MaxAmount > 1 && other.MaxAmount == MaxAmount &&
+			string.Equals(AssetGuid, other.AssetGuid, StringComparison.Ordinal))
 		{
 			return string.Equals(StateHash, other.StateHash, StringComparison.Ordinal);
 		}

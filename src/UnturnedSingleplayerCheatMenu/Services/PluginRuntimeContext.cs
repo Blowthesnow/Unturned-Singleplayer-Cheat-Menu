@@ -8,6 +8,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.Crafting;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Runtime;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.Patches;
@@ -43,7 +45,7 @@ public sealed class PluginRuntimeContext : IDisposable
 	private NearbyItemSnapshot _sharedItemSnapshot;
 	private float _nextSharedItemScanTime;
 	private int _sharedItemSnapshotVersion;
-	private InfiniteStorageRuntime _infiniteStorage;
+	private SnapshotInfiniteStorageRuntime _infiniteStorage;
 	private CreatureHealthBarService _creatureHealthBars;
 	private WorkshopLocalizationService _workshopLocalization;
 	private Harmony _harmony;
@@ -51,6 +53,7 @@ public sealed class PluginRuntimeContext : IDisposable
 	private bool _subscriptionsInstalled;
 	private bool _disposed;
 	private bool _hasLoggedUpdateCallback;
+	private bool _hasLoggedInfiniteStoragePumpFailure;
 	private int _lastRuntimeUpdateFrame = -1;
 	private int _lastRuntimeLateUpdateFrame = -1;
 	private int _lastWorkshopSnapshotVersion = -1;
@@ -108,10 +111,11 @@ public sealed class PluginRuntimeContext : IDisposable
 		RuntimeUpdatePatch.Install(_harmony, _log, this);
 		MinimapLayoutInputPatch.Install(_harmony, _log);
 		MovementSimulationPatch.Install(_harmony, _log);
+		FlightViewmodelPatch.Install(_harmony, _log);
 		InventoryArrangePatch.Install(_harmony, _log, _inventoryArrange);
 		PointToolInteractionPatch.Install(_harmony, _log);
 		WorkshopLocalizationPatch.Install(_harmony, _log);
-		InfiniteStorageCraftingPatch.Install(_harmony, _log);
+		SnapshotCraftingPatch.Install(_harmony, _log);
 		ZombieRegionRetentionPatch.Install(_harmony, _log);
 		try
 		{
@@ -210,8 +214,20 @@ public sealed class PluginRuntimeContext : IDisposable
 		NearbyItemSnapshot sharedItemSnapshot = RefreshSharedItemSnapshot(
 			_plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen, Time.realtimeSinceStartup);
 		_minimap?.Update(Time.realtimeSinceStartup, sharedItemSnapshot);
+		try
+		{
+			_infiniteStorage?.Pump();
+			_hasLoggedInfiniteStoragePumpFailure = false;
+		}
+		catch (Exception exception)
+		{
+			if (!_hasLoggedInfiniteStoragePumpFailure)
+			{
+				_hasLoggedInfiniteStoragePumpFailure = true;
+				_log?.LogError("[Runtime] InfiniteStorage Pump failed; downstream runtime features remain active.\n" + exception);
+			}
+		}
 		_autoPickup?.Pump(_plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen, sharedItemSnapshot);
-		_infiniteStorage?.Pump();
 
 		if ((_plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen) && !SingleplayerGuard.IsReady)
 		{

@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [更新日志](CHANGELOG.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.98.0`；v1.98 新增 Fluent Legacy uGUI 控件库与响应式界面、无限储存分解、自动拾取稀有度过滤，并扩展了小地图朝向、编辑输入隔离、稀有度视觉和跨区域丧尸保留。
+一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.995.0`；v1.995 引入精确快照式无限储存及同 DLL 内制作/补弹/分解适配器，强化自动拾取和背包整理的一致性，并补齐 Legacy uGUI 动效、飞行视模与富文本兼容修复。
 
 > **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
 
@@ -120,7 +120,7 @@
 
 ## 兼容环境
 
-当前 `1.98.0` 源码已针对以下环境构建；版本归属、构建记录与验证边界见 [更新日志](CHANGELOG.md)：
+当前 `1.995.0` 源码已针对以下环境构建；版本归属、构建记录与验证边界见 [更新日志](CHANGELOG.md)：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -128,7 +128,7 @@
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.98.0` |
+| 插件 | `1.995.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
@@ -163,12 +163,16 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` 
 | `UnturnedSingleplayerCheatMenu.favorites.json` | 物品与车辆收藏 |
 | `UnturnedSingleplayerCheatMenu.teleports.json` | 具名传送点 |
 | `AutoPickup.rules.json` | 自动拾取白名单/黑名单规则 |
-| `UnturnedSingleplayerCheatMenu/InfiniteStorage/<世界>/<玩家>.json` | 按世界和玩家隔离的无限储存数据 |
+| `UnturnedSingleplayerCheatMenu/InfiniteStorageSnapshots/v1/<世界哈希前24位>/<玩家哈希前24位>/snapshot.json` | Snapshot schema 1；96 位目录前缀控制 Unity Mono 路径长度，文档内完整身份仍按世界、Steam ID 与角色槽精确校验 |
 | `BepInEx/LogOutput.log` | BepInEx 与插件运行日志 |
 
 默认快捷键是 `End`，可以在配置文件中的 `ToggleShortcut` 修改。修改前请退出游戏。
 
 插件窗口右上角提供 `EN` / `中文` 语言切换按钮，点击后立即刷新界面并写回 `Interface.Language`，不需要重启游戏。
+
+从未发布的旧 `UnturnedSingleplayerCheatMenu/InfiniteStorage/` 格式已废弃；当前运行时不会读取、Claim、迁移、移动或删除该目录中的文件。新路径不存在时，无限储存从空仓库开始。
+
+若同目录出现 `snapshot.json.reconciliation-required`，无限储存与自动拾取会保持锁定，避免把无法证明一致的原生/仓库状态继续扩散。先按活文档核对 primary、`.bak`、临时残件与世界掉落，手工清理标记后重启；不要直接覆盖存档。
 
 `Interface.Language` 初始默认为 `Auto`：简体/繁体中文 Unturned 使用中文，其余游戏语言使用英文。也可以在配置文件中显式填写 `English` 或 `Chinese`；未知值按 `Auto` 处理。
 

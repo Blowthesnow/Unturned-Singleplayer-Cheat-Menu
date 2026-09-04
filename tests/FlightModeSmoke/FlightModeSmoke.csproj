@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\FlightMode.cs" Link="FlightMode.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\FlightViewmodelPolicy.cs" Link="FlightViewmodelPolicy.cs" />
   </ItemGroup>
 </Project>

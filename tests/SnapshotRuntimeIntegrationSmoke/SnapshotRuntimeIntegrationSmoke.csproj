@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\UnturnedSingleplayerCheatMenu\UnturnedSingleplayerCheatMenu.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="BepInEx" HintPath="..\..\lib\BepInEx.dll" Private="true" />
+    <Reference Include="0Harmony" HintPath="..\..\lib\0Harmony.dll" Private="true" />
+    <Reference Include="Assembly-CSharp" HintPath="..\..\lib\Assembly-CSharp.dll" Private="true" />
+    <Reference Include="UnityEngine" HintPath="..\..\lib\UnityEngine.dll" Private="true" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="..\..\lib\UnityEngine.CoreModule.dll" Private="true" />
+  </ItemGroup>
+</Project>

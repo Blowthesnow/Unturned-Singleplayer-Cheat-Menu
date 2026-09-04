@@ -22,9 +22,7 @@ internal sealed partial class CheatMenuOverlayUi
 {
 	private void ShowAboutDialog()
 	{
-		HideAboutDialog();
-		HideFontPicker();
-		HideShortcutDialog();
+		PrepareModalOpen();
 		if (!(_root == null))
 		{
 			_aboutRoot = CreateObject("AboutOverlay", _uiRoot.ModalLayer, typeof(Image));
@@ -70,6 +68,7 @@ internal sealed partial class CheatMenuOverlayUi
 				Application.OpenURL("https://afdian.com/a/Blowthesnow");
 			}, "在系统浏览器中打开作者的爱发电支持页面。", 0f, 36f, CheatMenuStyle.Surface, 11);
 			_uiRoot.RegisterModal(_aboutRoot, HideAboutDialog, button.gameObject);
+			AnimateModalEnter(_aboutRoot, gameObject.transform);
 		}
 	}
 
@@ -77,16 +76,15 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		if (!(_aboutRoot == null))
 		{
-			QueueForDestroy(_aboutRoot);
+			GameObject root = _aboutRoot;
 			_aboutRoot = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
 	}
 
 	private void ShowFontPicker()
 	{
-		HideFontPicker();
-		HideAboutDialog();
-		HideShortcutDialog();
+		PrepareModalOpen();
 		if (_root == null)
 		{
 			return;
@@ -187,6 +185,7 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateText(dialog.transform, string.Format(PluginLocalization.Translate("可用中文字体：{0} 个"), fontFamilies.Count),
 			11, CheatMenuStyle.Muted, TextAnchor.MiddleLeft, FontStyle.Normal, localize: false);
 		_uiRoot.RegisterModal(_fontPickerRoot, HideFontPicker, preferredSelection);
+		AnimateModalEnter(_fontPickerRoot, dialog.transform);
 	}
 
 	private void ApplyFontFamily(string fontFamily, string displayName)
@@ -198,7 +197,7 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 
 		_font = _shellPresenter.ResolveFont();
-		HideFontPicker();
+		RunWithoutTransientMotion(HideFontPicker);
 		string message = persisted
 			? "界面字体已切换为：" + displayName
 			: (string.IsNullOrWhiteSpace(error) ? "界面字体已切换，但配置文件保存失败。" : error);
@@ -210,16 +209,15 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		if (_fontPickerRoot != null)
 		{
-			QueueForDestroy(_fontPickerRoot);
+			GameObject root = _fontPickerRoot;
 			_fontPickerRoot = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
 	}
 
 	private void ShowShortcutDialog()
 	{
-		HideShortcutDialog();
-		HideAboutDialog();
-		HideFontPicker();
+		PrepareModalOpen();
 		if (!(_root == null))
 		{
 			_shortcutRoot = CreateObject("ShortcutOverlay", _uiRoot.ModalLayer, typeof(Image));
@@ -340,6 +338,7 @@ internal sealed partial class CheatMenuOverlayUi
 			RebuildShortcutScrollLayout();
 			_shortcutScrollRect.verticalNormalizedPosition = Mathf.Clamp01(_shortcutScrollPosition);
 			_uiRoot.RegisterModal(_shortcutRoot, HideShortcutDialog, button.gameObject);
+			AnimateModalEnter(_shortcutRoot, gameObject.transform);
 		}
 	}
 
@@ -551,8 +550,9 @@ internal sealed partial class CheatMenuOverlayUi
 		_shortcutCaptureText = null;
 		if (!(_shortcutRoot == null))
 		{
-			QueueForDestroy(_shortcutRoot);
+			GameObject root = _shortcutRoot;
 			_shortcutRoot = null;
+			QueueModalExit(root, ResolveModalVisual(root));
 		}
 	}
 

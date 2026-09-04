@@ -15,5 +15,7 @@
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopTextIdentity.cs" Link="WorkshopTextIdentity.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopProtectedText.cs" Link="WorkshopProtectedText.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\WorkshopRichTextProtector.cs" Link="WorkshopRichTextProtector.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotContracts.cs" Link="SnapshotContracts.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotPresentation.cs" Link="SnapshotPresentation.cs" />
   </ItemGroup>
 </Project>

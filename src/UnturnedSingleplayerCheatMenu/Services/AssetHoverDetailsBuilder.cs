@@ -13,9 +13,10 @@ internal static class AssetHoverDetailsBuilder
     {
         if (asset == null) return string.Empty;
         List<string> lines = new List<string>();
-        string nativeDescription = BuildNativeDescription(asset);
+        string nativeDescription = LegacyRichTextSanitizer.Normalize(BuildNativeDescription(asset));
         if (!string.IsNullOrWhiteSpace(nativeDescription)) lines.Add(nativeDescription);
-        else if (!string.IsNullOrWhiteSpace(translatedDescription)) lines.Add(translatedDescription.Trim());
+        else if (!string.IsNullOrWhiteSpace(translatedDescription))
+            lines.Add(LegacyRichTextSanitizer.Normalize(translatedDescription.Trim()));
         if (asset is ItemGunAsset gun) AddGunLines(lines, gun, ammoIndex, loadedItems);
         if (asset is ItemConsumeableAsset consumeable) AddConsumeableLines(lines, consumeable);
         return new AssetHoverDetails(displayName, lines).ToString();

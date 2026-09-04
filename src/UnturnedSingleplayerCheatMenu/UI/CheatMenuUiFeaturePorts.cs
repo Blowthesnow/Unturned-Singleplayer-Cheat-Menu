@@ -6,6 +6,8 @@ using SDG.Unturned;
 using UnityEngine;
 using UnturnedSingleplayerCheatMenu.AutoPickup;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Composition;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel;
 using UnturnedSingleplayerCheatMenu.InventoryArrange;
 using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.Models;
@@ -94,15 +96,20 @@ internal interface IInfiniteStorageUiFeature
 	bool IsAvailable { get; }
 	bool Enabled { get; }
 	bool PickupPriorityEnabled { get; }
-	IReadOnlyList<VirtualStorageEntry> Entries { get; }
-	int LegacyAmbiguousEntryCount { get; }
+	bool DestructionWarningAcknowledged { get; }
+	IReadOnlyList<ItemGroupView> Groups { get; }
+	IReadOnlyList<SnapshotModuleAction> ModuleActions { get; }
 	void SetEnabled(bool value);
 	void SetPickupPriority(bool value);
-	bool TryExportLegacyAmbiguousEntries();
 	int StoreAllCarried();
-	long Withdraw(string entryId, long amount);
-	bool CanDecompose(string entryId);
-	InfiniteStorageDecomposeResult Decompose(string entryId, InfiniteStorageDecomposeScope scope);
+	long Withdraw(ItemGroupIdentity identity, ItemSnapshot snapshot, long count);
+	bool CanWithdraw(ItemGroupIdentity identity);
+	bool AcknowledgeDestructionWarning();
+	bool CanDestroy(ItemGroupIdentity identity);
+	InfiniteStorageDestructionResult Destroy(ItemGroupIdentity identity, ItemSnapshot snapshot,
+		SnapshotDestructionScope scope);
+	bool CanExecuteModule(string id, SnapshotModuleRequest request);
+	SnapshotModuleExecutionResult ExecuteModule(string id, SnapshotModuleRequest request);
 }
 
 internal interface ITranslationUiFeature
@@ -340,16 +347,34 @@ internal sealed class PluginUiFeatureAdapter :
 	bool IInfiniteStorageUiFeature.IsAvailable => _plugin.InfiniteStorage != null;
 	bool IInfiniteStorageUiFeature.Enabled => _plugin.InfiniteStorage?.Enabled ?? false;
 	bool IInfiniteStorageUiFeature.PickupPriorityEnabled => _plugin.IsInfiniteStoragePickupPriorityEnabled;
-	IReadOnlyList<VirtualStorageEntry> IInfiniteStorageUiFeature.Entries => _plugin.InfiniteStorage?.Entries?.ToArray() ?? Array.Empty<VirtualStorageEntry>();
-	int IInfiniteStorageUiFeature.LegacyAmbiguousEntryCount => _plugin.InfiniteStorage?.LegacyAmbiguousEntries?.Count ?? 0;
+	bool IInfiniteStorageUiFeature.DestructionWarningAcknowledged =>
+		_plugin.IsInfiniteStorageDestructionWarningAcknowledged;
+	IReadOnlyList<ItemGroupView> IInfiniteStorageUiFeature.Groups => _plugin.InfiniteStorage?.Groups?.ToArray() ?? Array.Empty<ItemGroupView>();
+	IReadOnlyList<SnapshotModuleAction> IInfiniteStorageUiFeature.ModuleActions => _plugin.InfiniteStorage?.ModuleActions?.ToArray() ?? Array.Empty<SnapshotModuleAction>();
 	void IInfiniteStorageUiFeature.SetEnabled(bool value) => _plugin.SetInfiniteStorageEnabled(value);
 	void IInfiniteStorageUiFeature.SetPickupPriority(bool value) => _plugin.SetInfiniteStoragePickupPriority(value);
-	bool IInfiniteStorageUiFeature.TryExportLegacyAmbiguousEntries() => _plugin.InfiniteStorage?.TryExportLegacyAmbiguousEntries(out _, out _) ?? false;
 	int IInfiniteStorageUiFeature.StoreAllCarried() => _plugin.InfiniteStorage?.StoreAllCarried() ?? 0;
-	long IInfiniteStorageUiFeature.Withdraw(string entryId, long amount) => _plugin.InfiniteStorage?.Withdraw(entryId, amount) ?? 0;
-	bool IInfiniteStorageUiFeature.CanDecompose(string entryId) => _plugin.InfiniteStorage?.CanDecompose(entryId) ?? false;
-	InfiniteStorageDecomposeResult IInfiniteStorageUiFeature.Decompose(string entryId, InfiniteStorageDecomposeScope scope) =>
-		_plugin.InfiniteStorage?.Decompose(entryId, scope) ?? InfiniteStorageDecomposeResult.Failed(InfiniteStorageDecomposeFailure.StorageUnavailable);
+	long IInfiniteStorageUiFeature.Withdraw(ItemGroupIdentity identity, ItemSnapshot snapshot, long count) =>
+		_plugin.InfiniteStorage?.Withdraw(identity, snapshot, count) ?? 0;
+	bool IInfiniteStorageUiFeature.CanWithdraw(ItemGroupIdentity identity) =>
+		_plugin.InfiniteStorage?.CanWithdraw(identity) ?? false;
+	bool IInfiniteStorageUiFeature.AcknowledgeDestructionWarning() =>
+		_plugin.AcknowledgeInfiniteStorageDestructionWarning();
+	bool IInfiniteStorageUiFeature.CanDestroy(ItemGroupIdentity identity) =>
+		_plugin.InfiniteStorage?.CanDestroy(identity) ?? false;
+	InfiniteStorageDestructionResult IInfiniteStorageUiFeature.Destroy(ItemGroupIdentity identity,
+		ItemSnapshot snapshot, SnapshotDestructionScope scope)
+	{
+		if (_plugin.InfiniteStorage == null || _plugin.AutoPickup == null)
+			return InfiniteStorageDestructionResult.Failed("destruction-service-unavailable");
+		return InfiniteStorageDestructionCoordinator.Execute(identity.AssetId, _plugin.AutoPickup.Rules,
+			_plugin.SetAutoPickupRules,
+			() => _plugin.InfiniteStorage.Destroy(identity, snapshot, scope));
+	}
+	bool IInfiniteStorageUiFeature.CanExecuteModule(string id, SnapshotModuleRequest request) =>
+		_plugin.InfiniteStorage?.CanExecuteModule(id, request) ?? false;
+	SnapshotModuleExecutionResult IInfiniteStorageUiFeature.ExecuteModule(string id, SnapshotModuleRequest request) =>
+		_plugin.InfiniteStorage?.ExecuteModule(id, request) ?? SnapshotModuleExecutionResult.Failed("storage-unavailable");
 
 	private WorkshopLocalizationService Translation => _plugin.WorkshopLocalization;
 	string ITranslationUiFeature.ApiProtocol => Translation?.Settings?.ApiProtocol ?? string.Empty;

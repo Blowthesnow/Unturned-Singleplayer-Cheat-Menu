@@ -11,6 +11,8 @@ internal sealed class ItemFilterMatcher
 	{
 		public readonly HashSet<string> AssetIds = new HashSet<string>(StringComparer.Ordinal);
 
+		public int Count => AssetIds.Count;
+
 		public void Add(string value)
 		{
 			AssetIds.Add(value);
@@ -62,7 +64,9 @@ internal sealed class ItemFilterMatcher
 				deny.Add(value);
 			}
 		}
-		_whitelistEnabled = enabled && (mode == AutoPickupFilterMode.WhitelistOnly || mode == AutoPickupFilterMode.WhitelistThenBlacklist);
+		bool requestedWhitelist = enabled &&
+			(mode == AutoPickupFilterMode.WhitelistOnly || mode == AutoPickupFilterMode.WhitelistThenBlacklist);
+		_whitelistEnabled = requestedWhitelist && allow.Count > 0;
 		Mode = _whitelistEnabled ? AutoPickupFilterMode.WhitelistThenBlacklist : AutoPickupFilterMode.BlacklistOnly;
 		_allow = allow;
 		_deny = deny;

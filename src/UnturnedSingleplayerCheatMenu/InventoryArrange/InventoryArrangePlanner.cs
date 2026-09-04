@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnturnedSingleplayerCheatMenu.ItemStacking;
 
 namespace UnturnedSingleplayerCheatMenu.InventoryArrange;
 
@@ -46,15 +47,21 @@ internal sealed class InventoryArrangePlanner
 		List<InventoryArrangeItem> list3 = list2.Where((InventoryArrangeItem item) => item.IsProtected).ToList();
 		List<InventoryArrangeItem> list4 = list2.Where((InventoryArrangeItem item) => !item.IsProtected).ToList();
 		bool flag = settings.Action == InventoryArrangeAction.Arrange && settings.Preset == InventorySortPreset.LowMovement;
-		List<InventoryArrangeItem> list5 = (((settings.Action == InventoryArrangeAction.Compact) | flag) ? list4.OrderBy((InventoryArrangeItem item) => item.OriginalIndex).ToList() : Merge(list4, settings.AutoRefillMagazines));
-		inventoryArrangePlan.MergeCount = list4.Count - list5.Count;
-		if (settings.AutoRefillMagazines && ((settings.Action == InventoryArrangeAction.Compact) | flag))
+		List<InventoryArrangeItem> list5 = list4.OrderBy((InventoryArrangeItem item) => item.OriginalIndex).ToList();
+		if (settings.AutoRefillMagazines)
 		{
-			list5 = RefillMagazineGroups(list5);
+			list5 = RefillMagazineGroups(list5, out IReadOnlyList<AmmoRefillTransfer> transfers);
+			inventoryArrangePlan.AmmoTransfers.AddRange(transfers);
 		}
+		if (!((settings.Action == InventoryArrangeAction.Compact) | flag)) list5 = Merge(list5);
+		inventoryArrangePlan.MergeCount = list4.Count - list5.Count;
 		if (settings.Action == InventoryArrangeAction.Arrange && !flag)
 		{
 			list5.Sort((InventoryArrangeItem left, InventoryArrangeItem right) => Compare(left, right, InventorySortRegistry.GetProfile(settings.Preset, settings.CustomKeys)));
+		}
+		if (settings.Action == InventoryArrangeAction.Merge)
+		{
+			return FinishMergeOnly(inventoryArrangePlan, list3, list5, list2);
 		}
 		Dictionary<int, PageState> dictionary = list.ToDictionary((InventoryArrangeContainer page) => page.Page, (InventoryArrangeContainer page) => new PageState(page));
 		foreach (InventoryArrangeItem item in list3)
@@ -75,7 +82,7 @@ internal sealed class InventoryArrangePlanner
 				}
 				inventoryArrangePlan.Placements.Add(Placement(item2, item2.SourcePage, item2.SourceX, item2.SourceY, item2.SourceRotation));
 			}
-			return Complete(inventoryArrangePlan);
+			return Complete(inventoryArrangePlan, list2);
 		}
 		foreach (InventoryArrangeItem item3 in list5)
 		{
@@ -85,19 +92,20 @@ internal sealed class InventoryArrangePlanner
 			}
 			inventoryArrangePlan.Placements.Add(placement);
 		}
-		return Complete(inventoryArrangePlan);
+		return Complete(inventoryArrangePlan, list2);
 	}
 
-	private static InventoryArrangePlan FinishMergeOnly(InventoryArrangePlan plan, IEnumerable<InventoryArrangeItem> protectedItems, IEnumerable<InventoryArrangeItem> output)
+	private static InventoryArrangePlan FinishMergeOnly(InventoryArrangePlan plan, IEnumerable<InventoryArrangeItem> protectedItems,
+		IEnumerable<InventoryArrangeItem> output, IReadOnlyList<InventoryArrangeItem> input)
 	{
 		foreach (InventoryArrangeItem item in protectedItems.Concat(output))
 		{
 			plan.Placements.Add(Placement(item, item.SourcePage, item.SourceX, item.SourceY, item.SourceRotation));
 		}
-		return Complete(plan);
+		return Complete(plan, input);
 	}
 
-	private static List<InventoryArrangeItem> Merge(IEnumerable<InventoryArrangeItem> items, bool autoRefillMagazines)
+	private static List<InventoryArrangeItem> Merge(IEnumerable<InventoryArrangeItem> items)
 	{
 		List<InventoryArrangeItem> list = new List<InventoryArrangeItem>();
 		foreach (IGrouping<string, InventoryArrangeItem> item in items.OrderBy((InventoryArrangeItem item) => item.OriginalIndex).GroupBy<InventoryArrangeItem, string>(MergeKey, StringComparer.Ordinal))
@@ -105,10 +113,10 @@ internal sealed class InventoryArrangePlanner
 			List<InventoryArrangeItem> list2 = item.OrderBy((InventoryArrangeItem item) => item.OriginalIndex).ToList();
 			if (list2[0].IsAmmoContainer)
 			{
-				list.AddRange(autoRefillMagazines ? RefillMagazineGroups(list2) : list2);
+				list.AddRange(list2);
 				continue;
 			}
-			if (list2[0].MaxAmount <= 1 || list2.Sum((InventoryArrangeItem item) => item.Amount) <= 0)
+			if (!list2[0].IsFungible || list2[0].MaxAmount <= 1 || list2.Sum((InventoryArrangeItem item) => item.Amount) <= 0)
 			{
 				list.AddRange(list2);
 				continue;
@@ -127,49 +135,55 @@ internal sealed class InventoryArrangePlanner
 		return list;
 	}
 
-	private static List<InventoryArrangeItem> RefillMagazineGroups(IEnumerable<InventoryArrangeItem> items)
+	private static List<InventoryArrangeItem> RefillMagazineGroups(IEnumerable<InventoryArrangeItem> items,
+		out IReadOnlyList<AmmoRefillTransfer> transfers)
 	{
 		List<InventoryArrangeItem> list = items.ToList();
-		Dictionary<string, int> dictionary = new Dictionary<string, int>(StringComparer.Ordinal);
-		HashSet<string> hashSet = new HashSet<string>(StringComparer.Ordinal);
-		foreach (IGrouping<string, InventoryArrangeItem> item in list.Where((InventoryArrangeItem item) => item.IsAmmoContainer).GroupBy<InventoryArrangeItem, string>(AmmoGroupKey, StringComparer.Ordinal))
+		List<InventoryArrangeItem> candidates = list.Where(item => item.IsAmmoContainer && !item.IsHotkeyBound &&
+			AmmoRefillIdentity.TryGetValidCapacity(item.AmmoCapacity, out _) &&
+			item.Amount >= 0 && item.Amount <= item.AmmoCapacity).ToList();
+		List<AmmoRefillLot> lots = candidates.Select(item => new AmmoRefillLot(
+			item.ItemKey,
+			AmmoRefillIdentity.BuildContainerIdentity(item.AssetGuid, item.Quality, item.StateHash, item.AmmoCapacity),
+			new AmmoRefillAssetRules(item.AssetGuid, item.IsMagazine, item.IsAmmoSource, item.AmmoDirectSourceAssetGuids),
+			1, item.Amount, item.AmmoCapacity)).ToList();
+		List<InventoryArrangeItem> sourceOnly = list.Where(item => item.IsAmmoSource && item.IsFungible &&
+			!item.IsHotkeyBound && item.Amount >= 0).ToList();
+		HashSet<string> sourceOnlyKeys = new HashSet<string>(sourceOnly.Select(item => item.ItemKey), StringComparer.Ordinal);
+		lots.AddRange(sourceOnly.Select(item => AmmoRefillLot.SourceOnly(item.ItemKey,
+			"resource|" + AmmoRefillIdentity.NormalizeAssetGuid(item.AssetGuid) + "|state:" +
+			(item.StateHash ?? string.Empty) + "|max:" + item.MaxAmount,
+			new AmmoRefillAssetRules(item.AssetGuid, false, true, item.AmmoDirectSourceAssetGuids), item.Amount)));
+		if (!AmmoRefillAllocator.TryPlan(lots, out AmmoRefillPlan refillPlan))
 		{
-			List<InventoryArrangeItem> source = item.ToList();
-			if (!source.Any((InventoryArrangeItem item) => item.AmmoCount < 0 || item.AmmoCapacity <= 0))
-			{
-				int num = source.Sum((InventoryArrangeItem item) => Math.Max(0, item.AmmoCount));
-				int num2 = source.Sum((InventoryArrangeItem item) => item.AmmoCapacity);
-				if (num <= num2)
-				{
-					hashSet.Add(item.Key);
-					dictionary[item.Key] = num;
-				}
-			}
+			transfers = Array.Empty<AmmoRefillTransfer>();
+			return list;
 		}
-		List<InventoryArrangeItem> list2 = new List<InventoryArrangeItem>(list.Count);
-		foreach (InventoryArrangeItem item2 in list)
-		{
-			if (!item2.IsAmmoContainer)
-			{
-				list2.Add(item2);
-				continue;
-			}
-			string text = AmmoGroupKey(item2);
-			if (!hashSet.Contains(text))
-			{
-				list2.Add(item2);
-				continue;
-			}
-			int num3 = Math.Min(item2.AmmoCapacity, dictionary[text]);
-			dictionary[text] -= num3;
-			list2.Add(item2.CloneWithAmount(num3));
-		}
-		return list2;
-	}
 
-	private static string AmmoGroupKey(InventoryArrangeItem item)
-	{
-		return item.AmmoGroup + "|" + item.Quality;
+		Dictionary<string, AmmoRefillBatch> allocations = refillPlan.Allocations.ToDictionary(
+			allocation => allocation.LotKey, allocation => allocation.Allocation, StringComparer.Ordinal);
+		Dictionary<string, long> sourceRemainders = refillPlan.SourceRemainders.ToDictionary(
+			value => value.LotKey, value => value.RemainingRounds, StringComparer.Ordinal);
+		transfers = refillPlan.Transfers.Where(value => sourceOnlyKeys.Contains(value.SourceLotKey) ||
+			!string.Equals(value.SourceAssetGuid, value.TargetAssetGuid, StringComparison.Ordinal)).ToArray();
+		List<InventoryArrangeItem> result = new List<InventoryArrangeItem>(list.Count);
+		foreach (InventoryArrangeItem item in list)
+		{
+			if (allocations.TryGetValue(item.ItemKey, out AmmoRefillBatch allocation))
+			{
+				result.Add(item.CloneWithAmount(allocation.FullCount > 0 ? item.AmmoCapacity :
+					allocation.PartialCount > 0 ? allocation.PartialAmount : 0));
+			}
+			else if (sourceRemainders.TryGetValue(item.ItemKey, out long remaining))
+			{
+				if (remaining > 0) result.Add(item.CloneWithAmount(checked((int)remaining)));
+			}
+			else
+			{
+				result.Add(item);
+			}
+		}
+		return result;
 	}
 
 	private static bool TryPlace(Dictionary<int, PageState> states, InventoryArrangeItem item, bool autoRotate, bool crossPage, IReadOnlyList<int> preferredPages, out InventoryArrangePlacement placement)
@@ -300,7 +314,7 @@ internal sealed class InventoryArrangePlanner
 		};
 	}
 
-	private static InventoryArrangePlan Complete(InventoryArrangePlan plan)
+	private static InventoryArrangePlan Complete(InventoryArrangePlan plan, IReadOnlyList<InventoryArrangeItem> input)
 	{
 		plan.OutputItemCount = plan.Placements.Count;
 		foreach (InventoryArrangePlacement placement in plan.Placements)
@@ -315,6 +329,15 @@ internal sealed class InventoryArrangePlanner
 				plan.CrossPageCount++;
 			}
 		}
+		Dictionary<string, InventoryArrangeItem> outputByKey = plan.Placements.ToDictionary(
+			value => value.Item.ItemKey, value => value.Item, StringComparer.Ordinal);
+		plan.AmmoChangedContainerCount = input.Count(item => (item.IsAmmoContainer || item.IsAmmoSource) &&
+			(!outputByKey.TryGetValue(item.ItemKey, out InventoryArrangeItem outputItem) || outputItem.Amount != item.Amount));
+		if (!InventoryStackingSemantics.TryValidateTransition(input,
+			plan.Placements.Select(value => value.Item), plan.AmmoTransfers, out string reason))
+		{
+			return Fail(plan, reason);
+		}
 		plan.IsSuccess = true;
 		return plan;
 	}
@@ -324,6 +347,7 @@ internal sealed class InventoryArrangePlanner
 		plan.IsSuccess = false;
 		plan.FailureReason = reason;
 		plan.Placements.Clear();
+		plan.AmmoTransfers.Clear();
 		return plan;
 	}
 
@@ -333,11 +357,16 @@ internal sealed class InventoryArrangePlanner
 		{
 			return "hotkey|" + item.ItemKey;
 		}
-		if (!item.IsAmmoContainer)
+		if (item.IsFungible)
 		{
-			return item.AssetGuid + "|" + item.Quality + "|" + item.StateHash + "|" + item.MaxAmount;
+			return "units|" + item.AssetGuid + "|quality:" + item.Quality + "|state:" +
+				item.StateHash + "|max:" + item.MaxAmount;
 		}
-		return "mag|" + AmmoGroupKey(item);
+		if (item.IsAmmoContainer)
+		{
+			return "ammo-instance|" + item.ItemKey;
+		}
+		return "instance|" + item.ItemKey;
 	}
 
 	private static int Compare(InventoryArrangeItem left, InventoryArrangeItem right, InventorySortProfile profile)
