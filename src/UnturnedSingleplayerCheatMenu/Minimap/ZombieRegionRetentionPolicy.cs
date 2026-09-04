@@ -7,9 +7,9 @@ internal static class ZombieRegionRetentionPolicy
 	internal const int MaxFarRetainedRegions = 8;
 	internal const float ProtectionRadiusPaddingMeters = 16f;
 
-	internal static bool IsEnabled(bool singleplayerReady, bool minimapEnabled, bool showZombies)
+	internal static bool IsEnabled(bool retentionAllowed, bool minimapEnabled, bool showZombies)
 	{
-		return singleplayerReady && minimapEnabled && showZombies;
+		return retentionAllowed && minimapEnabled && showZombies;
 	}
 
 	internal static bool ShouldSuppressBoundExitDestroy(bool retentionEnabled, bool insideBoundUpdate,

@@ -2,7 +2,7 @@
 param(
     [string]$PluginDll,
     [string]$OutputDirectory,
-    [string]$Version = '1.7.0'
+    [string]$Version = '2.0.0'
 )
 
 Set-StrictMode -Version Latest
@@ -51,7 +51,8 @@ Final plugin path:
 BepInEx\plugins\UnturnedSingleplayerCheatMenu\UnturnedSingleplayerCheatMenu.dll
 
 Keep exactly one active UnturnedSingleplayerCheatMenu.dll under BepInEx\plugins. Rename old backups to a non-.dll suffix.
-Use only in singleplayer without BattlEye.
+
+Gameplay features are designed, tested, and supported only for Unturned singleplayer worlds. The plugin may remain installed while you choose a BattlEye launch, and the menu may open in a multiplayer client session if BepInEx successfully loads and the local player exists. Gameplay-feature use in multiplayer/server sessions is unsupported and at your own risk. Workshop translation is a local content feature: it is not controlled by the singleplayer/multiplayer gameplay gate or multiplayer-risk acknowledgement, and entering multiplayer does not cancel it. The project does not stop, disable, modify, or bypass BattlEye, and does not guarantee that BattlEye will allow BepInEx, this plugin, or the connection to continue.
 
 插件 DLL SHA-256:
 $pluginHash

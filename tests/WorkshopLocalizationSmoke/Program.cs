@@ -12,6 +12,8 @@ UnsupportedMonoConnectionLimitDoesNotAbortStartup();
 ProductionConcurrencyUsesMonoCompatibilityBoundary();
 ProductionServiceUsesTheParallelDispatcher();
 ProductionUiUsesKeyRowsAndScrollableTranslationPage();
+ProductionTranslationLifecycleSurvivesSessionChangesAndDefersAssetRefresh();
+ProductionTranslationPumpRunsBeforeOtherRuntimeWork();
 Console.WriteLine("Workshop localization smoke checks passed.");
 
 static void ApiKeysAreNormalizedAndCapped()
@@ -189,6 +191,147 @@ static void ProductionUiUsesKeyRowsAndScrollableTranslationPage()
           toolsShell.Contains("AddShortcutScrollbar", StringComparison.Ordinal) &&
           toolsShell.Contains("AddShortcutScrollLayout", StringComparison.Ordinal),
         "The production translation UI does not use the global-shortcut vertical scroll layout.");
+}
+
+static void ProductionTranslationLifecycleSurvivesSessionChangesAndDefersAssetRefresh()
+{
+    string repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+    string runtimeContext = File.ReadAllText(Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu", "Services", "PluginRuntimeContext.cs"));
+    string translationService = File.ReadAllText(Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu", "Services", "WorkshopLocalizationService.cs"));
+    string translationView = File.ReadAllText(Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu", "UI", "CheatMenuOverlayUi.TranslationToolsView.cs"));
+    string plugin = File.ReadAllText(Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu", "CheatMenuPlugin.cs"));
+    int assetRefreshStart = translationService.IndexOf("internal void OnAssetsRefreshed()", StringComparison.Ordinal);
+    int deferredRescanStart = assetRefreshStart < 0
+        ? -1
+        : translationService.IndexOf("private bool TryTakeDeferredAssetRescan()", assetRefreshStart, StringComparison.Ordinal);
+    int reloadCacheStart = deferredRescanStart < 0
+        ? -1
+        : translationService.IndexOf("internal void ReloadCache()", deferredRescanStart, StringComparison.Ordinal);
+    Check(assetRefreshStart >= 0 && deferredRescanStart > assetRefreshStart &&
+          reloadCacheStart > deferredRescanStart,
+        "Workshop asset-refresh method boundaries were not found.");
+    string assetRefresh = translationService.Substring(assetRefreshStart, deferredRescanStart - assetRefreshStart);
+    string deferredRescan = translationService.Substring(deferredRescanStart, reloadCacheStart - deferredRescanStart);
+    int scanStart = translationService.IndexOf("internal void ScanCurrentAssets(bool allowAutoTranslate = true)", StringComparison.Ordinal);
+    int assetRefreshMethodStart = translationService.IndexOf("internal void OnAssetsRefreshed()", scanStart, StringComparison.Ordinal);
+    Check(scanStart >= 0 && assetRefreshMethodStart > scanStart,
+        "Workshop manual-scan method boundaries were not found.");
+    string manualScan = translationService.Substring(scanStart, assetRefreshMethodStart - scanStart);
+    int pumpStart = translationService.IndexOf("internal void Pump()", reloadCacheStart, StringComparison.Ordinal);
+    int disposeStart = pumpStart < 0
+        ? -1
+        : translationService.IndexOf("public void Dispose()", pumpStart, StringComparison.Ordinal);
+    Check(pumpStart >= 0 && disposeStart > pumpStart,
+        "Workshop Pump method boundaries were not found.");
+    string pump = translationService.Substring(pumpStart, disposeStart - pumpStart);
+    string compactAssetRefresh = Compact(assetRefresh);
+    string compactDeferredRescan = Compact(deferredRescan);
+    string compactPump = Compact(pump);
+    int pluginAssetsRefreshedStart = plugin.IndexOf("internal void HandleAssetsRefreshed()", StringComparison.Ordinal);
+    Check(pluginAssetsRefreshedStart >= 0,
+        "CheatMenuPlugin asset-refresh handler was not found.");
+    string pluginAssetsRefreshed = ExtractBraceBlock(plugin, pluginAssetsRefreshedStart);
+
+    Check(!runtimeContext.Contains("_workshopLocalization?.CancelTranslation()", StringComparison.Ordinal),
+        "Runtime session changes must never cancel Workshop translation.");
+    Check(!assetRefresh.Contains("CancelTranslation()", StringComparison.Ordinal) &&
+          compactAssetRefresh.Contains(
+              "if(_translationTask!=null&&!_translationTask.IsCompleted){_deferredAssetRescan=true;return;}",
+              StringComparison.Ordinal),
+        "Automatic asset refresh must not cancel an active translation.");
+    Check(translationService.Contains("private bool _deferredAssetRescan;", StringComparison.Ordinal) &&
+          compactDeferredRescan.Contains(
+              "if(!_deferredAssetRescan)returnfalse;if(_translationTask!=null&&!_translationTask.IsCompleted)returnfalse;_deferredAssetRescan=false;returnAutoScanOnAssetsRefreshed&&!_disposed;",
+              StringComparison.Ordinal) &&
+          CountOccurrences(pump, "TryTakeDeferredAssetRescan()") == 1 &&
+          CountOccurrences(pump, "ScanCurrentAssets();") == 1 &&
+          compactPump.Contains("if(TryTakeDeferredAssetRescan())ScanCurrentAssets();", StringComparison.Ordinal),
+        "Asset refresh must set one deferred rescan, keep it pending during translation, and let Pump consume it exactly once.");
+    Check(manualScan.Contains("_deferredAssetRescan = false;", StringComparison.Ordinal),
+        "An explicit manual scan must consume any older deferred asset rescan instead of running a duplicate scan later.");
+    Check(!translationService.Contains("GameplayFeatureAccessPolicy", StringComparison.Ordinal) &&
+          !translationView.Contains("GameplayFeatureAccessPolicy", StringComparison.Ordinal),
+        "Workshop translation must remain outside the multiplayer gameplay gate.");
+    Check(pluginAssetsRefreshed.Contains("WorkshopLocalization?.OnAssetsRefreshed();", StringComparison.Ordinal) &&
+          pluginAssetsRefreshed.Contains("RefreshCatalog(scanWorkshopLocalization: false);", StringComparison.Ordinal),
+        "Every asset refresh must reach the deferred-rescan boundary even while a plugin window is open.");
+}
+
+static void ProductionTranslationPumpRunsBeforeOtherRuntimeWork()
+{
+    string repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+    string runtimeContext = File.ReadAllText(Path.Combine(repoRoot, "src", "UnturnedSingleplayerCheatMenu", "Services", "PluginRuntimeContext.cs"));
+    int updateStart = runtimeContext.IndexOf("internal void Update()", StringComparison.Ordinal);
+    int lateUpdateStart = runtimeContext.IndexOf("internal void LateUpdate()", updateStart, StringComparison.Ordinal);
+    Check(updateStart >= 0 && lateUpdateStart > updateStart,
+        "PluginRuntimeContext Update method boundaries were not found.");
+    string update = runtimeContext.Substring(updateStart, lateUpdateStart - updateStart);
+    int frameClaim = update.IndexOf("_lastRuntimeUpdateFrame = Time.frameCount;", StringComparison.Ordinal);
+    int translationPump = update.IndexOf("_workshopLocalization?.Pump();", StringComparison.Ordinal);
+    int sessionObservation = update.IndexOf("_plugin.ObserveRuntimeSession();", StringComparison.Ordinal);
+    int iconPump = update.IndexOf("_icons.PumpOne()", StringComparison.Ordinal);
+    int uiPump = update.IndexOf("_uiRoot?.Pump();", StringComparison.Ordinal);
+    Check(frameClaim >= 0 && translationPump > frameClaim &&
+          sessionObservation > translationPump && iconPump > translationPump && uiPump > translationPump,
+        "Workshop translation Pump must be the first runtime operation after frame de-duplication so session, icon, or UI failures cannot starve it.");
+    int workshopTry = update.IndexOf("try", frameClaim + "_lastRuntimeUpdateFrame = Time.frameCount;".Length,
+        StringComparison.Ordinal);
+    int workshopCatch = update.IndexOf("catch (Exception exception)", translationPump, StringComparison.Ordinal);
+    string betweenFrameClaimAndTry = workshopTry < 0
+        ? string.Empty
+        : update.Substring(frameClaim + "_lastRuntimeUpdateFrame = Time.frameCount;".Length,
+            workshopTry - frameClaim - "_lastRuntimeUpdateFrame = Time.frameCount;".Length);
+    int workshopTryOpen = workshopTry < 0 ? -1 : update.IndexOf('{', workshopTry);
+    int workshopTryClose = workshopTryOpen < 0 ? -1 : FindMatchingBrace(update, workshopTryOpen);
+    int workshopCatchOpen = workshopCatch < 0 ? -1 : update.IndexOf('{', workshopCatch);
+    int workshopCatchClose = workshopCatchOpen < 0 ? -1 : FindMatchingBrace(update, workshopCatchOpen);
+    string workshopTryBody = workshopTryOpen < 0 || workshopTryClose < 0
+        ? string.Empty
+        : update.Substring(workshopTryOpen + 1, workshopTryClose - workshopTryOpen - 1);
+    string workshopCatchBody = workshopCatchOpen < 0 || workshopCatchClose < 0
+        ? string.Empty
+        : update.Substring(workshopCatchOpen + 1, workshopCatchClose - workshopCatchOpen - 1);
+    Check(workshopTry > frameClaim && workshopTry < translationPump && workshopCatch > translationPump &&
+          workshopCatch < sessionObservation && string.IsNullOrWhiteSpace(betweenFrameClaimAndTry) &&
+          workshopTryClose < workshopCatch && workshopCatchClose < sessionObservation &&
+          Compact(workshopTryBody) ==
+              "_workshopLocalization?.Pump();_hasLoggedWorkshopPumpFailure=false;" &&
+          !workshopCatchBody.Contains("return;", StringComparison.Ordinal) &&
+          !workshopCatchBody.Contains("throw", StringComparison.Ordinal),
+        "Workshop translation Pump must have its own exception boundary before the remaining runtime graph runs.");
+}
+
+static string Compact(string text) => new string(text.Where(character => !char.IsWhiteSpace(character)).ToArray());
+
+static string ExtractBraceBlock(string text, int searchStart)
+{
+    int open = text.IndexOf('{', searchStart);
+    int close = open < 0 ? -1 : FindMatchingBrace(text, open);
+    Check(open >= 0 && close > open, "A required source block has unbalanced braces.");
+    return text.Substring(open + 1, close - open - 1);
+}
+
+static int FindMatchingBrace(string text, int open)
+{
+    int depth = 0;
+    for (int index = open; index < text.Length; index++)
+    {
+        if (text[index] == '{') depth++;
+        else if (text[index] == '}' && --depth == 0) return index;
+    }
+    return -1;
+}
+
+static int CountOccurrences(string text, string value)
+{
+    int count = 0;
+    int offset = 0;
+    while ((offset = text.IndexOf(value, offset, StringComparison.Ordinal)) >= 0)
+    {
+        count++;
+        offset += value.Length;
+    }
+    return count;
 }
 
 static void Check(bool condition, string message)

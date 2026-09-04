@@ -27,6 +27,52 @@ internal sealed class SnapshotCraftingAbortResult
 	};
 }
 
+internal sealed class SnapshotCraftingBatch
+{
+	private readonly Func<SnapshotKernelTransaction> _beginTransaction;
+	private SnapshotKernelTransaction _transaction;
+	private bool _completed;
+
+	internal SnapshotCraftingBatch(Func<SnapshotKernelTransaction> beginTransaction)
+	{
+		_beginTransaction = beginTransaction ?? throw new ArgumentNullException(nameof(beginTransaction));
+	}
+
+	internal bool HasTransaction => _transaction != null;
+
+	internal SnapshotKernelTransaction GetOrBeginTransaction()
+	{
+		if (_completed) return null;
+		return _transaction ??= _beginTransaction();
+	}
+
+	internal SnapshotTransactionCommitResult Commit(
+		Func<SnapshotKernelTransaction, SnapshotTransactionCommitResult> commit)
+	{
+		if (_completed) return SnapshotTransactionCommitResult.Failed("crafting-batch-completed", false);
+		_completed = true;
+		if (_transaction == null) return SnapshotTransactionCommitResult.Succeeded();
+		if (commit == null) return SnapshotTransactionCommitResult.Failed("crafting-batch-commit-missing", false);
+		try
+		{
+			return commit(_transaction) ??
+				SnapshotTransactionCommitResult.Failed("crafting-batch-commit-null", false);
+		}
+		catch (Exception exception)
+		{
+			return SnapshotTransactionCommitResult.Failed(
+				"crafting-batch-commit-threw:" + exception.GetType().Name, false);
+		}
+	}
+
+	internal SnapshotTransactionCommitResult Rollback()
+	{
+		if (_completed) return SnapshotTransactionCommitResult.Failed("crafting-batch-completed", false);
+		_completed = true;
+		return _transaction?.Rollback() ?? SnapshotTransactionCommitResult.Succeeded();
+	}
+}
+
 internal static class SnapshotCraftingRollbackGate
 {
 	[ThreadStatic] private static int _depth;

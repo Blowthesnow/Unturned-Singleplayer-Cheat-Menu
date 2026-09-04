@@ -25,6 +25,14 @@ Equal(PluginLanguage.English, PluginLocalization.Resolve("invalid", "German"), "
 
 PluginLocalization.Initialize("English", "Schinese");
 Equal("Singleplayer Cheat Menu", PluginLocalization.Translate("单人作弊指令菜单"), "Static UI translation");
+Equal("Singleplayer (supported)", PluginLocalization.Translate("单人（受支持）"), "Supported-session badge translation");
+Equal("Multiplayer/server (unsupported)", PluginLocalization.Translate("多人/服务器（不受支持）"), "Unsupported-session badge translation");
+Equal("Multiplayer/server (unsupported, acknowledged)", PluginLocalization.Translate("多人/服务器（不受支持，已确认）"), "Acknowledged unsupported-session badge translation");
+Equal("Continue This Session", PluginLocalization.Translate("本次会话继续"), "Multiplayer acknowledgement action translation");
+Equal("Close Menu", PluginLocalization.Translate("关闭菜单"), "Multiplayer close-menu action translation");
+Equal("Snapshot infinite storage is available only in a true singleplayer world.",
+    PluginLocalization.Translate("Snapshot 无限储存仅在真正的单人世界中可用。"),
+    "Snapshot singleplayer exception translation");
 Equal("Workshop", PluginLocalization.Translate("Workshop"), "English origin label should remain Workshop");
 Equal("中文", PluginLocalization.SwitchButtonLabel, "English UI should offer the Chinese switch target");
 Equal("Language switched to English.", PluginLocalization.LanguageChangedMessage(true), "English switch success message");

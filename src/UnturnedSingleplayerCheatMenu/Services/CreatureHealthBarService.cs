@@ -15,6 +15,7 @@ internal sealed class CreatureHealthBarService : IDisposable
 {
 	private readonly ManualLogSource _log;
 	private readonly CreatureHealthBarHud _hud;
+	private readonly Func<bool> _canExecuteGameplay;
 	private readonly Dictionary<int, CreatureHealthBarState> _states = new Dictionary<int, CreatureHealthBarState>();
 	private readonly List<CreatureHealthBarRenderData> _renderBuffer = new List<CreatureHealthBarRenderData>();
 	private readonly RaycastHit[] _occlusionHits = new RaycastHit[32];
@@ -34,11 +35,13 @@ internal sealed class CreatureHealthBarService : IDisposable
 
 	internal CreatureHealthBarSettings Settings { get; }
 
-	internal CreatureHealthBarService(ManualLogSource log, CreatureHealthBarSettings settings, CreatureHealthBarHud hud)
+	internal CreatureHealthBarService(ManualLogSource log, CreatureHealthBarSettings settings, CreatureHealthBarHud hud,
+		Func<bool> canExecuteGameplay)
 	{
 		_log = log;
 		Settings = settings.Normalize();
 		_hud = hud;
+		_canExecuteGameplay = canExecuteGameplay ?? throw new ArgumentNullException(nameof(canExecuteGameplay));
 		Subscribe();
 		_log.LogInfo($"[CreatureHealthBar] initialized: enabled={Settings.Enabled}, duration={Settings.DamageDisplayDuration:0.##}s, crosshairRange={Settings.CrosshairRange:0.##}m, displayRange={Settings.DisplayRange:0.##}m, maxBars={Settings.MaxVisibleBars}, scaleReference={Settings.BarScaleReferenceDistance:0.##}m, maxScale={Settings.MaxBarScale:0.##}, Assembly-CSharp={typeof(Zombie).Assembly.GetName().Version}.");
 	}
@@ -49,13 +52,15 @@ internal sealed class CreatureHealthBarService : IDisposable
 		{
 			return;
 		}
-		bool ready = SingleplayerGuard.IsReady;
+		bool ready = _canExecuteGameplay();
 		float now = Time.unscaledTime;
 		if (Settings.Diagnostics && now >= _nextRuntimeDiagnostic)
 		{
 			_nextRuntimeDiagnostic = now + 2f;
 			bool menuOpen = CheatMenuPlugin.Instance?.IsMenuOpen == true;
-			_log.LogInfo($"[CreatureHealthBar] runtime: ready={ready}, singleplayer={SingleplayerGuard.IsSingleplayerWorld}, enabled={Settings.Enabled}, menuOpen={menuOpen}, reason={SingleplayerGuard.RejectionReason}");
+			RuntimeSessionState session = CheatMenuPlugin.Instance?.CurrentSessionState ??
+				new RuntimeSessionState(RuntimeSessionKind.Frontend, string.Empty, false);
+			_log.LogInfo($"[CreatureHealthBar] runtime: ready={ready}, session={session.Kind}, supported={session.IsSupportedGameplay}, acknowledged={CheatMenuPlugin.Instance?.IsMultiplayerRiskAcknowledged == true}, enabled={Settings.Enabled}, menuOpen={menuOpen}");
 		}
 		if (!ready)
 		{
@@ -105,7 +110,7 @@ internal sealed class CreatureHealthBarService : IDisposable
 		{
 			return;
 		}
-		if (!Settings.Enabled || !SingleplayerGuard.IsReady || PointToolService.IsInteractionPaused())
+		if (!Settings.Enabled || !_canExecuteGameplay() || PointToolService.IsInteractionPaused())
 		{
 			_hud.HideAll();
 			return;
@@ -173,7 +178,7 @@ internal sealed class CreatureHealthBarService : IDisposable
 
 	private void RecordDamageCandidate(Component creature, CreatureHealthBarKind kind)
 	{
-		if (creature == null || !Settings.Enabled || !SingleplayerGuard.IsReady)
+		if (creature == null || !Settings.Enabled || !_canExecuteGameplay())
 		{
 			return;
 		}

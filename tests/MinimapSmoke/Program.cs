@@ -26,10 +26,10 @@ Check(nearbyWorldScannerSource.Contains("ZombieManager.AllZombies", StringCompar
       !nearbyWorldScannerSource.Contains("ZombieManager.getZombiesInRadius", StringComparison.Ordinal),
     "Zombie radar must scan every instantiated zombie instead of disappearing at navigation-region boundaries.");
 
-Check(ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: true, minimapEnabled: true, showZombies: true) &&
-      !ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: false, minimapEnabled: true, showZombies: true) &&
-      !ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: true, minimapEnabled: false, showZombies: true) &&
-      !ZombieRegionRetentionPolicy.IsEnabled(singleplayerReady: true, minimapEnabled: true, showZombies: false),
+Check(ZombieRegionRetentionPolicy.IsEnabled(retentionAllowed: true, minimapEnabled: true, showZombies: true) &&
+      !ZombieRegionRetentionPolicy.IsEnabled(retentionAllowed: false, minimapEnabled: true, showZombies: true) &&
+      !ZombieRegionRetentionPolicy.IsEnabled(retentionAllowed: true, minimapEnabled: false, showZombies: true) &&
+      !ZombieRegionRetentionPolicy.IsEnabled(retentionAllowed: true, minimapEnabled: true, showZombies: false),
     "Zombie-region retention must be restricted to an active singleplayer zombie radar.");
 Check(ZombieRegionRetentionPolicy.ShouldSuppressBoundExitDestroy(
           retentionEnabled: true, insideBoundUpdate: true, existingZombieCount: 1) &&
@@ -77,6 +77,7 @@ Check(zombieRetentionPatchSource.Contains("onBoundUpdated", StringComparison.Ord
       zombieRetentionPatchSource.Contains("ShouldReuseExistingRegion", StringComparison.Ordinal) &&
       zombieRetentionPatchSource.Contains("HasLiveZombieInsideProtectionRadius", StringComparison.Ordinal) &&
       zombieRetentionPatchSource.Contains("ResolveFarRecycleCount", StringComparison.Ordinal) &&
+      zombieRetentionPatchSource.Contains("RuntimeSessionBoundary.CaptureCurrent().IsSupportedGameplay", StringComparison.Ordinal) &&
       zombieRetentionPatchSource.Contains("region.destroy();", StringComparison.Ordinal) &&
       runtimeContextSource.Contains("ZombieRegionRetentionPatch.Install(_harmony, _log);", StringComparison.Ordinal) &&
       runtimeContextSource.Contains("ZombieRegionRetentionPatch.Maintain();", StringComparison.Ordinal) &&

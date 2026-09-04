@@ -65,6 +65,110 @@ foreach (string typeName in new[]
         throw new InvalidOperationException($"Expected exactly one instance parameterless Update method on {typeName}, found {updateCount}.");
 }
 
+if (!types.TryGetValue("SDG.Unturned.Dedicator", out TypeDefinition dedicator))
+    throw new InvalidOperationException("Required type is missing: SDG.Unturned.Dedicator");
+
+PropertyDefinition dedicatedProperty = dedicator.GetProperties()
+    .Select(handle => reader.GetPropertyDefinition(handle))
+    .Single(property => reader.GetString(property.Name) == "isStandaloneDedicatedServer");
+MethodDefinition dedicatedGetter = reader.GetMethodDefinition(dedicatedProperty.GetAccessors().Getter);
+if ((dedicatedGetter.Attributes & System.Reflection.MethodAttributes.Public) == 0 ||
+    (dedicatedGetter.Attributes & System.Reflection.MethodAttributes.Static) == 0)
+{
+    throw new InvalidOperationException("Dedicator.isStandaloneDedicatedServer must remain public static.");
+}
+
+TypeDefinition movement = types["SDG.Unturned.PlayerMovement"];
+MethodDefinition walkingSimulation = movement.GetMethods()
+    .Select(handle => reader.GetMethodDefinition(handle))
+    .Single(method =>
+    {
+        if (reader.GetString(method.Name) != "simulate") return false;
+        string[] parameterNames = method.GetParameters()
+            .Select(handle => reader.GetParameter(handle))
+            .Where(parameter => parameter.SequenceNumber > 0)
+            .OrderBy(parameter => parameter.SequenceNumber)
+            .Select(parameter => reader.GetString(parameter.Name))
+            .ToArray();
+        return parameterNames.SequenceEqual(new[]
+        {
+            "simulation", "recov", "input_x", "input_y", "look_x", "look_y",
+            "inputJump", "inputSprint", "deltaTime"
+        }, StringComparer.Ordinal);
+    });
+if ((walkingSimulation.Attributes & System.Reflection.MethodAttributes.Public) == 0 ||
+    (walkingSimulation.Attributes & System.Reflection.MethodAttributes.Static) != 0)
+{
+    throw new InvalidOperationException("PlayerMovement.simulate walking overload must remain public instance API.");
+}
+
+TypeDefinition playerLook = types["SDG.Unturned.PlayerLook"];
+PropertyDefinition aimProperty = playerLook.GetProperties()
+    .Select(handle => reader.GetPropertyDefinition(handle))
+    .Single(property => reader.GetString(property.Name) == "aim");
+MethodDefinition aimGetter = reader.GetMethodDefinition(aimProperty.GetAccessors().Getter);
+if ((aimGetter.Attributes & System.Reflection.MethodAttributes.Public) == 0 ||
+    (aimGetter.Attributes & System.Reflection.MethodAttributes.Static) != 0)
+{
+    throw new InvalidOperationException("PlayerLook.aim must remain a public instance getter.");
+}
+
+TypeDefinition controlsSettings = types["SDG.Unturned.ControlsSettings"];
+Dictionary<string, PropertyDefinition> controlProperties = controlsSettings.GetProperties()
+    .Select(handle => reader.GetPropertyDefinition(handle))
+    .ToDictionary(property => reader.GetString(property.Name), StringComparer.Ordinal);
+foreach (string controlName in new[] { "up", "down", "left", "right", "ascend", "descend" })
+{
+    if (!controlProperties.TryGetValue(controlName, out PropertyDefinition property))
+        throw new InvalidOperationException("ControlsSettings." + controlName + " binding property is missing.");
+    MethodDefinition getter = reader.GetMethodDefinition(property.GetAccessors().Getter);
+    if ((getter.Attributes & System.Reflection.MethodAttributes.Public) == 0 ||
+        (getter.Attributes & System.Reflection.MethodAttributes.Static) == 0)
+    {
+        throw new InvalidOperationException("ControlsSettings." + controlName + " must remain a public static getter.");
+    }
+}
+
+TypeDefinition useableGun = types["SDG.Unturned.UseableGun"];
+HashSet<string> useableGunMethods = useableGun.GetMethods()
+    .Select(handle => reader.GetString(reader.GetMethodDefinition(handle).Name))
+    .ToHashSet(StringComparer.Ordinal);
+foreach (string methodName in new[] { "tick", "startAttach", "stopAttach" })
+{
+    if (!useableGunMethods.Contains(methodName))
+        throw new InvalidOperationException("Required attachment UI lifecycle method is missing: UseableGun." + methodName);
+}
+
+HashSet<string> useableGunFields = useableGun.GetFields()
+    .Select(handle => reader.GetString(reader.GetFieldDefinition(handle).Name))
+    .ToHashSet(StringComparer.Ordinal);
+foreach (string fieldName in new[]
+{
+    "isAttaching", "sightButton", "tacticalButton", "gripButton", "barrelButton", "magazineButton"
+})
+{
+    if (!useableGunFields.Contains(fieldName))
+        throw new InvalidOperationException("Required attachment UI state field is missing: UseableGun." + fieldName);
+}
+
+TypeDefinition inputEx = types["SDG.Unturned.InputEx"];
+bool hasConsumeKeyDown = inputEx.GetMethods()
+    .Select(handle => reader.GetMethodDefinition(handle))
+    .Any(method => reader.GetString(method.Name) == "ConsumeKeyDown" &&
+        method.GetParameters().Count(handle => reader.GetParameter(handle).SequenceNumber > 0) == 1);
+if (!hasConsumeKeyDown)
+    throw new InvalidOperationException("InputEx.ConsumeKeyDown(KeyCode) is missing from the current game assembly.");
+
+TypeDefinition playerUi = types["SDG.Unturned.PlayerUI"];
+HashSet<string> playerUiFields = playerUi.GetFields()
+    .Select(handle => reader.GetString(reader.GetFieldDefinition(handle).Name))
+    .ToHashSet(StringComparer.Ordinal);
+foreach (string fieldName in new[] { "window", "container" })
+{
+    if (!playerUiFields.Contains(fieldName))
+        throw new InvalidOperationException("Required native UI state field is missing: PlayerUI." + fieldName);
+}
+
 foreach ((string typeName, string[] properties) in requiredProperties)
 {
     if (!types.TryGetValue(typeName, out TypeDefinition type))

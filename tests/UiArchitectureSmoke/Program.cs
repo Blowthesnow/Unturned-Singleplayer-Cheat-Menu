@@ -130,6 +130,15 @@ if (args.Contains("--button-tooltips-only", StringComparer.Ordinal))
     return;
 }
 string project = Read(Path.Combine(sourceRoot, "UnturnedSingleplayerCheatMenu.csproj"));
+string pluginSource = Read(Path.Combine(sourceRoot, "CheatMenuPlugin.cs"));
+string awakeBody = ReadMethodBody(pluginSource, "private void Awake()");
+int dedicatedGuardIndex = awakeBody.IndexOf("Dedicator.isStandaloneDedicatedServer", StringComparison.Ordinal);
+int runtimeContextIndex = awakeBody.IndexOf("new PluginRuntimeContext", StringComparison.Ordinal);
+int initializeIndex = awakeBody.IndexOf("Initialize();", StringComparison.Ordinal);
+Check(dedicatedGuardIndex >= 0 &&
+      runtimeContextIndex > dedicatedGuardIndex &&
+      initializeIndex > dedicatedGuardIndex,
+    "Dedicated-server startup must return before constructing the client runtime graph or initializing UI.");
 
 Check(Approximately(WorldTimeClockMapping.GameNormalizedToClockHours(0f), 6f) &&
       Approximately(WorldTimeClockMapping.GameNormalizedToClockHours(0.25f), 12f) &&
@@ -1050,6 +1059,35 @@ string setMenuOpen = ReadMethodBody(plugin, "internal void SetMenuOpen(bool open
 string setInfiniteStorageOpen = ReadMethodBody(plugin, "internal void SetInfiniteStorageOpen(bool open)");
 Check(setMenuOpen.Contains("CanOpenWindow", StringComparison.Ordinal), "Main menu opening bypasses the Glazier backend guard.");
 Check(setInfiniteStorageOpen.Contains("CanOpenWindow", StringComparison.Ordinal), "Infinite storage opening bypasses the Glazier backend guard.");
+string handleToggleShortcut = ReadMethodBody(plugin, "private void HandleToggleShortcut(string inputSource)");
+Check(handleToggleShortcut.Contains("CanOpenClientMenu", StringComparison.Ordinal) &&
+      setMenuOpen.Contains("CanOpenClientMenu", StringComparison.Ordinal),
+    "The main-menu gate is not separated from gameplay authorization for multiplayer clients.");
+Check(!handleToggleShortcut.Contains("ShowMultiplayerRiskConfirmation", StringComparison.Ordinal) &&
+      !setMenuOpen.Contains("ShowMultiplayerRiskConfirmation", StringComparison.Ordinal),
+    "Opening the menu must not trigger the multiplayer gameplay-risk modal.");
+Check(plugin.Contains("internal bool EnsureGameplayAccess(string actionId, string inputSource)", StringComparison.Ordinal),
+    "The plugin has no unified gameplay-action authorization boundary.");
+Check(plugin.Contains("ObserveRuntimeSession()", StringComparison.Ordinal) &&
+      context.Contains("_plugin.ObserveRuntimeSession()", StringComparison.Ordinal),
+    "The runtime does not observe and invalidate per-connection acknowledgement.");
+string boundaryModalViews = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.ModalViews.cs"));
+string boundaryHeader = ReadMethodBody(overlay, "private void BuildHeader(Transform parent)");
+Check(boundaryModalViews.Contains("ShowMultiplayerRiskConfirmation", StringComparison.Ordinal) &&
+      boundaryModalViews.Contains("本次会话继续", StringComparison.Ordinal) &&
+      boundaryModalViews.Contains("关闭菜单", StringComparison.Ordinal),
+    "The multiplayer gameplay-risk modal does not expose exactly the continue-session and close-menu decisions.");
+Check(boundaryHeader.Contains("SessionBadge", StringComparison.Ordinal) &&
+      boundaryHeader.Contains("SessionBadgeText", StringComparison.Ordinal),
+    "The header does not expose a persistent supported/unsupported session badge.");
+string updateMinimapSettings = ReadMethodBody(plugin, "internal void UpdateMinimapSettings(Action<MinimapSettings> change)");
+string minimapPortUpdate = ReadMethodBody(Read(Path.Combine(sourceRoot, "UI", "CheatMenuUiFeaturePorts.cs")),
+    "void IMinimapUiFeature.UpdateSettings(Action<MinimapSettings> change)");
+Check(updateMinimapSettings.Contains("bool wasEnabled", StringComparison.Ordinal) &&
+      updateMinimapSettings.Contains("settings.Enabled && !wasEnabled", StringComparison.Ordinal) &&
+      minimapPortUpdate.Contains("_plugin.UpdateMinimapSettings(change);", StringComparison.Ordinal) &&
+      !minimapPortUpdate.Contains("EnsureGameplayAccess", StringComparison.Ordinal),
+    "Minimap settings must remain editable while denied, while only a disabled-to-enabled transition requests gameplay acknowledgement.");
 foreach (string signature in new[]
 {
     "private void NormalizeConfiguredToggleShortcut()",

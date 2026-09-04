@@ -9,6 +9,7 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 internal sealed class CheatActions
 {
 	private readonly ManualLogSource _log;
+	private readonly Func<bool> _canExecuteGameplay;
 
 	private uint _frozenTime;
 
@@ -18,13 +19,15 @@ internal sealed class CheatActions
 
 	public bool FreezeTimeEnabled { get; private set; }
 
-	public CheatActions(ManualLogSource log)
+	public CheatActions(ManualLogSource log, Func<bool> canExecuteGameplay)
 	{
 		_log = log;
+		_canExecuteGameplay = canExecuteGameplay ?? throw new ArgumentNullException(nameof(canExecuteGameplay));
 	}
 
 	public void SetGodMode(bool enabled)
 	{
+		if (enabled && !CanExecuteGameplay()) return;
 		GodModeEnabled = enabled;
 		if (enabled)
 		{
@@ -34,6 +37,7 @@ internal sealed class CheatActions
 
 	public void SetInfiniteNeeds(bool enabled)
 	{
+		if (enabled && !CanExecuteGameplay()) return;
 		InfiniteNeedsEnabled = enabled;
 		if (enabled)
 		{
@@ -43,6 +47,7 @@ internal sealed class CheatActions
 
 	public void SetFreezeTime(bool enabled)
 	{
+		if (enabled && !CanExecuteGameplay()) return;
 		FreezeTimeEnabled = enabled;
 		_frozenTime = LightingManager.time;
 		_log.LogInfo(enabled ? $"时间冻结已开启：游戏时间={_frozenTime}。" : "时间冻结已关闭。");
@@ -50,7 +55,7 @@ internal sealed class CheatActions
 
 	public void MaintainEnabledCheats()
 	{
-		if (SingleplayerGuard.IsReady)
+		if (CanExecuteGameplay())
 		{
 			if (GodModeEnabled)
 			{
@@ -69,6 +74,7 @@ internal sealed class CheatActions
 
 	public bool RestoreEverything()
 	{
+		if (!CanExecuteGameplay()) return false;
 		Player localPlayer = Player.LocalPlayer;
 		if (localPlayer?.life == null)
 		{
@@ -88,6 +94,7 @@ internal sealed class CheatActions
 
 	public bool RefillNeeds()
 	{
+		if (!CanExecuteGameplay()) return false;
 		PlayerLife playerLife = Player.LocalPlayer?.life;
 		if (playerLife == null)
 		{
@@ -103,6 +110,7 @@ internal sealed class CheatActions
 
 	public bool CureInjuries()
 	{
+		if (!CanExecuteGameplay()) return false;
 		PlayerLife playerLife = Player.LocalPlayer?.life;
 		if (playerLife == null)
 		{
@@ -115,6 +123,7 @@ internal sealed class CheatActions
 
 	public bool SetLifeStats(int health, int food, int water, int virus, int stamina, int oxygen)
 	{
+		if (!CanExecuteGameplay()) return false;
 		PlayerLife playerLife = Player.LocalPlayer?.life;
 		if (playerLife == null)
 		{
@@ -137,6 +146,7 @@ internal sealed class CheatActions
 
 	public bool AddExperience(uint amount)
 	{
+		if (!CanExecuteGameplay()) return false;
 		PlayerSkills playerSkills = Player.LocalPlayer?.skills;
 		if (playerSkills == null)
 		{
@@ -148,6 +158,7 @@ internal sealed class CheatActions
 
 	public bool AddReputation(int amount)
 	{
+		if (!CanExecuteGameplay()) return false;
 		PlayerSkills playerSkills = Player.LocalPlayer?.skills;
 		if (playerSkills == null)
 		{
@@ -159,6 +170,7 @@ internal sealed class CheatActions
 
 	public int MaxAllSkills()
 	{
+		if (!CanExecuteGameplay()) return 0;
 		PlayerSkills playerSkills = Player.LocalPlayer?.skills;
 		if (playerSkills?.skills == null)
 		{
@@ -181,6 +193,7 @@ internal sealed class CheatActions
 
 	public bool GiveItem(ItemAsset asset, byte amount)
 	{
+		if (!CanExecuteGameplay()) return false;
 		Player localPlayer = Player.LocalPlayer;
 		if (localPlayer == null || asset == null || amount == 0)
 		{
@@ -191,6 +204,7 @@ internal sealed class CheatActions
 
 	public int SpawnVehicles(VehicleAsset asset, int amount)
 	{
+		if (!CanExecuteGameplay()) return 0;
 		Player localPlayer = Player.LocalPlayer;
 		if (localPlayer == null || asset == null)
 		{
@@ -224,6 +238,7 @@ internal sealed class CheatActions
 
 	public bool Teleport(TeleportPoint point)
 	{
+		if (!CanExecuteGameplay()) return false;
 		Player localPlayer = Player.LocalPlayer;
 		if (localPlayer == null || point == null)
 		{
@@ -287,15 +302,11 @@ internal sealed class CheatActions
 	internal bool TeleportToMapPosition(Vector3 horizontalPosition, out Vector3 landingPoint)
 	{
 		landingPoint = horizontalPosition;
+		if (!CanExecuteGameplay()) return false;
 		Player localPlayer = Player.LocalPlayer;
 		if (localPlayer == null)
 		{
 			_log.LogWarning("地图传送失败：玩家不可用。");
-			return false;
-		}
-		if (!SingleplayerGuard.IsReady)
-		{
-			_log.LogWarning("地图传送失败：当前不是可用的单人世界。");
 			return false;
 		}
 		if (localPlayer.movement?.getVehicle() != null)
@@ -407,6 +418,7 @@ internal sealed class CheatActions
 
 	public void SetDay()
 	{
+		if (!CanExecuteGameplay()) return;
 		LightingManager.time = (uint)((float)LightingManager.cycle * LevelLighting.transition);
 		CaptureFrozenTime();
 		_log.LogInfo($"已设置为白天：游戏时间={LightingManager.time}。");
@@ -414,6 +426,7 @@ internal sealed class CheatActions
 
 	public void SetNight()
 	{
+		if (!CanExecuteGameplay()) return;
 		LightingManager.time = (uint)((float)LightingManager.cycle * (LevelLighting.bias + LevelLighting.transition));
 		CaptureFrozenTime();
 		_log.LogInfo($"已设置为夜晚：游戏时间={LightingManager.time}。");
@@ -421,6 +434,7 @@ internal sealed class CheatActions
 
 	public void SetTime(uint value)
 	{
+		if (!CanExecuteGameplay()) return;
 		LightingManager.time = value;
 		CaptureFrozenTime();
 		_log.LogInfo($"已设置游戏时间：{LightingManager.time}。");
@@ -428,12 +442,14 @@ internal sealed class CheatActions
 
 	public void SetFullMoon(bool enabled)
 	{
+		if (!CanExecuteGameplay()) return;
 		LightingManager.isFullMoon = enabled;
 		_log.LogInfo(enabled ? "强制满月已开启。" : "强制满月已关闭。");
 	}
 
 	public bool CallAirdrop()
 	{
+		if (!CanExecuteGameplay()) return false;
 		try
 		{
 			AirdropDevkitNode randomAirdropNode = LevelManager.GetRandomAirdropNode();
@@ -455,22 +471,26 @@ internal sealed class CheatActions
 
 	public bool StartRain()
 	{
+		if (!CanExecuteGameplay()) return false;
 		return StartWeather(WeatherAssetBase.DEFAULT_RAIN.Find(), "雨天");
 	}
 
 	public bool StartSnow()
 	{
+		if (!CanExecuteGameplay()) return false;
 		return StartWeather(WeatherAssetBase.DEFAULT_SNOW.Find(), "暴雪");
 	}
 
 	public void ClearWeather()
 	{
+		if (!CanExecuteGameplay()) return;
 		LightingManager.ResetScheduledWeather();
 		_log.LogInfo("已清除当前天气；自然天气调度仍可继续。");
 	}
 
 	public void DisableWeather()
 	{
+		if (!CanExecuteGameplay()) return;
 		LightingManager.DisableWeather();
 		_log.LogInfo("已关闭当前天气和自然天气调度。");
 	}
@@ -497,5 +517,10 @@ internal sealed class CheatActions
 		{
 			_frozenTime = LightingManager.time;
 		}
+	}
+
+	private bool CanExecuteGameplay()
+	{
+		return _canExecuteGameplay();
 	}
 }

@@ -75,7 +75,8 @@ internal static class FlightViewmodelPatch
 		}
 
 		bool isLocalMovement = ReferenceEquals(movement, Player.LocalPlayer?.movement);
-		bool flightEnabled = CheatMenuPlugin.Instance?.Movement?.FlightEnabled == true;
+		CheatMenuPlugin instance = CheatMenuPlugin.Instance;
+		bool flightEnabled = instance?.CanExecuteGameplay == true && instance.Movement?.FlightEnabled == true;
 		return FlightViewmodelPolicy.ShouldTreatAsGrounded(
 			movement.isGrounded,
 			isLocalMovement,

@@ -49,6 +49,8 @@ internal sealed class FakeRuntimePort : ISnapshotStorageRuntimePort
     internal FakeRuntimePort(ItemGroupIdentity group, ItemSnapshot snapshot) => _kernel.Store(group, snapshot, 1);
     public bool IsOperational => true;
     public IReadOnlyList<ItemGroupView> Groups => _kernel.GetGroups();
+    public bool TryGetGroup(ItemGroupIdentity identity, out ItemGroupView group) =>
+        _kernel.TryGetGroup(identity, out group) && group.TotalCount > 0;
     public SnapshotKernelTransaction BeginTransaction() => new SnapshotKernelTransaction(_kernel, _identity);
     public SnapshotTransactionCommitResult Commit(SnapshotKernelTransaction transaction) =>
         transaction.Commit(_ => SnapshotSaveResult.Succeeded());

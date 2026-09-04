@@ -53,6 +53,7 @@ public sealed class PluginRuntimeContext : IDisposable
 	private bool _subscriptionsInstalled;
 	private bool _disposed;
 	private bool _hasLoggedUpdateCallback;
+	private bool _hasLoggedWorkshopPumpFailure;
 	private bool _hasLoggedInfiniteStoragePumpFailure;
 	private int _lastRuntimeUpdateFrame = -1;
 	private int _lastRuntimeLateUpdateFrame = -1;
@@ -161,11 +162,26 @@ public sealed class PluginRuntimeContext : IDisposable
 			return;
 		}
 		_lastRuntimeUpdateFrame = Time.frameCount;
+		try
+		{
+			_workshopLocalization?.Pump();
+			_hasLoggedWorkshopPumpFailure = false;
+		}
+		catch (Exception exception)
+		{
+			if (!_hasLoggedWorkshopPumpFailure)
+			{
+				_hasLoggedWorkshopPumpFailure = true;
+				_log?.LogError("[Runtime] Workshop localization Pump failed; the remaining runtime graph will continue.\n" + exception);
+			}
+		}
 		if (!_hasLoggedUpdateCallback)
 		{
 			_hasLoggedUpdateCallback = true;
 			_log?.LogInfo("[Runtime] static game Update bridge has run; shortcut polling is enabled.");
 		}
+		_plugin.ObserveRuntimeSession();
+		bool gameplayAllowed = _plugin.CanExecuteGameplay;
 
 		if (_icons == null || !_icons.PumpOne())
 		{
@@ -174,7 +190,6 @@ public sealed class PluginRuntimeContext : IDisposable
 		OverlayIconBinder.PumpPending();
 		_uiRoot?.Pump();
 		_ui?.PumpDeferredDestroy();
-		_workshopLocalization?.Pump();
 		if (_workshopLocalization != null)
 		{
 			int snapshotVersion = _workshopLocalization.SnapshotVersion;
@@ -192,7 +207,10 @@ public sealed class PluginRuntimeContext : IDisposable
 			}
 		}
 		bool pluginWindowOpen = _plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen || _plugin.IsMinimapLayoutEditActive;
-		if (pluginWindowOpen && SingleplayerGuard.IsReady)
+		bool windowAllowed = (_plugin.IsMenuOpen && _plugin.CanOpenClientMenu) ||
+			(_plugin.IsInfiniteStorageOpen && _plugin.CanUseSnapshotStorage) ||
+			(_plugin.IsMinimapLayoutEditActive && gameplayAllowed);
+		if (pluginWindowOpen && windowAllowed)
 		{
 			_inputCapture.Maintain(!(_ui?.IsCapturingKeyboardInput ?? false));
 		}
@@ -229,12 +247,15 @@ public sealed class PluginRuntimeContext : IDisposable
 		}
 		_autoPickup?.Pump(_plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen, sharedItemSnapshot);
 
-		if ((_plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen) && !SingleplayerGuard.IsReady)
+		if (_plugin.IsMenuOpen && !_plugin.CanOpenClientMenu)
 		{
 			_plugin.SetMenuOpen(false);
+		}
+		if (_plugin.IsInfiniteStorageOpen && !_plugin.CanUseSnapshotStorage)
+		{
 			_plugin.SetInfiniteStorageOpen(false);
 		}
-		else if (_plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen)
+		if (_plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen)
 		{
 			if (!nativeUiCoexistence)
 			{
@@ -242,15 +263,10 @@ public sealed class PluginRuntimeContext : IDisposable
 			}
 		}
 
-		if (!SingleplayerGuard.IsReady)
+		if (!gameplayAllowed)
 		{
-			_workshopLocalization?.CancelTranslation();
 			_movement?.Restore();
-			if (_pointTool != null)
-			{
-				_pointTool.Enabled = false;
-			}
-			_pointToolHud?.Hide();
+			_pointTool?.Pump();
 			_creatureHealthBars?.Pump();
 		}
 		else
@@ -282,7 +298,7 @@ public sealed class PluginRuntimeContext : IDisposable
 	private NearbyItemSnapshot RefreshSharedItemSnapshot(bool pluginWindowOpen, float now)
 	{
 		Player player = Player.LocalPlayer;
-		if (_nearbyItemIndex == null || player == null || !SingleplayerGuard.IsReady)
+		if (_nearbyItemIndex == null || player == null || !_plugin.CanExecuteGameplay)
 		{
 			_sharedItemSnapshot = null;
 			return null;

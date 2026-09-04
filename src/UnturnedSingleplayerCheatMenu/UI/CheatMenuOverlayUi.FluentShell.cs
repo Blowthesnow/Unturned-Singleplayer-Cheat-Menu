@@ -117,6 +117,107 @@ internal sealed partial class CheatMenuOverlayUi
 		EventSystem.current.SetSelectedGameObject(target);
 	}
 
+	internal void OnSessionStateChanged()
+	{
+		RefreshHeader();
+	}
+
+	private void BuildHeader(Transform parent)
+	{
+		GameObject gameObject = CreateRow(parent, 56f, 10f);
+		GameObject dragArea = CreateRow(gameObject.transform, 56f, 10f);
+		SetLayout(dragArea, -1f, 56f, 1f);
+		Image dragSurface = dragArea.AddComponent<Image>();
+		dragSurface.color = new Color(0f, 0f, 0f, 0f);
+		dragSurface.raycastTarget = true;
+		WindowDragHandle dragHandle = dragArea.AddComponent<WindowDragHandle>();
+		dragHandle.Initialize(_panel, _root.GetComponent<RectTransform>(), CommitWindowPosition);
+		SetLayout(CreateText(dragArea.transform, "单人作弊指令菜单", 25, CheatMenuStyle.Text, TextAnchor.MiddleLeft, FontStyle.Bold).gameObject, (PluginLocalization.CurrentLanguage == PluginLanguage.English) ? 315f : 255f);
+		GameObject gameObject2 = CreateObject("SessionBadge", dragArea.transform, typeof(Image));
+		_sessionBadgeImage = gameObject2.GetComponent<Image>();
+		SetLayout(gameObject2, 190f, 28f);
+		_sessionBadgeText = CreateText(gameObject2.transform, string.Empty, 12, CheatMenuStyle.Text,
+			TextAnchor.MiddleCenter, FontStyle.Bold, localize: false);
+		_sessionBadgeText.gameObject.name = "SessionBadgeText";
+		Stretch(_sessionBadgeText.rectTransform);
+		CreateFlexibleSpacer(dragArea.transform);
+		CreateButton(gameObject.transform, PluginLocalization.SwitchButtonLabel, delegate
+		{
+			bool persisted = _shellPresenter.ToggleLanguage();
+			RebuildForLanguageChange(persisted);
+		}, "切换界面语言并立即重建当前菜单。", 58f, 40f, CheatMenuStyle.Accent);
+		CreateButton(gameObject.transform, "字体", ShowFontPicker, "选择此菜单使用的界面字体。", 58f, 40f, CheatMenuStyle.Surface);
+		CreateAccentPickerButton(gameObject.transform);
+		_mapAndShortcutText = CreateText(gameObject.transform, string.Empty, 13, CheatMenuStyle.Muted, TextAnchor.MiddleRight);
+		SetLayout(_mapAndShortcutText.gameObject, 220f);
+		CreateWindowCloseButton(gameObject.transform, delegate
+		{
+			_shellPresenter.CloseMenu();
+		}, "关闭作弊菜单。");
+	}
+
+	private Button CreateWindowCloseButton(Transform parent, System.Action action, string tooltip)
+	{
+		Button button = CreateButton(parent, "×", action, tooltip, 44f, 36f, CheatMenuStyle.Danger, 23);
+		OverlaySelectableVisual component = button.GetComponent<OverlaySelectableVisual>();
+		component?.SetOutlineVisible(visible: false);
+		if ((object)component != null)
+		{
+			component.SetFocusIndicatorVisible(visible: false);
+			return button;
+		}
+		return button;
+	}
+
+	private void RebuildForLanguageChange(bool persisted)
+	{
+		RebuildVisualTreesPreservingVisibility();
+		SetStatus(PluginLocalization.LanguageChangedMessage(persisted), 5f, persisted ? StatusKind.Success : StatusKind.Warning);
+	}
+
+	private void RefreshHeader()
+	{
+		RuntimeSessionKind sessionKind = _shellPresenter.SessionKind;
+		bool acknowledged = _shellPresenter.MultiplayerRiskAcknowledged;
+		if (_sessionBadgeImage != null && _sessionBadgeText != null &&
+			(_lastHeaderSessionKind != sessionKind || _lastHeaderAcknowledged != acknowledged))
+		{
+			_lastHeaderSessionKind = sessionKind;
+			_lastHeaderAcknowledged = acknowledged;
+			if (sessionKind == RuntimeSessionKind.Singleplayer)
+			{
+				_sessionBadgeImage.color = new Color(0.06f, 0.3f, 0.19f, 1f);
+				_sessionBadgeText.color = new Color(0.55f, 1f, 0.73f, 1f);
+				_sessionBadgeText.text = PluginLocalization.Translate("单人（受支持）");
+			}
+			else if (sessionKind == RuntimeSessionKind.MultiplayerClient || sessionKind == RuntimeSessionKind.ListenServer)
+			{
+				_sessionBadgeImage.color = new Color(0.38f, 0.2f, 0.03f, 1f);
+				_sessionBadgeText.color = CheatMenuStyle.Warning;
+				_sessionBadgeText.text = PluginLocalization.Translate(acknowledged
+					? "多人/服务器（不受支持，已确认）"
+					: "多人/服务器（不受支持）");
+			}
+			else
+			{
+				_sessionBadgeImage.color = CheatMenuStyle.SurfaceInset;
+				_sessionBadgeText.color = CheatMenuStyle.Muted;
+				_sessionBadgeText.text = PluginLocalization.Translate("会话未就绪");
+			}
+		}
+		if (_mapAndShortcutText != null)
+		{
+			string text = string.IsNullOrWhiteSpace(_shellPresenter.CurrentMap) ? PluginLocalization.Translate("未进入地图") : _shellPresenter.CurrentMap;
+			string shortcutLabel = _shellPresenter.ShortcutLabel;
+			if (!string.Equals(_lastHeaderMap, text, StringComparison.Ordinal) || !string.Equals(_lastHeaderShortcut, shortcutLabel, StringComparison.Ordinal))
+			{
+				_lastHeaderMap = text;
+				_lastHeaderShortcut = shortcutLabel;
+				_mapAndShortcutText.text = text + "  ·  " + shortcutLabel;
+			}
+		}
+	}
+
 	private void CloseTransientVisualSurfaces()
 	{
 		HideHoverExplanation();
@@ -140,6 +241,7 @@ internal sealed partial class CheatMenuOverlayUi
 		HideInventoryScopeDrawer();
 		HideWorkshopProtocolDrawer();
 		HideConfirmDialog();
+		HideMultiplayerRiskConfirmation();
 	}
 
 	private void ResetShellVisualReferences()
@@ -165,6 +267,8 @@ internal sealed partial class CheatMenuOverlayUi
 		_vehicleResultsHost = null;
 		_favoriteResultsHost = null;
 		_mapAndShortcutText = null;
+		_sessionBadgeImage = null;
+		_sessionBadgeText = null;
 		_statusText = null;
 		_statusAccent = null;
 		_aboutRoot = null;
@@ -181,6 +285,8 @@ internal sealed partial class CheatMenuOverlayUi
 		_shortcutCaptureActive = false;
 		_lastHeaderMap = string.Empty;
 		_lastHeaderShortcut = string.Empty;
+		_lastHeaderSessionKind = (RuntimeSessionKind)(-1);
+		_lastHeaderAcknowledged = false;
 		_tabButtons.Clear();
 		_toolsTabButtons.Clear();
 	}

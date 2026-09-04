@@ -8,7 +8,7 @@ internal static class GodModePatch
 	public static bool Prefix(PlayerLife __instance, ref EPlayerKill kill)
 	{
 		CheatMenuPlugin instance = CheatMenuPlugin.Instance;
-		if (instance == null || !instance.Actions.GodModeEnabled || !SingleplayerGuard.IsSingleplayerWorld)
+		if (instance == null || !instance.Actions.GodModeEnabled || !instance.CanExecuteGameplay)
 		{
 			return true;
 		}

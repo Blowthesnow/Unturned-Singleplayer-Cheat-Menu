@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using BepInEx.Logging;
 using HarmonyLib;
@@ -19,6 +20,7 @@ internal static class SnapshotCraftingPatch
 	private static ManualLogSource _log;
 	[ThreadStatic] private static Stack<SnapshotCraftingSearchContext> _activeSearches;
 	[ThreadStatic] private static int _outputDepth;
+	[ThreadStatic] private static SnapshotCraftingBatch _batch;
 	[ThreadStatic] private static SnapshotKernelCheckpoint _storageBefore;
 	[ThreadStatic] private static SnapshotInventoryCheckpoint _inventoryBefore;
 
@@ -35,6 +37,7 @@ internal static class SnapshotCraftingPatch
 				finalizer: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(SearchFinalizer))));
 			harmony.Patch(AccessTools.Method(typeof(PlayerCrafting), "HandleCraftRequestInternal"),
 				prefix: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(OutputPrefix))),
+				transpiler: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(OutputTranspiler))),
 				finalizer: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(OutputFinalizer))));
 			harmony.Patch(AccessTools.Method(typeof(PlayerInventory), "SearchContents"),
 				postfix: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(SearchContentsPostfix))));
@@ -42,8 +45,6 @@ internal static class SnapshotCraftingPatch
 				prefix: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(DeletePrefix))));
 			harmony.Patch(AccessTools.Method(typeof(PlayerInventorySearchResultV2), "DeleteAmount"),
 				prefix: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(DeleteAmountPrefix))));
-			harmony.Patch(AccessTools.Method(typeof(PlayerInventory), "forceAddItem", new[] { typeof(Item), typeof(bool) }),
-				prefix: new HarmonyMethod(AccessTools.Method(typeof(SnapshotCraftingPatch), nameof(ForceAddItemPrefix))));
 			log?.LogInfo("InfiniteStorage Snapshot Crafting adapter registered inside the main plugin DLL.");
 		}
 		catch (Exception exception)
@@ -71,7 +72,10 @@ internal static class SnapshotCraftingPatch
 
 	private static void SearchContentsPostfix(ref PlayerInventorySearchParameters parameters)
 	{
-		if (_module?.IsOperational != true || _activeSearches?.Count <= 0 || parameters.Results == null) return;
+		if (!SnapshotCraftingSearchPolicy.ShouldHandleSearchContents(
+				_module?.IsOperational == true,
+				_activeSearches?.Count,
+				parameters.Results != null)) return;
 		SnapshotCraftingSearchContext context = _activeSearches.Peek();
 		if (!SnapshotCraftingSearchPolicy.ShouldInjectSynthetic(context.Role)) return;
 		for (int index = parameters.Results.Count - 1; index >= 0; index--)
@@ -120,7 +124,8 @@ internal static class SnapshotCraftingPatch
 	private static bool DeletePrefix(ref PlayerInventorySearchResultV2 __instance)
 	{
 		if (!TryGetSynthetic(ref __instance, out SnapshotCraftingSyntheticItem synthetic)) return true;
-		if (!_module.ConsumeWhole(synthetic))
+		SnapshotKernelTransaction transaction = _batch?.GetOrBeginTransaction();
+		if (transaction == null || !_module.ConsumeWhole(synthetic, transaction))
 			throw new InvalidOperationException("Snapshot crafting material removal could not be persisted.");
 		return false;
 	}
@@ -129,7 +134,9 @@ internal static class SnapshotCraftingPatch
 		ref uint __result, bool alwaysDeleteAtZeroAmount = true)
 	{
 		if (!TryGetSynthetic(ref __instance, out SnapshotCraftingSyntheticItem synthetic)) return true;
-		__result = _module.ConsumeAmount(synthetic, desiredAmount, alwaysDeleteAtZeroAmount);
+		SnapshotKernelTransaction transaction = _batch?.GetOrBeginTransaction();
+		__result = transaction == null ? 0 :
+			_module.ConsumeAmount(synthetic, desiredAmount, alwaysDeleteAtZeroAmount, transaction);
 		if (__result == 0 && desiredAmount > 0)
 			throw new InvalidOperationException("Snapshot crafting amount removal could not be persisted.");
 		return false;
@@ -139,14 +146,59 @@ internal static class SnapshotCraftingPatch
 	{
 		_outputDepth++;
 		if (_outputDepth != 1 || _module?.IsOperational != true) return;
+		_batch = new SnapshotCraftingBatch(_module.BeginTransaction);
 		_storageBefore = _module.CaptureCheckpoint();
 		_inventoryBefore = SnapshotInventoryBridge.Capture(Player.LocalPlayer?.inventory);
 	}
 
+	private static IEnumerable<CodeInstruction> OutputTranspiler(IEnumerable<CodeInstruction> instructions)
+	{
+		MethodInfo nativeForceAddItem = typeof(PlayerInventory).GetMethod("forceAddItem",
+			BindingFlags.Instance | BindingFlags.Public, null,
+			new[] { typeof(Item), typeof(bool) }, null);
+		MethodInfo forceAddCraftedOutput = typeof(SnapshotCraftingPatch).GetMethod(
+			nameof(ForceAddCraftedOutput), BindingFlags.Static | BindingFlags.NonPublic);
+		if (nativeForceAddItem == null || forceAddCraftedOutput == null)
+			throw new MissingMethodException("Snapshot crafting output grant methods could not be resolved.");
+
+		int replacementCount = 0;
+		foreach (CodeInstruction instruction in instructions)
+		{
+			if ((instruction.opcode == OpCodes.Call || instruction.opcode == OpCodes.Callvirt) &&
+				Equals(instruction.operand, nativeForceAddItem))
+			{
+				instruction.opcode = OpCodes.Call;
+				instruction.operand = forceAddCraftedOutput;
+				replacementCount++;
+			}
+			yield return instruction;
+		}
+		if (replacementCount != 2)
+		{
+			throw new InvalidProgramException(
+				$"Expected exactly two crafted-output forceAddItem calls, found {replacementCount}.");
+		}
+	}
+
 	private static Exception OutputFinalizer(Exception __exception)
 	{
-		if (__exception != null && _outputDepth == 1 && _storageBefore != null)
+		if (_outputDepth == 1 && _storageBefore != null)
 		{
+			SnapshotTransactionCommitResult batchCommit = null;
+			Exception failure = __exception;
+			if (failure == null && _batch?.HasTransaction == true)
+			{
+				batchCommit = _batch.Commit(_module.CommitBatch);
+				if (batchCommit?.Success != true)
+				{
+					failure = new InvalidOperationException(
+						"Snapshot crafting batch persistence failed: " +
+						(batchCommit?.ErrorCode ?? "missing-result"));
+				}
+			}
+
+			if (failure != null)
+			{
 			SnapshotTransactionCommitResult storageRestored = null;
 			SnapshotCraftingAbortResult abort = SnapshotCraftingRollbackGate.Execute(() =>
 				SnapshotCraftingAbortCoordinator.Execute(
@@ -154,6 +206,17 @@ internal static class SnapshotCraftingPatch
 					{
 						try
 						{
+							if (batchCommit?.RollbackSucceeded == true)
+							{
+								storageRestored = batchCommit;
+								return true;
+							}
+							if (batchCommit == null)
+							{
+								storageRestored = _batch?.Rollback() ??
+									SnapshotTransactionCommitResult.Succeeded();
+								return storageRestored.Success || storageRestored.RollbackSucceeded;
+							}
 							storageRestored = _module.RestoreCheckpoint(_storageBefore);
 							return storageRestored?.Success == true;
 						}
@@ -177,27 +240,36 @@ internal static class SnapshotCraftingPatch
 					},
 					latchReconciliation: () => _module.LatchReconciliationFailure(
 						SnapshotCraftingReconciliationReason.Build(
-							__exception?.GetType().Name, storageRestored))));
+							failure.GetType().Name, storageRestored))));
 			if (!abort.Success)
 			{
 				_log?.LogError("Snapshot crafting abort rollback failed closed; stage=" + abort.ErrorCode +
 					" storage=" + (storageRestored?.ErrorCode ?? "not-restored"));
 			}
+			__exception = failure;
+			}
 		}
 		_outputDepth = Math.Max(0, _outputDepth - 1);
 		if (_outputDepth == 0)
 		{
+			_batch = null;
 			_storageBefore = null;
 			_inventoryBefore = null;
 		}
 		return __exception;
 	}
 
-	private static bool ForceAddItemPrefix(PlayerInventory __instance, Item item)
+	private static void ForceAddCraftedOutput(PlayerInventory inventory, Item item, bool auto)
 	{
-		if (SnapshotCraftingRollbackGate.IsActive) return true;
-		if (_outputDepth <= 0 || _module?.IsOperational != true || item == null) return true;
-		if (__instance.tryAddItem(item, true) || _module.StoreProduced(item)) return false;
+		if (SnapshotCraftingRollbackGate.IsActive || _outputDepth <= 0 ||
+			_module?.IsOperational != true || item == null)
+		{
+			inventory.forceAddItem(item, auto);
+			return;
+		}
+		if (inventory.tryAddItem(item, auto)) return;
+		SnapshotKernelTransaction transaction = _batch?.GetOrBeginTransaction();
+		if (transaction != null && _module.StoreProduced(item, transaction)) return;
 		throw new InvalidOperationException("Snapshot crafted output could not be placed or persisted.");
 	}
 

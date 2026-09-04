@@ -2,11 +2,11 @@
 
 [English](README.en.md) · [更新日志](CHANGELOG.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
 
-一个专门面向 **Unturned 单人世界** 的 BepInEx 5 中英双语作弊菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `1.995.0`；v1.995 唯一新增的功能是 Legacy uGUI 动效，其余更新集中在以 Snapshot Kernel 更换无限储存内核，以及修复储存、自动拾取、背包快捷键、飞行视模、富文本和 UI 生命周期问题。
+一个以 **Unturned 单人世界** 为玩法支持目标的 BepInEx 5 中英双语菜单。它在游戏运行时读取当前已经加载的资产注册表，因此可以自动发现原版、地图附带和 Workshop 模组中的物品与车辆，并提供角色状态、收藏、传送、时间、天气、满月和空投等操作。当前源码版本为 `2.0.0`。
 
-> **仅限无 BattlEye 的单人模式。** 本项目不会关闭、修改或绕过 BattlEye，也不支持多人服务器。
+> 本插件的玩法功能仅以 Unturned 单人世界为设计、测试和兼容性目标。插件可以保持安装并允许你选择 BattlEye 启动；若 BepInEx 成功加载，菜单也可以在已生成本地玩家的多人客户端会话中打开。多人/服务器会话中的玩法功能属于不受支持的自担风险使用。Workshop 翻译是本地内容功能，不受单人/多人玩法门或多人风险确认状态影响，也不会因为进入多人而自动停止。项目不会停止、禁用、修改或绕过 BattlEye，也不保证 BattlEye 会允许 BepInEx、本插件或当前连接继续运行。
 
-**默认快捷键：进入单人世界后按 `End` 打开或关闭菜单。**
+**默认快捷键：本地玩家生成后按 `End` 打开或关闭菜单。**
 
 > **截图说明：当前项目展示的截图为 1.1 版界面；2.0 版将统一更新项目截图。**
 
@@ -107,20 +107,23 @@
 
 ## 运行边界
 
-插件打开菜单前会同时确认：
+菜单就绪和玩法授权是两个独立边界：只要客户端已经连接且本地玩家已生成，单人和多人客户端都可以打开主菜单。单人玩法立即可用；多人或非单人 listen host 会常驻显示“不受支持”警示，第一次尝试玩法动作或启用玩法自动化时才要求确认本次连接的风险。断线、换服、换图连接或本地玩家实例重建会使确认失效。
 
-- 已经进入游戏世界；
-- 本地玩家已经生成；
-- 当前实例同时是客户端和服务端；
-- 服务器 ID 为 `Singleplayer_` 单人世界。
+| 会话 | 主菜单 | Workshop 翻译 | 玩法功能 | Snapshot 无限储存 |
+| --- | --- | --- | --- | --- |
+| 主菜单/加载中 | 关闭 | 已开始的任务继续 Pump | 暂停 | 关闭 |
+| 单人世界 | 打开 | 可用 | 受支持 | 可用 |
+| 多人客户端，未确认 | 打开并警示 | 可用且不中断 | 阻断 | 关闭 |
+| 多人客户端，已确认 | 打开并持续警示 | 可用且不中断 | 不受支持的 best-effort | 关闭 |
+| U3DS Dedicated Server | 不创建 UI | 不初始化客户端翻译 | inert/no-op | 关闭 |
 
-如果仍在主菜单、地图加载阶段、多人服务器或专用服务器中，菜单会拒绝开启；离开单人世界后，已打开的菜单也会自动关闭。
+Workshop 翻译扫描、缓存、请求、批次完成和本地文本应用不经过玩法授权。进入多人、菜单关闭、连接切换或风险确认变化不会取消当前批次；运行期间的资产刷新只合并为批次完成后的一次延迟重扫。
 
 地图创建界面的 **“单人作弊指令”复选框可以不勾选**。那个选项控制 Unturned 原生命令系统；本插件不依赖 `Provider.hasCheats`。
 
 ## 兼容环境
 
-当前 `1.995.0` 源码已针对以下环境构建；版本归属、构建记录与验证边界见 [更新日志](CHANGELOG.md)：
+当前 `2.0.0` 源码已针对以下环境构建；版本归属、构建记录与验证边界见 [更新日志](CHANGELOG.md)：
 
 | 项目 | 版本 |
 | --- | --- |
@@ -128,13 +131,13 @@
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `1.995.0` |
+| 插件 | `2.0.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
 ## 安装
 
-GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
+GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v2.0.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
 
 1. 完全退出 Unturned。
 2. 安装 BepInEx `5.4.23.5` x64 到 Unturned 游戏根目录。
@@ -148,10 +151,10 @@ GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v1.7.0-Plugin-Only.zip` 
 
    部署约束：`BepInEx\plugins` 下只能保留这一份活动的 `UnturnedSingleplayerCheatMenu.dll`，不能在 `plugins` 根目录或其他子目录再放置同名 DLL。旧版本或备份文件必须改为非 `.dll` 后缀，避免 BepInEx 重复加载，造成新版覆盖安装失效。
 
-6. 从 Steam 的启动方式选择窗口中明确选择 **不使用 BattlEye Anti-Cheat**。
-7. 只进入单人世界，角色加载完成后按 `End` 打开菜单。
+6. 继续使用原有的 Steam/Unturned 启动流程；本次运行边界调整不新增或改造启动器。
+7. 本地玩家加载完成后按 `End`。单人是唯一受支持的玩法环境；多人菜单只提供不受支持、自担风险的会话级确认，Snapshot 始终不可用。
 
-不要直接带着本插件进入 BattlEye 或多人服务器。仓库中的启动脚本只会打开 Steam 启动方式选择窗口；它不会停止、禁用或修改 BattlEye。
+启动流程保持不变。即使现有启动方式能够启动游戏，也不等于 BattlEye 会允许 BepInEx、本插件或服务器连接继续运行。
 
 ## 配置与数据
 
@@ -207,31 +210,35 @@ Get-ChildItem .\tests -Recurse -Filter '*Smoke.csproj' | Sort-Object FullName | 
 
 主要模块：
 
-- `CheatMenuPlugin` / `ShortcutToggleGate`：生命周期、快捷键去重、单人守卫、菜单状态和资产刷新。
+- `RuntimeSessionPolicy` / `GameplayFeatureAccessPolicy`：会话分类、菜单就绪、每连接多人风险确认和玩法执行授权。
+- `CheatMenuPlugin` / `ShortcutToggleGate`：生命周期、快捷键去重、菜单状态和资产刷新。
 - `CheatMenuOverlayUi`：运行时 Overlay UI 与输入隔离。
 - `AssetCatalog` / `ItemFilterService`：资产扫描、物品分类与高级筛选。
 - `IconCache` / `VehicleIconDiskCache` / `VehicleIconRenderer`：内存与磁盘图标缓存、车辆模型缩略图和渲染设置。
 - `CheatActions`：角色、物品、车辆、时间、天气和事件操作。
 - `FavoriteStore` / `TeleportStore`：原子化 JSON 持久化与失败回滚。
-- `GodModePatch`：当前版本 `PlayerLife.doDamage` 的 Harmony 单人保护补丁。
+- `GodModePatch`：当前版本 `PlayerLife.doDamage` 的 Harmony 本地玩家授权补丁。
 
 ## 验证
 
-`v1.98` 当前源码与早期源码阶段的变更、构建和 Smoke 记录见 [主更新日志](CHANGELOG.md)；v1.8 的逆向恢复边界单独记录在 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md)。v1.98 只推送源码与文档，不创建正式版、标签或发布包；`v1.7.0` Plugin-Only 包仍是当前最后一个正式发布资产。
+`v2.0.0` 是自 `v1.7.0` 以来首个正式版本；中间源码检查点与本版累计变更、构建和 Smoke 记录见 [主更新日志](CHANGELOG.md)，v1.8 的逆向恢复边界单独记录在 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md)。2.0 Release 构建为 0 警告、0 错误，递归发现的 27 个 Smoke 项目全部逐项重建并运行通过；源码/API、发布包与真实游戏验收边界仍分别记录。
 
-已发布插件 DLL：
+v2.0.0 发布产物：
 
 ```text
-SHA-256: FA500D0EC9E4E927797462CB72D713C1B6E409FE698F2F945C498F64BC31B3CF
+DLL SHA-256: 93FED6974CBF793B8619AE66D2846DFE60F1532AF5E030C2C7DA62EED059FECD
+Plugin-Only ZIP SHA-256: 338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD88953417621CA70C85
 ```
+
+最终 2.0 DLL/发布包在本次发布准备中未部署、未重启游戏验收；自动化通过不能替代真实单人玩法确认。
 
 ## 免责声明
 
-本项目是社区制作的非官方单人游戏模组，与 Smartly Dressed Games、Unturned、BattlEye 或 BepInEx 项目没有隶属或背书关系。使用前请自行备份存档并理解第三方插件可能在游戏更新后失效。
+本项目是社区制作的非官方单人玩法模组，与 Smartly Dressed Games、Unturned、BattlEye 或 BepInEx 项目没有隶属或背书关系。多人/服务器玩法和 BattlEye 加载均不受支持、不保证可用；使用前请备份存档并理解踢出、回档、断线或账号处罚风险。
 
 插件源码采用 [MIT License](LICENSE)。Unturned、Unity、BepInEx 及发行包中相应第三方文件仍遵循各自的许可证和权利声明。
 ## 当前架构验证入口
 
 当前源码使用单一 `PluginUiRoot`，由 `RuntimeUpdatePatch` 挂接 `Provider/MenuUI/PlayerUI.Update` 并按帧去重后分发 `PluginRuntimeContext` 的 Update/LateUpdate；这条静态桥与旧版相同，不依赖会在 Unturned 启动场景切换时被销毁的临时 BepInEx/Driver 组件。`PluginUiRoot` 若随启动场景丢失会自行重建。它还包含输入释放、窗口拖动/位置持久化和按当前地图隔离的传送点视图。生产源码不再包含旧 IMGUI 菜单或 `UnityEngine.IMGUIModule` 生产引用。
 
-Release 构建后应递归发现并串行运行 `tests/**/*Smoke.csproj`，不要依赖手写项目数量或旧 `bin/obj` 目录。Smoke 只证明源码和自动化契约；输入、IME、EventSystem 场景切换、原生菜单共存、HUD、字体和视觉结果仍需真实单人游戏验收。
+Release 构建后应递归发现并串行运行 `tests/**/*Smoke.csproj`，不要依赖手写项目数量或旧 `bin/obj` 目录。源码/API、构建、Smoke、部署哈希、BattlEye 启动、BepInEx/plugin 发现、多人连接、翻译连续性和真实游戏交互必须分别记录；其中任何一层都不能替代真实单人玩法验收。

@@ -13,6 +13,7 @@
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotCanonicalizer.cs" Link="SnapshotCanonicalizer.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotDestruction.cs" Link="SnapshotDestruction.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotPersistence.cs" Link="SnapshotPersistence.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotBackgroundPersistence.cs" Link="SnapshotBackgroundPersistence.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotTransaction.cs" Link="SnapshotTransaction.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotRuntimePolicies.cs" Link="SnapshotRuntimePolicies.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotStorageSession.cs" Link="SnapshotStorageSession.cs" />

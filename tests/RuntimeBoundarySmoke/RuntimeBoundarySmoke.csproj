@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\RuntimeSessionPolicy.cs" Link="RuntimeSessionPolicy.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\GameplayFeatureAccessPolicy.cs" Link="GameplayFeatureAccessPolicy.cs" />
+  </ItemGroup>
+</Project>

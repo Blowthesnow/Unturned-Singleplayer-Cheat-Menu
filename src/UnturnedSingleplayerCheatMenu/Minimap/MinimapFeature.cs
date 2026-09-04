@@ -11,6 +11,7 @@ namespace UnturnedSingleplayerCheatMenu.Minimap;
 internal sealed class MinimapFeature : IDisposable
 {
 	private readonly ManualLogSource _log;
+	private readonly Func<bool> _canExecuteGameplay;
 	private readonly PluginUiRoot _uiRoot;
 	private readonly NearbyItemIndex _itemIndex;
 	private readonly NativeMapCropProvider _nativeMap;
@@ -44,14 +45,15 @@ internal sealed class MinimapFeature : IDisposable
 	internal MinimapSettings Settings => _settings.Clone();
 	internal MinimapBackgroundState BackgroundState => _state;
 	internal OverheadOcclusionDiagnostics OcclusionDiagnostics => _occlusionDiagnostics;
-	internal bool NeedsItemScan => _settings.Enabled && _settings.ShowItems && SingleplayerGuard.IsReady &&
+	internal bool NeedsItemScan => _settings.Enabled && _settings.ShowItems && _canExecuteGameplay() &&
 		Player.LocalPlayer != null && (_settings.LayoutEditMode || !PointToolService.IsInteractionPaused());
 	internal float ItemScanRadius => MinimapProjection.ResolveCandidateScanRadius(
 		_settings.VisibleRadiusMeters, _settings.Shape);
 	internal float ItemScanFrequencyHz => _settings.WorldScanHz;
 
 	internal MinimapFeature(ManualLogSource log, PluginUiRoot uiRoot, TeleportStore teleports,
-		NearbyItemIndex itemIndex, MinimapSettings settings, Action<MinimapSettings> settingsChanged)
+		NearbyItemIndex itemIndex, MinimapSettings settings, Action<MinimapSettings> settingsChanged,
+		Func<bool> canExecuteGameplay)
 	{
 		_log = log;
 		_uiRoot = uiRoot ?? throw new ArgumentNullException(nameof(uiRoot));
@@ -61,6 +63,7 @@ internal sealed class MinimapFeature : IDisposable
 		_nextMarkerProjectionTime = 0f;
 		_nextRenderTime = 0f;
 		_settingsChanged = settingsChanged;
+		_canExecuteGameplay = canExecuteGameplay ?? throw new ArgumentNullException(nameof(canExecuteGameplay));
 		_nativeMap = new NativeMapCropProvider(log);
 		_sceneRenderer = new MinimapSceneRenderer(log);
 		_teleportMarkers = new TeleportMarkerAdapter(teleports);
@@ -74,7 +77,7 @@ internal sealed class MinimapFeature : IDisposable
 		_nextMarkerProjectionTime = 0f;
 		_nextRenderTime = 0f;
 		EnsureHud();
-		_hud.ApplySettings(_settings, SingleplayerGuard.IsReady && Player.LocalPlayer != null);
+		_hud.ApplySettings(_settings, _canExecuteGameplay() && Player.LocalPlayer != null);
 		if (!_settings.Enabled)
 		{
 			_backgroundState.Reset();
@@ -89,7 +92,7 @@ internal sealed class MinimapFeature : IDisposable
 		_sceneRenderer.BeginFrame();
 		EnsureHud();
 		Player player = Player.LocalPlayer;
-		bool active = _settings.Enabled && SingleplayerGuard.IsReady && player != null &&
+		bool active = _settings.Enabled && _canExecuteGameplay() && player != null &&
 			(_settings.LayoutEditMode || !PointToolService.IsInteractionPaused());
 		_hud.SetRuntimeVisible(active);
 		if (!active) return;
@@ -159,7 +162,7 @@ internal sealed class MinimapFeature : IDisposable
 
 	internal void LateUpdate()
 	{
-		if (_disposed || !_settings.Enabled || !SingleplayerGuard.IsReady) return;
+		if (_disposed || !_settings.Enabled || !_canExecuteGameplay()) return;
 		Player player = Player.LocalPlayer;
 		if (player == null) return;
 		float playerYaw = player.transform.rotation.eulerAngles.y;
@@ -284,7 +287,7 @@ internal sealed class MinimapFeature : IDisposable
 		if (_hud != null && _hud.IsAlive) return;
 		_hud?.Dispose();
 		_hud = new MinimapHud(_uiRoot, _log, HandleLayoutCommitted);
-		_hud.ApplySettings(_settings, SingleplayerGuard.IsReady && Player.LocalPlayer != null);
+		_hud.ApplySettings(_settings, _canExecuteGameplay() && Player.LocalPlayer != null);
 	}
 
 	private void HandleLayoutCommitted(MinimapAnchor anchor, float offsetX, float offsetY, float size)

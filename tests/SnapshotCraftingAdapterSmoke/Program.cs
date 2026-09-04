@@ -16,6 +16,22 @@ ItemGroupIdentity group = new ItemGroupIdentity(500,
 ItemSnapshot amountTen = new ItemSnapshot(500, 10, 73, new byte[] { 4, 5, 6 });
 SnapshotStorageIdentity storageIdentity = new SnapshotStorageIdentity("world", "player");
 
+Assert(!SnapshotCraftingSearchPolicy.ShouldHandleSearchContents(
+        moduleOperational: true, activeSearchCount: null, hasResults: true),
+    "A native inventory search outside crafting must bypass the global SearchContents postfix when the thread-local context stack is null.");
+Assert(!SnapshotCraftingSearchPolicy.ShouldHandleSearchContents(
+        moduleOperational: true, activeSearchCount: 0, hasResults: true),
+    "A native inventory search outside crafting must bypass the global SearchContents postfix when no context is active.");
+Assert(!SnapshotCraftingSearchPolicy.ShouldHandleSearchContents(
+        moduleOperational: false, activeSearchCount: 1, hasResults: true),
+    "An unavailable Snapshot crafting module must bypass SearchContents augmentation.");
+Assert(!SnapshotCraftingSearchPolicy.ShouldHandleSearchContents(
+        moduleOperational: true, activeSearchCount: 1, hasResults: false),
+    "SearchContents augmentation requires a native results list.");
+Assert(SnapshotCraftingSearchPolicy.ShouldHandleSearchContents(
+        moduleOperational: true, activeSearchCount: 1, hasResults: true),
+    "Only an operational crafting search with an active context and native results may inject Snapshot candidates.");
+
 foreach (string operation in new[] { "FillTargetItem", "RepairTargetItem" })
 {
     SnapshotKernel targetOnlyKernel = new SnapshotKernel();
@@ -84,6 +100,64 @@ Assert(amountGroup.TotalCount == 2 &&
        amountGroup.Buckets.Any(bucket => bucket.Snapshot.Amount == 8 && bucket.Count == 1 &&
            bucket.Snapshot.Quality == 73 && bucket.Snapshot.State.SequenceEqual(new byte[] { 4, 5, 6 })),
     "Consuming 12 from three amount-10 snapshots must leave one amount-10 and one exact amount-8 snapshot.");
+
+SnapshotKernel batchedKernel = new SnapshotKernel();
+Assert(batchedKernel.Store(group, amountTen, 3).Success,
+    "Batched crafting fixture should contain three exact snapshots.");
+int batchBeginCalls = 0;
+SnapshotCraftingBatch batch = new SnapshotCraftingBatch(() =>
+{
+    batchBeginCalls++;
+    return new SnapshotKernelTransaction(batchedKernel, storageIdentity);
+});
+SnapshotKernelTransaction firstBatchTransaction = batch.GetOrBeginTransaction();
+SnapshotKernelTransaction secondBatchTransaction = batch.GetOrBeginTransaction();
+Assert(ReferenceEquals(firstBatchTransaction, secondBatchTransaction) && batchBeginCalls == 1,
+    "One native craft invocation must lazily reuse one Snapshot transaction across every synthetic material.");
+Assert(firstBatchTransaction.Withdraw(group, amountTen, 1).Success &&
+       secondBatchTransaction.Withdraw(group, amountTen, 1).Success,
+    "Batched crafting fixture should stage two material removals in the shared transaction.");
+int batchPersistenceCalls = 0;
+SnapshotTransactionCommitResult batchedCommit = batch.Commit(transaction =>
+    transaction.Commit(_ =>
+    {
+        batchPersistenceCalls++;
+        return SnapshotSaveResult.Succeeded();
+    }));
+Assert(batchedCommit.Success && batchPersistenceCalls == 1 &&
+       batchedKernel.GetGroups().Single().Buckets.Single().Count == 1,
+    "Multiple synthetic material mutations in one craft must persist exactly once.");
+
+SnapshotKernel failedBatchKernel = new SnapshotKernel();
+Assert(failedBatchKernel.Store(group, amountTen, 2).Success,
+    "Failed batch fixture should contain two exact snapshots.");
+SnapshotCraftingBatch failedBatch = new SnapshotCraftingBatch(() =>
+    new SnapshotKernelTransaction(failedBatchKernel, storageIdentity));
+Assert(failedBatch.GetOrBeginTransaction().Withdraw(group, amountTen, 1).Success,
+    "Failed batch fixture should stage one material removal.");
+int failedBatchPersistenceCalls = 0;
+SnapshotTransactionCommitResult failedBatchCommit = failedBatch.Commit(transaction =>
+    transaction.Commit(_ =>
+    {
+        failedBatchPersistenceCalls++;
+        return SnapshotSaveResult.Failed("injected-batch-save-failure");
+    }));
+Assert(!failedBatchCommit.Success && failedBatchCommit.RollbackSucceeded &&
+       failedBatchPersistenceCalls == 1 &&
+       failedBatchKernel.GetGroups().Single().Buckets.Single().Count == 2,
+    "A failed batched craft save must restore every staged material mutation after one persistence attempt.");
+
+SnapshotKernel batchRollbackKernel = new SnapshotKernel();
+Assert(batchRollbackKernel.Store(group, amountTen, 2).Success,
+    "Batched rollback fixture should contain two snapshots.");
+SnapshotCraftingBatch rollbackBatch = new SnapshotCraftingBatch(() =>
+    new SnapshotKernelTransaction(batchRollbackKernel, storageIdentity));
+Assert(rollbackBatch.GetOrBeginTransaction().Withdraw(group, amountTen, 1).Success,
+    "Batched rollback fixture should stage one removal.");
+SnapshotTransactionCommitResult batchedRollback = rollbackBatch.Rollback();
+Assert(batchedRollback.RollbackSucceeded &&
+       batchRollbackKernel.GetGroups().Single().Buckets.Single().Count == 2,
+    "An aborted craft must restore the shared in-memory transaction without a persistence call.");
 
 string beforeInsufficient = string.Join(";", amountKernel.GetGroups().Single().Buckets.Select(bucket =>
     bucket.Snapshot.Amount + ":" + bucket.Count));

@@ -14,7 +14,8 @@ internal static class AssetOriginClassifier
 
 	public static bool IsWorkshop(Asset asset)
 	{
-		return GetOrigin(asset)?.workshopFileId != 0L;
+		AssetOrigin origin = GetOrigin(asset);
+		return origin != null && origin.workshopFileId != 0L;
 	}
 
 	public static bool IsOfficial(Asset asset)

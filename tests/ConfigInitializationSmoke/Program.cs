@@ -10,6 +10,7 @@ try
     ExistingFileIsRestoredAfterBindingFailure();
     MissingFileIsRestoredAfterBindingFailure();
     EmptyFileIsRestoredAfterSaveFailure();
+    GameplayDenialDoesNotRewriteRequestedFeatureFlags();
     Console.WriteLine("Configuration initialization smoke checks passed.");
 }
 finally
@@ -121,6 +122,24 @@ void EmptyFileIsRestoredAfterSaveFailure()
 
     Check(threw, "Save failure did not escape the transaction.");
     Check(File.Exists(path) && new FileInfo(path).Length == 0, "An empty original configuration was not restored exactly.");
+}
+
+void GameplayDenialDoesNotRewriteRequestedFeatureFlags()
+{
+    string repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+    string plugin = File.ReadAllText(Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "CheatMenuPlugin.cs"));
+    foreach (string expected in new[]
+    {
+        "PersistInterfaceState(_pointToolEnabled, value);",
+        "PersistInterfaceState(_creatureHealthBarEnabled, value);",
+        "PersistInterfaceState(_autoPickupEnabled, value);",
+        "PersistInterfaceState(_infiniteStorageEnabled, value);",
+        "PersistInterfaceState(_infiniteStoragePickupPriority, value);"
+    })
+    {
+        Check(plugin.Contains(expected, StringComparison.Ordinal),
+            "Requested feature state is still being rewritten from temporary runtime authorization: " + expected);
+    }
 }
 
 static ConfigFile NewConfig(string path) => new(path, saveOnInit: false);

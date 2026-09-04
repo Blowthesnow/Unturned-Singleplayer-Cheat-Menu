@@ -117,7 +117,7 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			_autoPickupPresenter.SetEnabled(value);
 			bool applied = _autoPickupPresenter.CaptureSnapshot().Settings.Enabled == value;
-			SetStatus(applied ? (value ? "自动拾取已启用；关闭菜单后开始扫描。" : "自动拾取已关闭。") : "只有进入真正的单人世界后才能启用自动拾取。", 5f, applied ? StatusKind.Info : StatusKind.Warning);
+			SetStatus(applied ? (value ? "自动拾取已启用；关闭菜单后开始扫描。" : "自动拾取已关闭。") : "当前会话尚未允许自动拾取；单人立即可用，多人需先确认本次连接风险。", 5f, applied ? StatusKind.Info : StatusKind.Warning);
 		});
 		CreateToggleAction(switches.transform, "菜单打开时暂停", settings.PauseWhenMenuOpen, _autoPickupPresenter.SetPauseWhenMenuOpen);
 		CreateToggleAction(switches.transform, "死亡时暂停", settings.PauseWhenDead, _autoPickupPresenter.SetPauseWhenDead);
@@ -498,7 +498,7 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateLabel(header.transform, $"当前背包去重后 {assets.Count} 件  ·  第 {_autoPickupBlacklistPickerPage + 1}/{pageCount} 页", 11, CheatMenuStyle.Muted);
 		if (assets.Count == 0)
 		{
-			CreateEmptyState(_autoPickupBlacklistPickerHost.transform, "当前背包没有匹配物品。", "请先进入单人世界并确认物品在随身背包中。");
+			CreateEmptyState(_autoPickupBlacklistPickerHost.transform, "当前背包没有匹配物品。", "请确认物品在随身背包中；多人玩法需先确认本次连接风险。");
 			return;
 		}
 		GameObject grid = CreateObject("PickerGrid", _autoPickupBlacklistPickerHost.transform);

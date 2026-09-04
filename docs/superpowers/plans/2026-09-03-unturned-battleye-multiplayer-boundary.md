@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/plans/2026-09-03-unturned-battleye-multiplayer-boundary.md` 的“目标边界合同”至“功能矩阵”章节。
 
+> **2026-09-04 实施修正：** 启动流程在边界调整前已经可正常使用。本方案中新增中性启动器、改造旧启动器及其验收步骤均已取消，不属于实现范围；现有启动文件保持原样。BattlEye/多人仍按独立运行证据报告，但不能通过新增仓库启动器来证明。
+
 ## Global Constraints
 
 - 本轮任务只交付本文档；不修改生产源码、测试、README、发布包，不构建、不部署、不启动游戏。
@@ -17,8 +19,8 @@
 - 多人客户端可打开菜单；玩法功能仅在本次连接会话明确确认风险后才允许尝试执行，成功、同步、回档、掉线和账号结果均不作保证。
 - Workshop 翻译不是玩法功能：扫描、缓存命中、翻译请求、批次完成和原生 UI 文本应用在多人中不得因 session kind、风险确认、菜单关闭或场景切换自动停止。
 - 资产刷新发生在翻译运行期间时只登记一次 deferred rescan；当前批次先正常完成。`AutoScanOnAssetsRefreshed=false` 时资产刷新不得调用 `CancelTranslation()`。
-- BattlEye 允许由使用者正常启动；项目不得停止、禁用、修改、注入规避、伪装或宣称绕过 BattlEye。
-- “允许 BattlEye 启动”只表示仓库启动器不再阻止该选择，不等于 BepInEx 或本插件获 BattlEye 允许，也不等于插件一定能加载或保持连接。
+- 启动流程保持实施前状态；项目不得停止、禁用、修改、注入规避、伪装或宣称绕过 BattlEye。
+- 本轮不新增或改造仓库启动器。游戏能够通过既有方式启动，不等于 BepInEx 或本插件获 BattlEye 允许，也不等于插件一定能加载或保持连接。
 - 独立专用服务器进程只要求插件安全加载为 inert/no-op；当前客户端 uGUI 和玩法功能不承诺作为 U3DS 服务端插件运行。
 - `PluginGuid`、程序集名、命名空间、插件目录、配置名、收藏/传送/自动拾取数据名及 Snapshot v1 路径保持不变，避免产生双 DLL、双配置或存档迁移。
 - Snapshot Infinite Storage 的 `Singleplayer_<slot>` 身份合同保持不变；多人会话不得读取、写入或迁移单人仓库。
@@ -36,7 +38,7 @@
 
 本方案把“功能只针对单人游戏”解释为**产品支持与验证范围**，而不是继续把整个插件锁死在单人会话：
 
-1. 插件可以保持安装，启动器允许选择 BattlEye 或非 BattlEye。
+1. 插件可以保持安装，使用者继续通过实施前已有的 Steam/Unturned 流程启动；本轮不改变启动器。
 2. 进入多人服务器后，只要 `Provider.isConnected` 且 `Player.LocalPlayer` 已生成，主菜单可以打开。
 3. 多人菜单打开时显示常驻警示，但不弹出阻断整个菜单的确认层；第一次尝试玩法动作或启用玩法自动化时才显示风险确认。确认前仅玩法动作和玩法自动化暂停，翻译页与正在运行的翻译任务保持可用。
 4. 确认后，瞬时玩法功能可以按现有单人实现 best-effort 调用，不新增多人协议、服务端 RPC 适配或反作弊适配。
@@ -376,8 +378,6 @@ if (TryTakeDeferredAssetRescan())
 | `src/UnturnedSingleplayerCheatMenu/Services/GameplayFeatureAccessPolicy.cs` | 多人会话确认、玩法功能授权和重连失效；不包含 Workshop 翻译 |
 | `tests/RuntimeBoundarySmoke/RuntimeBoundarySmoke.csproj` | 只链接两个纯策略源文件的 Smoke 项目；不链接含 Unity/Unturned 依赖的 runtime adapter |
 | `tests/RuntimeBoundarySmoke/Program.cs` | 会话矩阵与确认生命周期测试 |
-| `scripts/Launch-Unturned.ps1` | 中性启动入口，支持 Steam 对话框或明确 BattlEye launcher |
-| `Launch-Unturned.cmd` | 中性 Windows 包装入口 |
 
 ### 6.2 生产源码：现有硬门与新可达入口
 
@@ -417,61 +417,9 @@ if (TryTakeDeferredAssetRescan())
 | `UI/CheatMenuOverlayUi.FluentShell.cs` | 顶部 shell | 加常驻 `单人（受支持）` / `多人或服务器（不受支持）` badge |
 | `Services/PluginLocalization.cs:205,614-616,971,1007,1010,1077` | 单人硬拒绝与标题翻译 | 保留产品名翻译；替换硬拒绝文本，新增风险、确认、状态 badge、Snapshot 单人例外文本 |
 
-### 6.3 BattlEye 与启动器
+### 6.3 启动流程：明确不改
 
-| 文件 | 必须改动 |
-| --- | --- |
-| `scripts/Launch-Unturned-Singleplayer.ps1:20-37` | 删除 `Unturned_BE` 进程和 `BEService` 运行即抛错的两段；中性入口不得停止服务 |
-| `scripts/Launch-Unturned.ps1` | 新增 `Dialog` / `BattlEye` 两种模式；默认仍打开 Steam 选择对话框 |
-| `Launch-Unturned-Singleplayer.cmd` | 保留为兼容包装器，转调 `Launch-Unturned.ps1 -Mode Dialog` 并打印旧名称提示 |
-| `Launch-Unturned.cmd` | 新增推荐入口，并把第二个参数传给 `-Mode` |
-| `scripts/Build-PortablePackage.ps1:35-70` | 安装说明从 “Use only in singleplayer without BattlEye” 改为精确四层边界文本 |
-
-中性启动器的完整目标行为：
-
-```powershell
-[CmdletBinding()]
-param(
-    [string]$GameRoot = $env:UNTURNED_GAME_DIR,
-    [ValidateSet('Dialog', 'BattlEye')]
-    [string]$Mode = 'Dialog'
-)
-
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
-if ([string]::IsNullOrWhiteSpace($GameRoot)) {
-    throw 'Specify -GameRoot or set the UNTURNED_GAME_DIR environment variable.'
-}
-
-$gameRootFull = [IO.Path]::GetFullPath($GameRoot)
-$gameExecutable = Join-Path $gameRootFull 'Unturned.exe'
-$battleyeExecutable = Join-Path $gameRootFull 'Unturned_BE.exe'
-$plugin = Join-Path $gameRootFull 'BepInEx\plugins\UnturnedSingleplayerCheatMenu\UnturnedSingleplayerCheatMenu.dll'
-
-foreach ($required in @($gameExecutable, $plugin)) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "Required file not found: $required"
-    }
-}
-
-if (Get-Process -Name 'Unturned' -ErrorAction SilentlyContinue) {
-    Write-Host 'Unturned is already running.'
-    exit 0
-}
-
-if ($Mode -eq 'BattlEye') {
-    if (-not (Test-Path -LiteralPath $battleyeExecutable -PathType Leaf)) {
-        throw "BattlEye launcher not found: $battleyeExecutable"
-    }
-    Start-Process -FilePath $battleyeExecutable -WorkingDirectory $gameRootFull
-    Write-Host 'BattlEye launch requested. BepInEx/plugin loading is not guaranteed.'
-    exit 0
-}
-
-Start-Process 'steam://launch/304930/dialog'
-Write-Host 'Steam launch options opened. Choose BattlEye or no BattlEye yourself.'
-```
+本轮不新增 `Launch-Unturned.ps1` / `Launch-Unturned.cmd`，也不改造既有 Singleplayer launcher。`scripts/Build-PortablePackage.ps1` 只同步玩法支持、Workshop 翻译和 Snapshot 边界文字，不改变启动机制。
 
 ### 6.4 测试与解决方案
 
@@ -876,45 +824,9 @@ git diff --cached --check
 git commit -m "fix: keep snapshot persistence singleplayer-only"
 ```
 
-### Task 7: 放开 BattlEye 启动选择但不接触反作弊
+### Task 7: 已取消——启动流程保持原样
 
-**Files:**
-
-- Create: `scripts/Launch-Unturned.ps1`
-- Create: `Launch-Unturned.cmd`
-- Modify: `scripts/Launch-Unturned-Singleplayer.ps1`
-- Modify: `Launch-Unturned-Singleplayer.cmd`
-- Modify: `scripts/Build-PortablePackage.ps1`
-
-**Interfaces:**
-
-- Consumes: `GameRoot`、`UNTURNED_GAME_DIR`、`Mode=Dialog|BattlEye`。
-- Produces: 不停止服务、不拒绝 BE 的中性 launcher；旧入口兼容转发。
-
-- [ ] **Step 1: 写入第 6.3 节完整中性 PowerShell 入口**
-- [ ] **Step 2: 旧 PowerShell 入口只转调新入口，不再查询 `BEService` 或抛 BE 错误**
-- [ ] **Step 3: 新旧 `.cmd` 均只负责参数转发，不启动/停止 Windows 服务**
-- [ ] **Step 4: 用静态搜索证明 launcher 没有 `Stop-Service`、`sc stop`、`taskkill`、BE 拒绝文案**
-
-```powershell
-$launcherText = Get-Content -LiteralPath '.\scripts\Launch-Unturned.ps1' -Raw -Encoding UTF8
-foreach ($forbidden in @('Stop-Service', 'sc stop', 'taskkill', 'Exit it before', 'service is still running')) {
-    if ($launcherText.IndexOf($forbidden, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-        throw "Forbidden launcher behavior remains: $forbidden"
-    }
-}
-```
-
-- [ ] **Step 5: 在游戏未运行时分别验证 `Dialog` 打开 Steam 选择器、`BattlEye` 启动 `Unturned_BE.exe`；只记录启动事实，不宣称插件加载**
-- [ ] **Step 6: 提交 launcher/package 文本**
-
-```powershell
-git add -- 'scripts/Launch-Unturned.ps1' 'Launch-Unturned.cmd'
-git add -p -- 'scripts/Launch-Unturned-Singleplayer.ps1' 'Launch-Unturned-Singleplayer.cmd' 'scripts/Build-PortablePackage.ps1'
-git diff --cached --name-only
-git diff --cached --check
-git commit -m "feat: allow explicit BattlEye launch selection"
-```
+不创建新启动器，不改动既有启动器。只在 Task 8 的用户文档和便携包说明中陈述新的玩法、翻译与 Snapshot 边界。
 
 ### Task 8: 同步中英边界文档与历史记录
 
@@ -1024,7 +936,7 @@ Expected: 任务触及文件无 whitespace error；既有无关改动仍存在�
 - [ ] **Step 5: 多人确认前验证 AutoPickup/移动/Point Tool/health bar/minimap 都不产生后台动作，同时翻译 Pump、进度和结果应用继续**
 - [ ] **Step 6: 确认后只在操作者控制的私有服务器做一个可回滚的瞬时玩法动作，记录服务器接受/拒绝/纠正，不把结果推广为兼容承诺**
 - [ ] **Step 7: 验证多人中 Snapshot 页面明确不可用，且单人 Snapshot 目录所有文件 hash/mtime 均未改变**
-- [ ] **Step 8: 使用 `Launch-Unturned.ps1 -Mode BattlEye`，分别记录 BE launcher 成功、Unturned 子进程、BepInEx preloader、chainloader、plugin discovered 五个状态**
+- [ ] **Step 8: 通过实施前已有的 Steam/Unturned 启动流程，分别记录游戏启动、BepInEx preloader、chainloader、plugin discovered 五个状态**
 - [ ] **Step 9: 若 BE 阻止 `winhttp.dll`、preloader、插件或连接，记录原始日志并停止该验收线；不得改成规避或宣称插件缺陷**
 - [ ] **Step 10: 在可丢弃 U3DS 实例验证插件若被发现只打印 inert 日志，不创建 Canvas/Harmony 客户端 patch；若程序集依赖阶段已失败，启动独立拆包计划**
 - [ ] **Step 11: 最终报告按下列证据层分别写结论**
@@ -1037,7 +949,7 @@ Deployment hash: PASS|FAIL
 No-BE singleplayer: PASS|FAIL|NOT RUN
 No-BE multiplayer menu: PASS|FAIL|NOT RUN
 Workshop translation across multiplayer: PASS|FAIL|NOT RUN
-BattlEye launcher: PASS|FAIL|NOT RUN
+Game/BattlEye launch: PASS|FAIL|NOT RUN
 BepInEx under BattlEye: LOADED|BLOCKED|NOT RUN
 Plugin under BattlEye: LOADED|BLOCKED|NOT RUN
 Dedicated no-op: PASS|FAIL|NOT RUN
@@ -1061,13 +973,13 @@ Gameplay acceptance: SUPPORTED SINGLEPLAYER ONLY
 1. 退出 Unturned 和 U3DS。
 2. 恢复部署前备份 DLL并核对 hash。
 3. 源码按任务提交逐个 `git revert <commit>`；不得 reset 整个 dirty 工作树。
-4. 删除新增的 `Launch-Unturned.ps1` / `Launch-Unturned.cmd` 只通过 revert 完成，旧 Singleplayer launcher 在整个迁移期始终保留。
+4. 启动器不是本次变更的一部分，不参与回滚。
 5. 风险确认没有持久配置，无需配置迁移。
 6. GUID、配置、Favorites、Teleports、AutoPickup rules、Snapshot v1 均保持原路径，因此回滚不能移动或重写这些数据。
 
 ## 9. 自审结果
 
-- 需求覆盖：BattlEye 可选启动、多人客户端菜单、单人功能支持范围、服务器自担风险、Dedicated Server 定义均有对应代码、文案和验收任务。
+- 需求覆盖：既有启动流程保持不变；多人客户端菜单、单人功能支持范围、服务器自担风险、Dedicated Server 定义均有对应代码、文案和验收任务。
 - 可达入口覆盖：不仅迁移 50 处显式 `SingleplayerGuard`，还覆盖了以前依靠“菜单打不开”间接保护的 `CharacterPagePresenter` 与 `CheatMenuUiFeaturePorts` 直接调用。
 - 持久化覆盖：Snapshot v1 明确保留单人硬门，requested/effective 状态分离，重连确认不落盘。
 - 翻译覆盖：Workshop 翻译明确脱离 gameplay gate；RuntimeContext 删除会话触发的取消，资产刷新采用当前批次完成后的合并 rescan。
@@ -1086,7 +998,7 @@ Gameplay acceptance: SUPPORTED SINGLEPLAYER ONLY
 5. 确认仅对当前 connection key 生效，重连后失效。
 6. 单人功能和 Snapshot v1 回归全部通过。
 7. 多人中 Snapshot 与 Zombie region retention 始终关闭。
-8. 启动器不再因 `Unturned_BE` / `BEService` 拒绝，但也不停止、修改或规避 BattlEye。
+8. 启动器保持实施前状态；本次边界调整不新增或改造启动入口。
 9. Dedicated Server 不初始化客户端 UI/功能图；若单 DLL 无法加载，结果被如实记录并转入拆包方案。
 10. 中英 README、SECURITY、CONTRIBUTING、安装包文字和 UI 警示完全一致。
 11. Release 构建、递归全部 Smoke、diff check 通过。

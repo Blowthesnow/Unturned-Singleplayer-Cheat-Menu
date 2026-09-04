@@ -8,6 +8,7 @@ namespace UnturnedSingleplayerCheatMenu.Services;
 internal sealed class MovementCheatService
 {
 	private readonly ManualLogSource _log;
+	private readonly Func<bool> _canExecuteGameplay;
 
 	private bool _hasOriginalMultipliers;
 
@@ -41,9 +42,10 @@ internal sealed class MovementCheatService
 
 	internal bool SafeExit { get; set; } = true;
 
-	internal MovementCheatService(ManualLogSource log)
+	internal MovementCheatService(ManualLogSource log, Func<bool> canExecuteGameplay)
 	{
 		_log = log;
+		_canExecuteGameplay = canExecuteGameplay ?? throw new ArgumentNullException(nameof(canExecuteGameplay));
 	}
 
 	internal void SetSimulationResimulating(bool value)
@@ -67,7 +69,7 @@ internal sealed class MovementCheatService
 
 	internal void SetFlight(bool enabled)
 	{
-		if (enabled == FlightEnabled || (enabled && !SingleplayerGuard.IsReady))
+		if (enabled == FlightEnabled || (enabled && !_canExecuteGameplay()))
 		{
 			return;
 		}
@@ -89,7 +91,7 @@ internal sealed class MovementCheatService
 
 	internal void SetNoclip(bool enabled)
 	{
-		if (enabled == NoclipEnabled || (enabled && !SingleplayerGuard.IsReady))
+		if (enabled == NoclipEnabled || (enabled && !_canExecuteGameplay()))
 		{
 			return;
 		}
@@ -129,7 +131,7 @@ internal sealed class MovementCheatService
 		{
 			return;
 		}
-		if (SingleplayerGuard.IsReady)
+		if (_canExecuteGameplay())
 		{
 			PlayerLife life = Player.LocalPlayer.life;
 			if (((object)life == null || !life.isDead) && !(Player.LocalPlayer.movement?.getVehicle() != null))
@@ -153,7 +155,7 @@ internal sealed class MovementCheatService
 
 	internal void PrepareNativeSimulation(PlayerMovement movement)
 	{
-		if (IsLocalMovement(movement) && (FlightEnabled || NoclipEnabled))
+		if (_canExecuteGameplay() && IsLocalMovement(movement) && (FlightEnabled || NoclipEnabled))
 		{
 			ApplyNativeMovementState(movement);
 			if (NoclipEnabled)
@@ -165,7 +167,7 @@ internal sealed class MovementCheatService
 
 	internal void SimulateMovement(PlayerMovement movement, float deltaTime)
 	{
-		if (!IsLocalMovement(movement) || (!FlightEnabled && !NoclipEnabled) || _isResimulating || !SingleplayerGuard.IsReady)
+		if (!IsLocalMovement(movement) || (!FlightEnabled && !NoclipEnabled) || _isResimulating || !_canExecuteGameplay())
 		{
 			return;
 		}
@@ -331,39 +333,29 @@ internal sealed class MovementCheatService
 	private Vector3 GetViewDirectionVelocity(Player player)
 	{
 		Vector3 forward = player.look?.aim?.forward ?? player.transform.forward;
-		if (forward.sqrMagnitude < 0.001f)
-		{
-			forward = player.transform.forward;
-		}
-		forward.Normalize();
-		Vector3 horizontalForward = new Vector3(forward.x, 0f, forward.z);
-		if (horizontalForward.sqrMagnitude < 0.001f)
-		{
-			horizontalForward = player.transform.forward;
-			horizontalForward.y = 0f;
-		}
-		horizontalForward.Normalize();
-		Vector3 right = Vector3.Cross(Vector3.up, horizontalForward).normalized;
-		float forwardInput = (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f);
-		float strafeInput = (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f);
+		Vector3 fallbackForward = player.transform.forward;
+		float forwardInput = (InputEx.GetKey(ControlsSettings.up) ? 1f : 0f) -
+			(InputEx.GetKey(ControlsSettings.down) ? 1f : 0f);
+		float strafeInput = (InputEx.GetKey(ControlsSettings.right) ? 1f : 0f) -
+			(InputEx.GetKey(ControlsSettings.left) ? 1f : 0f);
 		float verticalInput = GetVerticalInput();
-		Vector3 horizontal = (verticalInput != 0f ? horizontalForward : forward) * forwardInput + right * strafeInput;
-		if (horizontal.sqrMagnitude > 1f)
-		{
-			horizontal.Normalize();
-		}
-		return horizontal * HorizontalMetersPerSecond + Vector3.up * (verticalInput * VerticalMetersPerSecond);
+		FlightDirectionVector velocity = FlightDirectionPolicy.ResolveVelocity(
+			new FlightDirectionVector(forward.x, forward.y, forward.z),
+			new FlightDirectionVector(fallbackForward.x, fallbackForward.y, fallbackForward.z),
+			forwardInput, strafeInput, verticalInput,
+			HorizontalMetersPerSecond, VerticalMetersPerSecond);
+		return new Vector3(velocity.X, velocity.Y, velocity.Z);
 	}
 
 	private static float GetVerticalInput()
 	{
-		bool key = Input.GetKey(KeyCode.Space);
-		bool flag = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-		if (key == flag)
+		bool ascend = Input.GetKey(KeyCode.Space);
+		bool descend = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+		if (ascend == descend)
 		{
 			return 0f;
 		}
-		if (!key)
+		if (!ascend)
 		{
 			return -1f;
 		}

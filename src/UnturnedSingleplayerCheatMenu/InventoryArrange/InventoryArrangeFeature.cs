@@ -63,6 +63,8 @@ internal sealed class InventoryArrangeFeature
 	private readonly ManualLogSource _log;
 
 	private readonly Func<InventoryArrangeSettings> _settings;
+	private readonly Func<bool> _canExecuteGameplay;
+	private readonly Func<string> _connectionKey;
 
 	private readonly InventoryArrangePlanner _planner = new InventoryArrangePlanner();
 
@@ -77,6 +79,7 @@ internal sealed class InventoryArrangeFeature
 	private List<byte> _journalPages;
 
 	private InventoryArrangeScope _journalScope;
+	private string _journalConnectionKey;
 
 	private bool _hasLoggedPlayerReady;
 
@@ -84,10 +87,13 @@ internal sealed class InventoryArrangeFeature
 
 	internal InventoryArrangeResult LastResult { get; private set; }
 
-	internal InventoryArrangeFeature(ManualLogSource log, Func<InventoryArrangeSettings> settings)
+	internal InventoryArrangeFeature(ManualLogSource log, Func<InventoryArrangeSettings> settings,
+		Func<bool> canExecuteGameplay, Func<string> connectionKey)
 	{
 		_log = log;
 		_settings = settings;
+		_canExecuteGameplay = canExecuteGameplay ?? throw new ArgumentNullException(nameof(canExecuteGameplay));
+		_connectionKey = connectionKey ?? throw new ArgumentNullException(nameof(connectionKey));
 	}
 
 	internal void OnPlayerInitialized()
@@ -101,7 +107,7 @@ internal sealed class InventoryArrangeFeature
 
 	internal InventoryArrangeResult Preview(InventoryArrangeScope scope, InventoryArrangeAction action)
 	{
-		if (!TryCapture(scope, out var captured, out var reason))
+		if (!TryCapture(scope, requireGameplayAccess: false, out var captured, out var reason))
 		{
 			return Publish(success: false, reason, null);
 		}
@@ -117,7 +123,7 @@ internal sealed class InventoryArrangeFeature
 		{
 			return Publish(success: false, "整理正在执行，已忽略重复请求。", null);
 		}
-		if (!TryCapture(scope, out var captured, out var reason))
+		if (!TryCapture(scope, requireGameplayAccess: true, out var captured, out var reason))
 		{
 			return Publish(success: false, reason, null);
 		}
@@ -165,6 +171,7 @@ internal sealed class InventoryArrangeFeature
 			_journalAfterLayoutFingerprint = capturedInventory.LayoutFingerprint;
 			_journalAfterFingerprint = capturedInventory.Fingerprint;
 			_journalScope = scope;
+			_journalConnectionKey = _connectionKey();
 			_log?.LogInfo("背包整理完成：来源=" + source + "；" + Describe(inventoryArrangePlan, "执行") + "。");
 			return Publish(success: true, Describe(inventoryArrangePlan, "已整理"), inventoryArrangePlan);
 		}
@@ -192,9 +199,9 @@ internal sealed class InventoryArrangeFeature
 		{
 			return Publish(success: false, "跨箱集中正在执行，已忽略重复请求。", null);
 		}
-		if (!SingleplayerGuard.IsReady || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
+		if (!_canExecuteGameplay() || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
 		{
-			return Publish(success: false, "当前没有可用的本地单人玩家库存。", null);
+			return Publish(success: false, "当前没有获得玩法授权的本地玩家库存。", null);
 		}
 		PlayerInventory inventory = Player.LocalPlayer.inventory;
 		if (!inventory.isStoring || !IsCarriedOrStoragePage(sourcePage))
@@ -231,7 +238,7 @@ internal sealed class InventoryArrangeFeature
 		{
 			return;
 		}
-		if (!SingleplayerGuard.IsReady || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
+		if (!_canExecuteGameplay() || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
 		{
 			_quickTransfer = null;
 			return;
@@ -437,9 +444,9 @@ internal sealed class InventoryArrangeFeature
 	{
 		captured = null;
 		reason = null;
-		if (!SingleplayerGuard.IsReady || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
+		if (!_canExecuteGameplay() || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
 		{
-			reason = "当前没有可用的本地单人玩家库存。";
+			reason = "当前没有获得玩法授权的本地玩家库存。";
 			return false;
 		}
 		if (Player.LocalPlayer.equipment != null && Player.LocalPlayer.equipment.isBusy)
@@ -467,6 +474,15 @@ internal sealed class InventoryArrangeFeature
 		{
 			return Publish(success: false, "没有可撤销的整理记录。", null);
 		}
+		if (!string.Equals(_journalConnectionKey, _connectionKey(), StringComparison.Ordinal))
+		{
+			_journalBefore = null;
+			_journalPages = null;
+			_journalAfterLayoutFingerprint = null;
+			_journalAfterFingerprint = null;
+			_journalConnectionKey = null;
+			return Publish(success: false, "撤销已失效：连接会话已经变化。", null);
+		}
 		string reason = null;
 		if (_journalPages == null || !TryCapturePages(_journalPages, out var captured, out reason))
 		{
@@ -477,6 +493,7 @@ internal sealed class InventoryArrangeFeature
 		{
 			_journalBefore = null;
 			_journalPages = null;
+			_journalConnectionKey = null;
 			_journalAfterLayoutFingerprint = null;
 			_journalAfterFingerprint = null;
 			return Publish(success: false, "撤销已失效：整理后的库存已被外部操作改变。", null);
@@ -496,6 +513,7 @@ internal sealed class InventoryArrangeFeature
 			_journalAfterLayoutFingerprint = null;
 			_journalAfterFingerprint = null;
 			_journalPages = null;
+			_journalConnectionKey = null;
 			return Publish(flag, flag ? "已撤销上次整理。" : "撤销后校验失败，请查看 BepInEx 日志。", null);
 		}
 		finally
@@ -504,13 +522,13 @@ internal sealed class InventoryArrangeFeature
 		}
 	}
 
-	private bool TryCapture(InventoryArrangeScope scope, out CapturedInventory captured, out string reason)
+	private bool TryCapture(InventoryArrangeScope scope, bool requireGameplayAccess, out CapturedInventory captured, out string reason)
 	{
 		captured = null;
 		reason = null;
-		if (!SingleplayerGuard.IsReady || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
+		if ((requireGameplayAccess && !_canExecuteGameplay()) || Player.LocalPlayer == null || Player.LocalPlayer.inventory == null)
 		{
-			reason = "当前没有可用的本地单人玩家库存。";
+			reason = "当前没有可用的本地玩家库存或玩法授权。";
 			return false;
 		}
 		PlayerInventory inventory = Player.LocalPlayer.inventory;

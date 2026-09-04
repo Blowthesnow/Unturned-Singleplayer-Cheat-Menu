@@ -2,20 +2,15 @@
 
 ## Supported version
 
-Security and compatibility reports are currently accepted for the latest published version, `1.7.0`.
+Security and compatibility reports are currently accepted for the latest published version, `2.0.0`.
 
 ## Intended environment
 
-This plugin is intentionally limited to:
+Gameplay compatibility reports are supported only for Unturned singleplayer worlds on Windows x64 Unity Mono with BepInEx 5. The menu may open in a connected multiplayer client after the local player exists, but gameplay use there is unsupported, best-effort, and requires acknowledgement for the current connection. Snapshot Infinite Storage and zombie-region retention remain true-singleplayer-only. A standalone U3DS process is expected to remain inert and create no client UI or gameplay graph.
 
-- Unturned singleplayer worlds;
-- Windows x64 Unity Mono;
-- BepInEx 5;
-- a launch where BattlEye is not active.
+Workshop translation is a local content pipeline and is not controlled by gameplay authorization. Entering multiplayer, reconnecting, or changing acknowledgement state must not cancel an active translation batch.
 
-It is not a multiplayer cheat, does not provide anti-cheat bypass functionality, and should not be loaded into BattlEye-protected or multiplayer sessions.
-
-The included launcher helper only opens Steam's launch-option dialog. It does not stop, patch, disable, or reconfigure BattlEye. If a BattlEye process or service is detected, the helper refuses to continue.
+Startup behavior and existing launcher helpers are unchanged by this boundary implementation. Successfully starting the game does not establish that BattlEye permits BepInEx, this plugin, or a multiplayer connection.
 
 ## Reporting
 
@@ -26,8 +21,12 @@ For a reproducible compatibility report, include:
 - plugin version;
 - Unturned version;
 - BepInEx version;
-- whether the issue occurs before or after entering a singleplayer world;
+- runtime session kind and whether a local player exists;
+- BattlEye launch state;
+- whether the BepInEx preloader and chainloader ran;
+- whether the plugin was discovered;
+- server type (singleplayer, multiplayer client/listen host, or standalone U3DS);
 - the smallest relevant excerpt from `BepInEx/LogOutput.log`;
 - reproduction steps.
 
-Remove usernames and local filesystem paths before posting.
+Remove usernames, Steam identifiers, local filesystem paths, private server addresses, credentials, and unrelated save data before posting.

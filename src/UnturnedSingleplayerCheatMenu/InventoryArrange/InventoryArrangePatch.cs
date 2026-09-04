@@ -163,7 +163,7 @@ internal static class InventoryArrangePatch
 
 	private static bool CanTrackManualMove(PlayerInventory inventory, byte sourcePage, byte destinationPage)
 	{
-		return SingleplayerGuard.IsReady && inventory != null &&
+		return CheatMenuPlugin.Instance?.CanExecuteGameplay == true && inventory != null &&
 			ReferenceEquals(Player.LocalPlayer?.inventory, inventory) &&
 			IsHotkeyPage(sourcePage) && IsHotkeyPage(destinationPage) &&
 			Player.LocalPlayer?.equipment?.hotkeys != null;

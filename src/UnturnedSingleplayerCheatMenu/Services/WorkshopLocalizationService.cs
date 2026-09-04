@@ -84,6 +84,8 @@ internal sealed class WorkshopLocalizationService : IDisposable
 
 	private int _presentationVersion;
 
+	private bool _deferredAssetRescan;
+
 	private bool _disposed;
 
 	internal MachineTranslationSettings Settings { get; }
@@ -174,6 +176,10 @@ internal sealed class WorkshopLocalizationService : IDisposable
 		{
 			return;
 		}
+		lock (_gate)
+		{
+			_deferredAssetRescan = false;
+		}
 		CancelTranslation();
 		lock (_gate)
 		{
@@ -206,13 +212,31 @@ internal sealed class WorkshopLocalizationService : IDisposable
 
 	internal void OnAssetsRefreshed()
 	{
-		if (AutoScanOnAssetsRefreshed)
+		if (_disposed || !AutoScanOnAssetsRefreshed)
 		{
-			ScanCurrentAssets();
+			return;
 		}
-		else
+		lock (_gate)
 		{
-			CancelTranslation();
+			if (_translationTask != null && !_translationTask.IsCompleted)
+			{
+				_deferredAssetRescan = true;
+				return;
+			}
+		}
+		ScanCurrentAssets();
+	}
+
+	private bool TryTakeDeferredAssetRescan()
+	{
+		lock (_gate)
+		{
+			if (!_deferredAssetRescan)
+				return false;
+			if (_translationTask != null && !_translationTask.IsCompleted)
+				return false;
+			_deferredAssetRescan = false;
+			return AutoScanOnAssetsRefreshed && !_disposed;
 		}
 	}
 
@@ -346,28 +370,29 @@ internal sealed class WorkshopLocalizationService : IDisposable
 	internal void Pump()
 	{
 		PendingApply pendingApply = Interlocked.Exchange(ref _pendingApply, null);
-		if (pendingApply == null)
+		if (pendingApply != null)
 		{
-			return;
-		}
-		lock (_gate)
-		{
-			if (pendingApply.Generation == _generation)
+			lock (_gate)
 			{
-				PublishSnapshotLocked();
-				if (pendingApply.Error != null)
+				if (pendingApply.Generation == _generation)
 				{
-					_progress.State = WorkshopLocalizationState.Error;
-					_progress.Message = pendingApply.Error;
+					PublishSnapshotLocked();
+					if (pendingApply.Error != null)
+					{
+						_progress.State = WorkshopLocalizationState.Error;
+						_progress.Message = pendingApply.Error;
+					}
+					else if (_progress.State != WorkshopLocalizationState.Cancelled)
+					{
+						_progress.State = WorkshopLocalizationState.Idle;
+						_progress.Message = (pendingApply.Changed ? "translation complete" : "translation produced no valid entries");
+					}
+					MarkPresentationChangedLocked();
 				}
-				else if (_progress.State != WorkshopLocalizationState.Cancelled)
-				{
-					_progress.State = WorkshopLocalizationState.Idle;
-					_progress.Message = (pendingApply.Changed ? "translation complete" : "translation produced no valid entries");
-				}
-				MarkPresentationChangedLocked();
 			}
 		}
+		if (TryTakeDeferredAssetRescan())
+			ScanCurrentAssets();
 	}
 
 	public void Dispose()

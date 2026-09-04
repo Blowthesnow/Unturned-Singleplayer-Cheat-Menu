@@ -58,6 +58,7 @@ internal sealed class PointToolService
 	private const int ResourceLayer = 14;
 
 	private readonly ManualLogSource _log;
+	private readonly Func<bool> _canExecuteGameplay;
 
 	private readonly PointToolHud _hud;
 
@@ -131,20 +132,21 @@ internal sealed class PointToolService
 
 	internal bool ShowHud { get; set; } = true;
 
-	internal PointToolService(ManualLogSource log, PointToolHud hud)
+	internal PointToolService(ManualLogSource log, PointToolHud hud, Func<bool> canExecuteGameplay)
 	{
 		_log = log;
 		_hud = hud;
+		_canExecuteGameplay = canExecuteGameplay ?? throw new ArgumentNullException(nameof(canExecuteGameplay));
 	}
 
 	internal void Pump()
 	{
 		FlushPendingTeleportTrace();
 		bool flag = _nativeMiddleMouse.IsPressed(MiddleMouseShortcut);
-		if (!SingleplayerGuard.IsReady)
+		if (!_canExecuteGameplay())
 		{
-			Enabled = false;
 			ClearTarget();
+			_hud.Hide();
 			return;
 		}
 		if (!Enabled || IsInteractionPaused())
@@ -772,7 +774,7 @@ internal sealed class PointToolService
 
 	private void ExecuteCurrentTarget()
 	{
-		if (!SingleplayerGuard.IsReady)
+		if (!_canExecuteGameplay())
 		{
 			return;
 		}
@@ -1162,7 +1164,7 @@ internal sealed class PointToolService
 
 	private static bool IsRegisteredVehicle(InteractableVehicle vehicle)
 	{
-		if (!SingleplayerGuard.IsReady || vehicle == null || vehicle.asset == null || vehicle.IsPendingDestroy || vehicle.isExploded)
+		if (CheatMenuPlugin.Instance?.CanExecuteGameplay != true || vehicle == null || vehicle.asset == null || vehicle.IsPendingDestroy || vehicle.isExploded)
 		{
 			return false;
 		}

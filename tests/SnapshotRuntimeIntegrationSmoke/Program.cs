@@ -5,6 +5,7 @@ using System.Text;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using HarmonyLib;
 using SDG.Unturned;
 
 static void Assert(bool condition, string message)
@@ -23,21 +24,23 @@ static string FindRepositoryRoot()
     throw new DirectoryNotFoundException("Repository root marker was not found.");
 }
 
-static bool ContainsDirectCall(MethodInfo caller, int calleeMetadataToken)
+static int CountDirectCalls(MethodInfo caller, int calleeMetadataToken)
 {
     byte[] il = caller?.GetMethodBody()?.GetILAsByteArray() ?? Array.Empty<byte>();
     Dictionary<short, OpCode> opcodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
         .Where(field => field.FieldType == typeof(OpCode))
         .Select(field => (OpCode)field.GetValue(null)!)
         .ToDictionary(opcode => opcode.Value);
+    int count = 0;
     for (int index = 0; index < il.Length;)
     {
         short value = il[index++] == 0xfe
             ? unchecked((short)(0xfe00 | il[index++]))
             : il[index - 1];
-        if (!opcodes.TryGetValue(value, out OpCode opcode)) return false;
-        if (opcode == OpCodes.Call && index + sizeof(int) <= il.Length &&
-            BitConverter.ToInt32(il, index) == calleeMetadataToken) return true;
+        if (!opcodes.TryGetValue(value, out OpCode opcode)) return -1;
+        if ((opcode == OpCodes.Call || opcode == OpCodes.Callvirt) &&
+            index + sizeof(int) <= il.Length &&
+            BitConverter.ToInt32(il, index) == calleeMetadataToken) count++;
         int operandSize = opcode.OperandType switch
         {
             OperandType.InlineNone => 0,
@@ -49,11 +52,14 @@ static bool ContainsDirectCall(MethodInfo caller, int calleeMetadataToken)
                 : int.MaxValue,
             _ => 4
         };
-        if (operandSize < 0 || index > il.Length - operandSize) return false;
+        if (operandSize < 0 || index > il.Length - operandSize) return -1;
         index += operandSize;
     }
-    return false;
+    return count;
 }
+
+static bool ContainsDirectCall(MethodInfo caller, int calleeMetadataToken) =>
+    CountDirectCalls(caller, calleeMetadataToken) > 0;
 
 static bool ContainsMemberReferenceCall(string assemblyPath,
     string callerNamespace, string callerTypeName, string callerMethodName,
@@ -167,6 +173,67 @@ static string ResolveMethodIdentity(MetadataReader reader, EntityHandle handle)
     return string.Empty;
 }
 
+static int CountCallsByIdentity(string assemblyPath,
+    string callerNamespace, string callerTypeName, string callerMethodName,
+    string calleeNamespace, string calleeTypeName, string calleeMethodName)
+{
+    using FileStream stream = File.OpenRead(assemblyPath);
+    using PEReader peReader = new PEReader(stream);
+    MetadataReader reader = peReader.GetMetadataReader();
+    MethodDefinitionHandle callerHandle = default;
+    foreach (TypeDefinitionHandle typeHandle in reader.TypeDefinitions)
+    {
+        TypeDefinition type = reader.GetTypeDefinition(typeHandle);
+        if (reader.GetString(type.Namespace) != callerNamespace ||
+            reader.GetString(type.Name) != callerTypeName) continue;
+        foreach (MethodDefinitionHandle methodHandle in type.GetMethods())
+        {
+            if (reader.GetString(reader.GetMethodDefinition(methodHandle).Name) == callerMethodName)
+            {
+                callerHandle = methodHandle;
+                break;
+            }
+        }
+        break;
+    }
+    if (callerHandle.IsNil) return -1;
+    MethodDefinition callerDefinition = reader.GetMethodDefinition(callerHandle);
+    byte[] il = peReader.GetMethodBody(callerDefinition.RelativeVirtualAddress).GetILBytes();
+    Dictionary<short, OpCode> opcodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
+        .Where(field => field.FieldType == typeof(OpCode))
+        .Select(field => (OpCode)field.GetValue(null)!)
+        .ToDictionary(opcode => opcode.Value);
+    string expectedCallee = calleeNamespace + "." + calleeTypeName + "::" + calleeMethodName;
+    int count = 0;
+    for (int index = 0; index < il.Length;)
+    {
+        short value = il[index++] == 0xfe
+            ? unchecked((short)(0xfe00 | il[index++]))
+            : il[index - 1];
+        if (!opcodes.TryGetValue(value, out OpCode opcode)) return -1;
+        int operandStart = index;
+        int operandSize = opcode.OperandType switch
+        {
+            OperandType.InlineNone => 0,
+            OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
+            OperandType.InlineVar => 2,
+            OperandType.InlineI8 or OperandType.InlineR => 8,
+            OperandType.InlineSwitch => index + sizeof(int) <= il.Length
+                ? checked(sizeof(int) + BitConverter.ToInt32(il, index) * sizeof(int))
+                : int.MaxValue,
+            _ => 4
+        };
+        if (operandSize < 0 || index > il.Length - operandSize) return -1;
+        if ((opcode == OpCodes.Call || opcode == OpCodes.Callvirt) && operandSize == sizeof(int))
+        {
+            EntityHandle called = MetadataTokens.EntityHandle(BitConverter.ToInt32(il, operandStart));
+            if (ResolveMethodIdentity(reader, called) == expectedCallee) count++;
+        }
+        index += operandSize;
+    }
+    return count;
+}
+
 static bool HasContinuingCatchAroundCall(string assemblyPath,
     string callerNamespace, string callerTypeName, string callerMethodName,
     string protectedCalleeIdentity, string continuationCalleeIdentity)
@@ -262,7 +329,7 @@ static int FindMethodToken(string assemblyPath, string typeNamespace, string typ
 Assembly product = Assembly.Load("UnturnedSingleplayerCheatMenu");
 Assembly nativeAssembly = typeof(Item).Assembly;
 Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(nativeAssembly.Location))) ==
-       "126C27BA2811A78380319D8DD3623352C00169250F7189394D9CA6B0EF0AB529",
+       "A110F5FE471422254C594E29F90FC4058D04D357EB3AE9CB4D3EDA0FFEC33F10",
     "Assembly-CSharp ABI hash drifted and requires a new explicit audit.");
 Assert(typeof(Item).GetConstructor(new[] { typeof(ushort), typeof(byte), typeof(byte), typeof(byte[]) }) != null &&
        typeof(Item).GetConstructor(new[] { typeof(ItemAsset), typeof(EItemOrigin) }) != null &&
@@ -317,6 +384,13 @@ Type[] pluginTypes = productTypes.Where(type => type.CustomAttributes.Any(attrib
     attribute.AttributeType.FullName == "BepInEx.BepInPlugin")).ToArray();
 Assert(pluginTypes.Length == 1 && pluginTypes[0].FullName == "UnturnedSingleplayerCheatMenu.CheatMenuPlugin",
     "The product must contain exactly one existing BepInPlugin entry point.");
+Type assetOriginClassifierType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.Services.AssetOriginClassifier", true)!;
+MethodInfo compiledIsWorkshop = assetOriginClassifierType.GetMethod("IsWorkshop",
+    BindingFlags.Static | BindingFlags.Public)!;
+Assert(compiledIsWorkshop != null &&
+       !(bool)compiledIsWorkshop.Invoke(null, new object[] { null })!,
+    "The compiled product must classify a null or unresolved asset origin as unknown, never Workshop.");
 
 string[] moduleTypes =
 [
@@ -338,6 +412,10 @@ string[] retiredTypes =
 ];
 Assert(retiredTypes.All(name => product.GetType(name, throwOnError: false) == null),
     "The released product must not contain legacy storage, migration, provenance, identity, or runtime types.");
+Assert(product.GetType("UnturnedSingleplayerCheatMenu.Patches.AttachmentUiDiagnosticPatch", false) == null &&
+       product.GetType("UnturnedSingleplayerCheatMenu.Services.AttachmentUiDiagnosticPolicy", false) == null &&
+       product.GetType("UnturnedSingleplayerCheatMenu.Services.AttachmentUiRecoveryPolicy", false) == null,
+    "The clean product must retain the attachment root fix without temporary diagnostics or symptom-recovery hooks.");
 Assert(product.GetType("UnturnedSingleplayerCheatMenu.InfiniteStorage.Runtime.SnapshotInfiniteStorageRuntime") != null &&
        product.GetType("UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotDocument") != null,
     "The Snapshot Runtime and schema-1 document must be present in the product.");
@@ -479,6 +557,168 @@ MethodInfo pendingCoordinatorExecute = pendingCoordinatorType.GetMethod("Execute
 Assert(confirmPendingMethod != null && pendingCoordinatorExecute != null &&
        ContainsDirectCall(confirmPendingMethod, pendingCoordinatorExecute.MetadataToken),
     "Runtime ConfirmPending must delegate stale/timeout decisions to the same tested native post-state coordinator.");
+Type snapshotRuntimeType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.Runtime.SnapshotInfiniteStorageRuntime", true)!;
+Type backgroundStoreHandleType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.Runtime.SnapshotBackgroundStoreHandle", true)!;
+Type backgroundPersistenceType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotBackgroundPersistence", true)!;
+Type backgroundCompletionPolicyType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotBackgroundStoreCompletionPolicy", true)!;
+Type backgroundCompletionResultType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotBackgroundStoreCompletionResult", true)!;
+Type backgroundCompletionRouterType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotBackgroundStoreCompletionRouter", true)!;
+MethodInfo beginBackgroundStore = snapshotRuntimeType.GetMethod(
+    "TryBeginStoreCandidateInBackground", BindingFlags.Instance | BindingFlags.NonPublic)!;
+MethodInfo completeBackgroundStore = snapshotRuntimeType.GetMethod(
+    "TryCompleteBackgroundStore", BindingFlags.Instance | BindingFlags.NonPublic)!;
+MethodInfo latchBackgroundStore = snapshotRuntimeType.GetMethod(
+    "LatchBackgroundStoreReconciliation", BindingFlags.Instance | BindingFlags.NonPublic)!;
+MethodInfo beginPendingStorage = autoPickupFeatureType.GetMethod(
+    "TryBeginPendingStorage", BindingFlags.Instance | BindingFlags.NonPublic)!;
+MethodInfo completePendingStorage = autoPickupFeatureType.GetMethod(
+    "CompletePendingStorage", BindingFlags.Instance | BindingFlags.NonPublic)!;
+MethodInfo backgroundStart = backgroundPersistenceType.GetMethod(
+    "Start", BindingFlags.Static | BindingFlags.NonPublic)!;
+MethodInfo resolveBackgroundCompletion = backgroundCompletionPolicyType.GetMethod(
+    "Resolve", BindingFlags.Static | BindingFlags.NonPublic)!;
+MethodInfo routeBackgroundCompletion = backgroundCompletionRouterType.GetMethod(
+    "Route", BindingFlags.Static | BindingFlags.NonPublic)!;
+Assert(backgroundStoreHandleType != null && beginBackgroundStore != null &&
+       completeBackgroundStore != null && latchBackgroundStore != null && beginPendingStorage != null &&
+       completePendingStorage != null && backgroundStart != null &&
+       backgroundCompletionResultType != null && backgroundCompletionRouterType != null &&
+       backgroundStoreHandleType.GetProperty("ConnectionKey", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+       backgroundStoreHandleType.GetProperty("PersistencePath", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+       backgroundStoreHandleType.GetProperty("TargetPersistence", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+       completeBackgroundStore.GetParameters()[2].ParameterType.GetElementType() == backgroundCompletionResultType &&
+       resolveBackgroundCompletion != null && routeBackgroundCompletion != null &&
+       ContainsDirectCall(beginBackgroundStore, backgroundStart.MetadataToken) &&
+       ContainsDirectCall(completeBackgroundStore, resolveBackgroundCompletion.MetadataToken) &&
+       ContainsDirectCall(beginPendingStorage, beginBackgroundStore.MetadataToken) &&
+       ContainsDirectCall(completePendingStorage, completeBackgroundStore.MetadataToken),
+    "AutoPickup Snapshot writes must use one isolated background persistence operation and apply the tested completion policy before world-drop finalization.");
+Assert(CountCallsByIdentity(product.Location,
+        "UnturnedSingleplayerCheatMenu.AutoPickup", "AutoPickupFeature", "CompletePendingStorage",
+        "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel",
+        "SnapshotBackgroundStoreCompletionRouter", "Route") == 1,
+    "The compiled AutoPickup completion path must route exactly once through the executable detached/current-session side-effect policy.");
+
+Type storageIdentityType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotStorageIdentity", true)!;
+Type groupIdentityType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.ItemGroupIdentity", true)!;
+Type itemSnapshotType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.ItemSnapshot", true)!;
+Type persistenceType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotPersistence", true)!;
+Type saveResultType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel.SnapshotSaveResult", true)!;
+MethodInfo saveSucceeded = saveResultType.GetMethod("Succeeded",
+    BindingFlags.Static | BindingFlags.NonPublic)!;
+MethodInfo saveFailed = saveResultType.GetMethod("Failed",
+    BindingFlags.Static | BindingFlags.NonPublic)!;
+MethodInfo taskFromResult = typeof(Task).GetMethods(BindingFlags.Static | BindingFlags.Public)
+    .Single(method => method.Name == "FromResult" && method.IsGenericMethodDefinition)
+    .MakeGenericMethod(saveResultType);
+ConstructorInfo backgroundConstructor = backgroundPersistenceType.GetConstructors(
+    BindingFlags.Instance | BindingFlags.NonPublic).Single();
+ConstructorInfo runtimeConstructor = snapshotRuntimeType.GetConstructors(
+    BindingFlags.Instance | BindingFlags.NonPublic)
+    .Single(constructor => constructor.GetParameters().Length == 1);
+ConstructorInfo handleConstructor = backgroundStoreHandleType.GetConstructors(
+    BindingFlags.Instance | BindingFlags.NonPublic).Single();
+FieldInfo activePersistenceField = snapshotRuntimeType.GetField("_activePersistence",
+    BindingFlags.Instance | BindingFlags.NonPublic)!;
+FieldInfo activePersistencePathField = snapshotRuntimeType.GetField("_activePersistencePath",
+    BindingFlags.Instance | BindingFlags.NonPublic)!;
+FieldInfo backgroundStoreField = snapshotRuntimeType.GetField("_backgroundStore",
+    BindingFlags.Instance | BindingFlags.NonPublic)!;
+MethodInfo invalidateHandle = backgroundStoreHandleType.GetMethod("InvalidateSession",
+    BindingFlags.Instance | BindingFlags.NonPublic)!;
+PropertyInfo completionDetached = backgroundCompletionResultType.GetProperty("SessionDetached",
+    BindingFlags.Instance | BindingFlags.NonPublic)!;
+PropertyInfo completionRequiresReconciliation = backgroundCompletionResultType.GetProperty(
+    "RequiresReconciliation", BindingFlags.Instance | BindingFlags.NonPublic)!;
+PropertyInfo completionMarkerPersisted = backgroundCompletionResultType.GetProperty(
+    "ReconciliationMarkerPersisted", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+object detachedSafeSave = saveFailed.Invoke(null,
+    new object[] { "detached-safe", false, string.Empty, string.Empty, string.Empty })!;
+object detachedSuccessfulSave = saveSucceeded.Invoke(null,
+    new object[] { string.Empty, string.Empty, string.Empty })!;
+object detachedUncertainSave = saveFailed.Invoke(null,
+    new object[] { "detached-uncertain", true, string.Empty, "old-candidate.json", string.Empty })!;
+var detachedCompletionCases = new[]
+{
+    new { Name = "safe", Save = detachedSafeSave, RequiresMarker = false },
+    new { Name = "success", Save = detachedSuccessfulSave, RequiresMarker = true },
+    new { Name = "uncertain", Save = detachedUncertainSave, RequiresMarker = true }
+};
+string detachedRoot = Path.Combine(Path.GetTempPath(),
+    "SnapshotRuntimeIntegrationSmoke-detached-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(detachedRoot);
+try
+{
+    foreach (var testCase in detachedCompletionCases)
+    {
+        string caseRoot = Path.Combine(detachedRoot, testCase.Name);
+        string oldPath = Path.Combine(caseRoot, "old", "snapshot.json");
+        string currentPath = Path.Combine(caseRoot, "current", "snapshot.json");
+        object oldPersistence = Activator.CreateInstance(persistenceType,
+            BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { oldPath }, null)!;
+        object currentPersistence = Activator.CreateInstance(persistenceType,
+            BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { currentPath }, null)!;
+        object backgroundTask = taskFromResult.Invoke(null, new[] { testCase.Save })!;
+        object backgroundPersistence = backgroundConstructor.Invoke(new[] { backgroundTask });
+        object storageIdentity = Activator.CreateInstance(storageIdentityType,
+            BindingFlags.Instance | BindingFlags.NonPublic, null,
+            new object[] { "old-world", "old-player" }, null)!;
+        object groupIdentity = Activator.CreateInstance(groupIdentityType,
+            BindingFlags.Instance | BindingFlags.NonPublic, null,
+            new object[] { (ushort)700, Guid.Parse("07000000-0000-0000-0000-000000000001") }, null)!;
+        object itemSnapshot = Activator.CreateInstance(itemSnapshotType,
+            BindingFlags.Instance | BindingFlags.NonPublic, null,
+            new object[] { (ushort)700, (byte)17, (byte)63, new byte[] { 4, 2, 9 } }, null)!;
+        object handle = handleConstructor.Invoke(new[]
+        {
+            storageIdentity, "old-connection", oldPath, oldPersistence,
+            groupIdentity, itemSnapshot, backgroundPersistence
+        });
+        invalidateHandle.Invoke(handle, null);
+        object runtime = runtimeConstructor.Invoke(new object[] { null });
+        activePersistenceField.SetValue(runtime, currentPersistence);
+        activePersistencePathField.SetValue(runtime, currentPath);
+        backgroundStoreField.SetValue(runtime, handle);
+        object[] completionArguments = { handle, true, null! };
+        Assert((bool)completeBackgroundStore.Invoke(runtime, completionArguments)! &&
+               completionArguments[2] != null,
+            "A pre-completed detached background store did not produce a completion result.");
+        object completion = completionArguments[2];
+        bool detached = (bool)completionDetached.GetValue(completion)!;
+        bool requiresReconciliation = (bool)completionRequiresReconciliation.GetValue(completion)!;
+        bool markerPersisted = (bool)completionMarkerPersisted.GetValue(completion)!;
+        bool oldMarkerExists = File.Exists(oldPath + ".reconciliation-required");
+        bool currentMarkerExists = File.Exists(currentPath + ".reconciliation-required");
+        Assert(detached && requiresReconciliation == testCase.RequiresMarker &&
+               markerPersisted == testCase.RequiresMarker &&
+               oldMarkerExists == testCase.RequiresMarker && !currentMarkerExists,
+            "Detached completion must write reconciliation only to its captured old path. case=" +
+            testCase.Name + " requires=" + requiresReconciliation + " marker=" + markerPersisted +
+            " old=" + oldMarkerExists + " current=" + currentMarkerExists);
+    }
+}
+finally
+{
+    Directory.Delete(detachedRoot, recursive: true);
+}
+ParameterInfo[] nativeExecuteParameters = nativePickupExecutorExecute.GetParameters();
+Assert(nativeExecuteParameters.Length == 3 &&
+       nativeExecuteParameters[2].ParameterType == typeof(bool) &&
+       nativeExecuteParameters[2].HasDefaultValue &&
+       Equals(nativeExecuteParameters[2].DefaultValue, true),
+    "Native fallback must expose an explicit switch that prevents a failed background stage from re-entering synchronous Snapshot persistence.");
 MethodInfo buildAutoPickupSettingsPage = infiniteStorageViewType.GetMethod("BuildAutoPickupSettingsPage",
     BindingFlags.Instance | BindingFlags.NonPublic)!;
 MethodInfo rawLastFailureGetter = product.GetType(
@@ -490,11 +730,80 @@ Assert(buildAutoPickupSettingsPage != null &&
 
 Type patch = product.GetType(
     "UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.Crafting.SnapshotCraftingPatch", true)!;
+Type craftingSearchPolicyType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.Crafting.SnapshotCraftingSearchPolicy", true)!;
+MethodInfo compiledShouldHandleSearchContents = craftingSearchPolicyType.GetMethod(
+    "ShouldHandleSearchContents", BindingFlags.Static | BindingFlags.NonPublic)!;
+MethodInfo compiledSearchContentsPostfix = patch.GetMethod("SearchContentsPostfix",
+    BindingFlags.Static | BindingFlags.NonPublic)!;
+Assert(compiledShouldHandleSearchContents != null && compiledSearchContentsPostfix != null &&
+       !(bool)compiledShouldHandleSearchContents.Invoke(null, new object[] { true, null, true })! &&
+       !(bool)compiledShouldHandleSearchContents.Invoke(null, new object[] { true, 0, true })! &&
+       (bool)compiledShouldHandleSearchContents.Invoke(null, new object[] { true, 1, true })! &&
+       ContainsDirectCall(compiledSearchContentsPostfix,
+           compiledShouldHandleSearchContents.MetadataToken),
+    "The compiled global SearchContents Postfix must call the null-safe crafting-context policy before it can reach the thread-local stack.");
 MethodInfo nativeSearch = typeof(PlayerCrafting).GetMethod("UpdateBlueprintInputItemStatus",
     BindingFlags.Instance | BindingFlags.NonPublic)!;
 MethodInfo nativeCraft = typeof(PlayerCrafting).GetMethod("HandleCraftRequestInternal",
     BindingFlags.Instance | BindingFlags.NonPublic)!;
 Assert(nativeSearch != null && nativeCraft != null, "Current Assembly-CSharp crafting targets must exist.");
+MethodInfo nativeForceAddItem = typeof(PlayerInventory).GetMethod("forceAddItem",
+    BindingFlags.Instance | BindingFlags.Public, null,
+    new[] { typeof(Item), typeof(bool) }, null)!;
+MethodInfo outputTranspiler = patch.GetMethod("OutputTranspiler",
+    BindingFlags.Static | BindingFlags.NonPublic)!;
+MethodInfo forceAddCraftedOutput = patch.GetMethod("ForceAddCraftedOutput",
+    BindingFlags.Static | BindingFlags.NonPublic)!;
+Assert(nativeForceAddItem != null &&
+       CountCallsByIdentity(typeof(PlayerCrafting).Assembly.Location,
+           "SDG.Unturned", "PlayerCrafting", "HandleCraftRequestInternal",
+           "SDG.Unturned", "PlayerInventory", "forceAddItem") == 2,
+    "Current HandleCraftRequestInternal must contain exactly the two proven native crafted-output grants.");
+Assert(CountCallsByIdentity(typeof(PlayerCrafting).Assembly.Location,
+           "SDG.Unturned", "UseableGun", "updateAttach",
+           "SDG.Unturned", "PlayerInventory", "FindAttachmentsByCaliber") == 5 &&
+       CountCallsByIdentity(typeof(PlayerCrafting).Assembly.Location,
+           "SDG.Unturned", "PlayerInventory", "FindAttachmentsByCaliber",
+           "SDG.Unturned", "PlayerInventory", "SearchContents") == 1,
+    "Current native attachment UI must retain its five slot searches through PlayerInventory.SearchContents.");
+Assert(outputTranspiler != null && forceAddCraftedOutput != null,
+    "Snapshot crafting must replace only the proven output grant call sites instead of globally patching PlayerInventory.forceAddItem.");
+CodeInstruction unrelatedInstruction = new CodeInstruction(OpCodes.Nop);
+CodeInstruction[] rewrittenOutputCalls = ((IEnumerable<CodeInstruction>)outputTranspiler.Invoke(null,
+    new object[]
+    {
+        new[]
+        {
+            new CodeInstruction(OpCodes.Callvirt, nativeForceAddItem),
+            unrelatedInstruction,
+            new CodeInstruction(OpCodes.Callvirt, nativeForceAddItem)
+        }
+    })!).ToArray();
+Assert(rewrittenOutputCalls.Count(instruction =>
+           instruction.opcode == OpCodes.Call && Equals(instruction.operand, forceAddCraftedOutput)) == 2 &&
+       rewrittenOutputCalls.All(instruction =>
+           !(instruction.opcode == OpCodes.Callvirt && Equals(instruction.operand, nativeForceAddItem))) &&
+       ReferenceEquals(rewrittenOutputCalls[1], unrelatedInstruction),
+    "The output transpiler must rewrite exactly the crafted-output grants and preserve unrelated IL instructions.");
+Type craftingBatchType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.Crafting.SnapshotCraftingBatch", true)!;
+Type craftingModuleType = product.GetType(
+    "UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.Crafting.SnapshotCraftingModule", true)!;
+FieldInfo craftingBatchField = patch.GetField("_batch",
+    BindingFlags.Static | BindingFlags.NonPublic)!;
+MethodInfo batchCommit = craftingBatchType.GetMethod("Commit",
+    BindingFlags.Instance | BindingFlags.NonPublic)!;
+MethodInfo outputFinalizer = patch.GetMethod("OutputFinalizer",
+    BindingFlags.Static | BindingFlags.NonPublic)!;
+Assert(craftingBatchField != null && craftingBatchField.FieldType == craftingBatchType &&
+       craftingBatchField.CustomAttributes.Any(attribute =>
+           attribute.AttributeType == typeof(ThreadStaticAttribute)) &&
+       craftingModuleType.GetMethod("BeginTransaction", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+       craftingModuleType.GetMethod("CommitBatch", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+       batchCommit != null && outputFinalizer != null &&
+       ContainsDirectCall(outputFinalizer, batchCommit.MetadataToken),
+    "One native craft invocation must share one thread-local Snapshot transaction and commit it once in the outer finalizer.");
 Type updateStatusParametersType = nativeSearch.GetParameters()[0].ParameterType.GetElementType()!;
 FieldInfo nativeStatusField = updateStatusParametersType.GetField("status",
     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
@@ -551,6 +860,30 @@ string craftingPatchSource = File.ReadAllText(Path.Combine(storageSource, "Adapt
 string craftingModuleSource = File.ReadAllText(Path.Combine(storageSource, "Adapters", "Crafting", "SnapshotCraftingModule.cs"));
 string decompositionModuleSource = File.ReadAllText(Path.Combine(storageSource, "Adapters", "Decomposition", "SnapshotDecompositionModule.cs"));
 string pluginSource = File.ReadAllText(Path.Combine(root, "src", "UnturnedSingleplayerCheatMenu", "CheatMenuPlugin.cs"));
+Assert(runtimeSource.Contains("public bool IsOperational => Enabled && RuntimeSessionBoundary.CaptureCurrent().CanUseSnapshotStorage", StringComparison.Ordinal) &&
+       runtimeSource.Contains("public SnapshotKernelTransaction BeginTransaction() => IsOperational", StringComparison.Ordinal),
+    "Snapshot runtime entry points must fail closed immediately after leaving true singleplayer, before the next Pump.");
+Assert(runtimeSource.Contains("RuntimeSessionBoundary.CaptureConnectionKey(state)", StringComparison.Ordinal) &&
+       runtimeSource.Contains("handle.InvalidateSession();", StringComparison.Ordinal) &&
+       runtimeSource.Contains("IsBackgroundStoreSessionCurrent(handle)", StringComparison.Ordinal) &&
+       runtimeSource.Contains("LatchReconciliationAt(handle.PersistencePath", StringComparison.Ordinal) &&
+       runtimeSource.Contains("handle.TargetPersistence", StringComparison.Ordinal) &&
+       autoPickupRuntimeSource.Contains("SnapshotBackgroundStoreCompletionRouter.Route(", StringComparison.Ordinal) &&
+       autoPickupRuntimeSource.Contains("BuildDetachedBackgroundStoreAttempt", StringComparison.Ordinal),
+    "A background Snapshot store must bind its origin connection and old persistence target, then abandon all current-session effects after a boundary change.");
+int moduleCommitStart = runtimeSource.IndexOf("public SnapshotTransactionCommitResult Commit(", StringComparison.Ordinal);
+int checkpointRestoreStart = runtimeSource.IndexOf("public SnapshotKernelCheckpoint CaptureCheckpoint()", moduleCommitStart, StringComparison.Ordinal);
+string moduleCommitBody = runtimeSource.Substring(moduleCommitStart, checkpointRestoreStart - moduleCommitStart);
+Assert(moduleCommitBody.Contains("if (!IsOperational)", StringComparison.Ordinal) &&
+       moduleCommitBody.Contains("transaction?.Rollback()", StringComparison.Ordinal),
+    "A Snapshot module transaction must roll back rather than persist if the session leaves true singleplayer before commit.");
+int restoreCheckpointStart = runtimeSource.IndexOf("public SnapshotTransactionCommitResult RestoreCheckpointAndPersist", StringComparison.Ordinal);
+int storeSnapshotBoundary = runtimeSource.IndexOf("public SnapshotMutationResult StoreSnapshot", restoreCheckpointStart, StringComparison.Ordinal);
+string restoreCheckpointBody = runtimeSource.Substring(restoreCheckpointStart, storeSnapshotBoundary - restoreCheckpointStart);
+int commitWithReconciliationStart = runtimeSource.IndexOf("private SnapshotTransactionCommitResult CommitWithReconciliation", StringComparison.Ordinal);
+Assert(restoreCheckpointBody.Contains("if (!IsOperational)", StringComparison.Ordinal) &&
+       runtimeSource.IndexOf("if (!IsOperational)", commitWithReconciliationStart, StringComparison.Ordinal) > commitWithReconciliationStart,
+    "Snapshot persistence and rollback entry points must re-check true-singleplayer capability at their final write boundary.");
 int firstAmmoRefreshCall = pluginSource.IndexOf("_snapshotAmmoRefillModule.RefreshAssets();", StringComparison.Ordinal);
 int assetRefreshHandler = pluginSource.IndexOf("internal void HandleAssetsRefreshed()", StringComparison.Ordinal);
 Assert(firstAmmoRefreshCall < 0 && assetRefreshHandler >= 0 &&
@@ -624,7 +957,12 @@ Assert(craftingPatchSource.Contains("SnapshotCraftingAbortCoordinator.Execute", 
        craftingPatchSource.Contains("restoreStorage:", StringComparison.Ordinal) &&
        craftingPatchSource.Contains("restoreNative:", StringComparison.Ordinal) &&
        craftingPatchSource.Contains("SnapshotCraftingRollbackGate.Execute", StringComparison.Ordinal) &&
-       craftingPatchSource.Contains("if (SnapshotCraftingRollbackGate.IsActive) return true;", StringComparison.Ordinal),
+       craftingPatchSource.Contains("SnapshotCraftingRollbackGate.IsActive", StringComparison.Ordinal) &&
+       craftingPatchSource.Contains("nameof(OutputTranspiler)", StringComparison.Ordinal) &&
+       craftingPatchSource.Contains("ForceAddCraftedOutput", StringComparison.Ordinal) &&
+       !craftingPatchSource.Contains(
+           "harmony.Patch(AccessTools.Method(typeof(PlayerInventory), \"forceAddItem\"",
+           StringComparison.Ordinal),
     "The Harmony crafting finalizer bypasses the tested storage-first abort coordinator.");
 Assert(craftingModuleSource.Contains("RegisterDefaultTemplate", StringComparison.Ordinal) &&
        decompositionModuleSource.Contains("RegisterDefaultTemplate", StringComparison.Ordinal),

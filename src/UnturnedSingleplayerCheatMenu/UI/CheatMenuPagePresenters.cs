@@ -38,10 +38,12 @@ internal sealed class CharacterPageSnapshot
 internal sealed class CharacterPagePresenter
 {
 	private readonly CheatActions _actions;
+	private readonly Func<string, bool> _ensureGameplayAccess;
 
-	internal CharacterPagePresenter(CheatActions actions)
+	internal CharacterPagePresenter(CheatActions actions, Func<string, bool> ensureGameplayAccess)
 	{
 		_actions = actions ?? throw new ArgumentNullException(nameof(actions));
+		_ensureGameplayAccess = ensureGameplayAccess ?? throw new ArgumentNullException(nameof(ensureGameplayAccess));
 	}
 
 	internal CharacterPageSnapshot CaptureSnapshot()
@@ -67,16 +69,24 @@ internal sealed class CharacterPagePresenter
 			_actions.InfiniteNeedsEnabled);
 	}
 
-	internal void SetGodMode(bool value) => _actions.SetGodMode(value);
-	internal void SetInfiniteNeeds(bool value) => _actions.SetInfiniteNeeds(value);
+	internal void SetGodMode(bool value)
+	{
+		if (!value || _ensureGameplayAccess(GlobalShortcutActions.ToggleGodMode)) _actions.SetGodMode(value);
+	}
+	internal void SetInfiniteNeeds(bool value)
+	{
+		if (!value || _ensureGameplayAccess(GlobalShortcutActions.ToggleInfiniteNeeds)) _actions.SetInfiniteNeeds(value);
+	}
 	internal bool SetLifeStats(byte health, byte food, byte water, byte virus, byte stamina, byte oxygen) =>
-		_actions.SetLifeStats(health, food, water, virus, stamina, oxygen);
-	internal bool RestoreEverything() => _actions.RestoreEverything();
-	internal bool RefillNeeds() => _actions.RefillNeeds();
-	internal bool CureInjuries() => _actions.CureInjuries();
-	internal bool AddExperience(uint amount) => _actions.AddExperience(amount);
-	internal bool AddReputation(int amount) => _actions.AddReputation(amount);
-	internal int MaxAllSkills() => _actions.MaxAllSkills();
+		_ensureGameplayAccess("character.life-stats") && _actions.SetLifeStats(health, food, water, virus, stamina, oxygen);
+	internal bool RestoreEverything() =>
+		_ensureGameplayAccess(GlobalShortcutActions.RestoreEverything) && _actions.RestoreEverything();
+	internal bool RefillNeeds() =>
+		_ensureGameplayAccess(GlobalShortcutActions.RefillNeeds) && _actions.RefillNeeds();
+	internal bool CureInjuries() => _ensureGameplayAccess("character.cure-injuries") && _actions.CureInjuries();
+	internal bool AddExperience(uint amount) => _ensureGameplayAccess("character.add-experience") && _actions.AddExperience(amount);
+	internal bool AddReputation(int amount) => _ensureGameplayAccess("character.add-reputation") && _actions.AddReputation(amount);
+	internal int MaxAllSkills() => _ensureGameplayAccess("character.max-skills") ? _actions.MaxAllSkills() : 0;
 }
 
 internal sealed class WorldPageSnapshot

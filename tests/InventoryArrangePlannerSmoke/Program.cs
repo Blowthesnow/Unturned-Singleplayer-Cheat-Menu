@@ -596,4 +596,10 @@ IReadOnlyList<InventoryHotkeyBindingState> swapped = InventoryHotkeyBindingPolic
 Check(swapped[0].Address == new InventoryItemAddress(4, 2, 0) && swapped[1].Address == new InventoryItemAddress(3, 1, 0),
     "Swapping two bound items must swap both hotkey bindings without clearing either binding.");
 
+string inventoryFeatureSource = File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "src",
+    "UnturnedSingleplayerCheatMenu", "InventoryArrange", "InventoryArrangeFeature.cs"));
+Check(inventoryFeatureSource.Contains("_journalConnectionKey = _connectionKey();", StringComparison.Ordinal) &&
+      inventoryFeatureSource.Contains("!string.Equals(_journalConnectionKey, _connectionKey(), StringComparison.Ordinal)", StringComparison.Ordinal),
+    "Inventory arrange Undo must fail closed after the connection key changes.");
+
 Console.WriteLine("Inventory arrange planner smoke checks passed.");

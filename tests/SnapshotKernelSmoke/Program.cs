@@ -56,6 +56,27 @@ static long CountExact(SnapshotDocument document, ItemGroupIdentity identity, It
             (bucket.State ?? Array.Empty<byte>()).SequenceEqual(snapshot.State))
         .Sum(bucket => bucket.Count);
 
+static void AssertBackgroundRoute(SnapshotBackgroundStoreCompletionResult completion,
+    string expected)
+{
+    int detached = 0;
+    int committed = 0;
+    int safeFailure = 0;
+    int uncertain = 0;
+    string actual = SnapshotBackgroundStoreCompletionRouter.Route(completion,
+        onDetached: () => { detached++; return "detached"; },
+        onCommittedCurrentSession: () => { committed++; return "committed"; },
+        onSafeFailureCurrentSession: () => { safeFailure++; return "safe"; },
+        onUncertainCurrentSession: () => { uncertain++; return "uncertain"; });
+    Assert(actual == expected && detached + committed + safeFailure + uncertain == 1 &&
+           detached == (expected == "detached" ? 1 : 0) &&
+           committed == (expected == "committed" ? 1 : 0) &&
+           safeFailure == (expected == "safe" ? 1 : 0) &&
+           uncertain == (expected == "uncertain" ? 1 : 0),
+        "Background completion routed to an unexpected or duplicate side-effect branch. expected=" +
+        expected + " actual=" + actual);
+}
+
 static string FileSha256(string path) => Convert.ToHexString(
     System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
 
@@ -84,6 +105,16 @@ ItemGroupView mergedGroup = kernel.GetGroups().Single();
 Assert(mergedGroup.TotalCount == 5 && mergedGroup.Buckets.Count == 1 &&
        mergedGroup.Buckets[0].Count == 5,
     "Identical native snapshots must merge by instance count rather than by amount units.");
+Assert(kernel.TryGetGroup(group, out ItemGroupView pointLookupGroup) &&
+       pointLookupGroup.TotalCount == 5 && pointLookupGroup.Buckets.Count == 1 &&
+       !kernel.TryGetGroup(new ItemGroupIdentity(group.AssetId,
+           Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff")), out _),
+    "Point lookup must return one exact ID/GUID group without scanning or exporting the complete warehouse.");
+byte[] pointLookupState = pointLookupGroup.Buckets[0].Snapshot.State;
+pointLookupState[0] ^= 0xff;
+Assert(kernel.TryGetGroup(group, out ItemGroupView freshPointLookupGroup) &&
+       freshPointLookupGroup.Buckets[0].Snapshot.State.SequenceEqual(new byte[] { 1, 2, 3 }),
+    "Point lookup must keep the same deep-copy boundary as the full presentation snapshot.");
 
 Assert(kernel.Store(group, Snapshot(100, 9, 80, 1, 2, 3), 1).Success &&
        kernel.Store(group, Snapshot(100, 10, 79, 1, 2, 3), 1).Success &&
@@ -242,11 +273,21 @@ Assert(SnapshotRuntimeIdentity.TryCreate("Singleplayer_0", "PEI", "7656119800000
     "The same native identity must be stable across repeated resolution.");
 Assert(!SnapshotRuntimeIdentity.TryCreate("DedicatedServer", "PEI", "76561198000000001",
            0, 0, false, out _, out _) &&
+       !SnapshotRuntimeIdentity.TryCreate("PublicServer", "PEI", "76561198000000001",
+           0, 0, false, out _, out _) &&
        !SnapshotRuntimeIdentity.TryCreate("Singleplayer_0", "PEI", "76561198000000001",
            0, 1, false, out _, out _) &&
        !SnapshotRuntimeIdentity.TryCreate("Singleplayer_5", "PEI", "76561198000000001",
            5, 5, false, out _, out _),
-    "Non-singleplayer, mismatched, and out-of-range character identities must fail closed.");
+    "Dedicated, multiplayer, mismatched, and out-of-range character identities must fail closed.");
+
+for (byte slot = 0; slot < 5; slot++)
+{
+    Assert(SnapshotRuntimeIdentity.TryCreate("Singleplayer_" + slot, "PEI", "76561198000000001",
+               slot, slot, false, out SnapshotStorageIdentity stableIdentity, out string stableError) &&
+           stableIdentity.WorldKey.Length > 0 && stableIdentity.PlayerKey.Length > 0,
+        "Existing Singleplayer_0 through Singleplayer_4 identities must remain valid. Slot=" + slot + "; error=" + stableError);
+}
 
 SnapshotActivationAttemptPolicy activationPolicy = new SnapshotActivationAttemptPolicy();
 Assert(activationPolicy.ShouldAttempt(slotZero), "The first activation attempt should be allowed.");
@@ -1934,6 +1975,148 @@ finally
 {
     Directory.Delete(persistenceRoot, true);
 }
+
+ManualResetEventSlim backgroundStarted = new ManualResetEventSlim(false);
+ManualResetEventSlim releaseBackground = new ManualResetEventSlim(false);
+int callerThreadId = Environment.CurrentManagedThreadId;
+int persistenceThreadId = callerThreadId;
+SnapshotStorageIdentity backgroundIdentity = new SnapshotStorageIdentity(
+    "background-world", "background-player");
+SnapshotDocument backgroundDocument = SnapshotDocument.Empty(backgroundIdentity);
+SnapshotBackgroundPersistence backgroundPersistence = SnapshotBackgroundPersistence.Start(
+    backgroundDocument, document =>
+    {
+        persistenceThreadId = Environment.CurrentManagedThreadId;
+        backgroundStarted.Set();
+        releaseBackground.Wait();
+        return ReferenceEquals(document, backgroundDocument)
+            ? SnapshotSaveResult.Succeeded()
+            : SnapshotSaveResult.Failed("background-document-changed");
+    });
+Assert(backgroundStarted.Wait(TimeSpan.FromSeconds(5)) &&
+       persistenceThreadId != callerThreadId && !backgroundPersistence.IsCompleted,
+    "Background Snapshot persistence must start off the caller thread and return before the gated save completes.");
+Assert(!backgroundPersistence.TryGetResult(out _),
+    "A gated background save must not report a result before persistence finishes.");
+releaseBackground.Set();
+SnapshotSaveResult backgroundResult = backgroundPersistence.WaitForResult();
+Assert(backgroundResult.Success && backgroundPersistence.IsCompleted &&
+       backgroundPersistence.TryGetResult(out SnapshotSaveResult repeatedBackgroundResult) &&
+       ReferenceEquals(backgroundResult, repeatedBackgroundResult),
+    "Background Snapshot persistence must publish one stable successful result after completion.");
+
+SnapshotBackgroundPersistence throwingBackground = SnapshotBackgroundPersistence.Start(
+    backgroundDocument, _ => throw new IOException("injected-background-save-failure"));
+SnapshotSaveResult throwingBackgroundResult = throwingBackground.WaitForResult();
+Assert(!throwingBackgroundResult.Success && throwingBackgroundResult.MayHaveCommitted &&
+       throwingBackgroundResult.ErrorCode == "background-persistence-threw:IOException",
+    "An unexpected background persistence exception must fail closed as a possibly committed write.");
+
+int backgroundApplyCalls = 0;
+SnapshotBackgroundStoreCompletionResult safeBackgroundCompletion =
+    SnapshotBackgroundStoreCompletionPolicy.Resolve(
+        SnapshotSaveResult.Failed("background-safe-failure"), sessionCurrent: true,
+        () => { backgroundApplyCalls++; return SnapshotMutationResult.Succeeded(); });
+SnapshotTransactionCommitResult safeBackgroundFailure = safeBackgroundCompletion.Transaction;
+Assert(safeBackgroundCompletion.Disposition == SnapshotBackgroundStoreDisposition.SafeFailureCurrentSession &&
+       !safeBackgroundFailure.Success && safeBackgroundFailure.RollbackSucceeded && backgroundApplyCalls == 0,
+    "A definitely uncommitted background save must keep memory unchanged and permit native fallback.");
+SnapshotBackgroundStoreCompletionResult uncertainBackgroundCompletion =
+    SnapshotBackgroundStoreCompletionPolicy.Resolve(
+        SnapshotSaveResult.Failed("background-uncertain", mayHaveCommitted: true,
+            recoveryBackupPath: "A.json", candidateRecoveryPath: "B.json",
+            candidateHistoryRecoveryPath: "C.json"),
+        sessionCurrent: true,
+        () => { backgroundApplyCalls++; return SnapshotMutationResult.Succeeded(); });
+SnapshotTransactionCommitResult uncertainBackgroundFailure = uncertainBackgroundCompletion.Transaction;
+Assert(!uncertainBackgroundFailure.Success && !uncertainBackgroundFailure.RollbackSucceeded &&
+       uncertainBackgroundCompletion.Disposition == SnapshotBackgroundStoreDisposition.UncertainCurrentSession &&
+       uncertainBackgroundFailure.RecoveryBackupPath == "A.json" &&
+       uncertainBackgroundFailure.CandidateRecoveryPath == "B.json" &&
+       uncertainBackgroundFailure.CandidateHistoryRecoveryPath == "C.json" &&
+       backgroundApplyCalls == 0,
+    "An uncertain background save must preserve A/B/C evidence and forbid in-memory apply/native fallback.");
+SnapshotBackgroundStoreCompletionResult successfulBackgroundCompletion =
+    SnapshotBackgroundStoreCompletionPolicy.Resolve(SnapshotSaveResult.Succeeded(), sessionCurrent: true,
+        () => { backgroundApplyCalls++; return SnapshotMutationResult.Succeeded(); });
+SnapshotTransactionCommitResult successfulBackgroundApply = successfulBackgroundCompletion.Transaction;
+Assert(successfulBackgroundCompletion.Disposition == SnapshotBackgroundStoreDisposition.CommittedCurrentSession &&
+       successfulBackgroundCompletion.CanFinalizeWorldDrop && !successfulBackgroundCompletion.CanUseNativeFallback &&
+       successfulBackgroundApply.Success && backgroundApplyCalls == 1,
+    "A durable background save must apply its exact mutation to memory once.");
+SnapshotBackgroundStoreCompletionResult failedBackgroundCompletion =
+    SnapshotBackgroundStoreCompletionPolicy.Resolve(
+        SnapshotSaveResult.Succeeded(recoveryBackupPath: "persisted-A.json"),
+        sessionCurrent: true,
+        () => SnapshotMutationResult.Failed("injected-memory-apply-failure"));
+SnapshotTransactionCommitResult failedBackgroundApply = failedBackgroundCompletion.Transaction;
+Assert(!failedBackgroundApply.Success && !failedBackgroundApply.RollbackSucceeded &&
+       failedBackgroundCompletion.Disposition == SnapshotBackgroundStoreDisposition.UncertainCurrentSession &&
+       failedBackgroundApply.ErrorCode ==
+           "background-memory-apply-failed:injected-memory-apply-failure" &&
+       failedBackgroundApply.RecoveryBackupPath == "persisted-A.json",
+    "If durable state cannot be mirrored into memory, mutations must lock with recovery evidence.");
+
+int detachedApplyCalls = 0;
+SnapshotBackgroundStoreCompletionResult detachedSafeFailure =
+    SnapshotBackgroundStoreCompletionPolicy.Resolve(
+        SnapshotSaveResult.Failed("detached-before-commit"), sessionCurrent: false,
+        () => { detachedApplyCalls++; return SnapshotMutationResult.Succeeded(); });
+Assert(detachedSafeFailure.Disposition == SnapshotBackgroundStoreDisposition.DetachedBeforeCommit &&
+       detachedSafeFailure.Transaction.RollbackSucceeded && detachedSafeFailure.SessionDetached &&
+       !detachedSafeFailure.CanFinalizeWorldDrop && !detachedSafeFailure.CanUseNativeFallback &&
+       !detachedSafeFailure.RequiresReconciliation && detachedApplyCalls == 0,
+    "A detached definitely-uncommitted save must be abandoned without touching either session.");
+SnapshotBackgroundStoreCompletionResult detachedSuccess =
+    SnapshotBackgroundStoreCompletionPolicy.Resolve(
+        SnapshotSaveResult.Succeeded(recoveryBackupPath: "old-session-A.json"), sessionCurrent: false,
+        () => { detachedApplyCalls++; return SnapshotMutationResult.Succeeded(); });
+Assert(detachedSuccess.Disposition == SnapshotBackgroundStoreDisposition.DetachedCommittedOrUncertain &&
+       !detachedSuccess.Transaction.Success && !detachedSuccess.Transaction.RollbackSucceeded &&
+       detachedSuccess.RequiresReconciliation && detachedApplyCalls == 0 &&
+       detachedSuccess.Transaction.RecoveryBackupPath == "old-session-A.json",
+    "A detached successful save must never apply to memory and must require old-session reconciliation.");
+SnapshotBackgroundStoreCompletionResult detachedUncertain =
+    SnapshotBackgroundStoreCompletionPolicy.Resolve(
+        SnapshotSaveResult.Failed("detached-uncertain", mayHaveCommitted: true,
+            candidateRecoveryPath: "old-session-B.json"), sessionCurrent: false,
+        () => { detachedApplyCalls++; return SnapshotMutationResult.Succeeded(); });
+Assert(detachedUncertain.Disposition == SnapshotBackgroundStoreDisposition.DetachedCommittedOrUncertain &&
+       detachedUncertain.RequiresReconciliation && !detachedUncertain.Transaction.RollbackSucceeded &&
+       detachedUncertain.Transaction.CandidateRecoveryPath == "old-session-B.json" && detachedApplyCalls == 0,
+    "A detached uncertain save must preserve old-session evidence and forbid all current-session effects.");
+AssertBackgroundRoute(successfulBackgroundCompletion, "committed");
+AssertBackgroundRoute(safeBackgroundCompletion, "safe");
+AssertBackgroundRoute(uncertainBackgroundCompletion, "uncertain");
+AssertBackgroundRoute(failedBackgroundCompletion, "uncertain");
+AssertBackgroundRoute(detachedSafeFailure, "detached");
+AssertBackgroundRoute(detachedSuccess, "detached");
+AssertBackgroundRoute(detachedUncertain, "detached");
+
+SnapshotDocument directStage = SnapshotDocument.Empty(backgroundIdentity);
+ItemGroupIdentity directStageIdentity = new ItemGroupIdentity(700,
+    Guid.Parse("07000000-0000-0000-0000-000000000001"));
+ItemSnapshot directStageSnapshot = Snapshot(700, 17, 63, 4, 2, 9);
+Assert(SnapshotDocumentMutation.TryStoreExact(directStage, directStageIdentity,
+        directStageSnapshot, 1).Success &&
+       CountExact(directStage, directStageIdentity, directStageSnapshot) == 1,
+    "Direct background staging must add one exact snapshot to an isolated document.");
+Assert(SnapshotDocumentMutation.TryStoreExact(directStage, directStageIdentity,
+        directStageSnapshot, 2).Success &&
+       CountExact(directStage, directStageIdentity, directStageSnapshot) == 3,
+    "Direct background staging must merge only an exact amount/quality/state bucket.");
+string directStageBeforeConflict = SnapshotDocumentCodec.Serialize(directStage);
+Assert(!SnapshotDocumentMutation.TryStoreExact(directStage,
+        new ItemGroupIdentity(700, Guid.Parse("07000000-0000-0000-0000-000000000002")),
+        directStageSnapshot, 1).Success &&
+       SnapshotDocumentCodec.Serialize(directStage) == directStageBeforeConflict,
+    "Direct background staging must reject an AssetId/GUID conflict without mutating the document.");
+directStage.Groups.Single().Buckets.Single().Count = long.MaxValue;
+string directStageBeforeOverflow = SnapshotDocumentCodec.Serialize(directStage);
+Assert(!SnapshotDocumentMutation.TryStoreExact(directStage, directStageIdentity,
+        directStageSnapshot, 1).Success &&
+       SnapshotDocumentCodec.Serialize(directStage) == directStageBeforeOverflow,
+    "Direct background staging must reject count overflow without mutating the document.");
 
 Console.WriteLine("Snapshot kernel core smoke checks passed.");
 

@@ -20,6 +20,8 @@ internal interface IShellUiFeature
 	float UiScale { get; }
 	string ShortcutLabel { get; }
 	string CurrentMap { get; }
+	RuntimeSessionKind SessionKind { get; }
+	bool MultiplayerRiskAcknowledged { get; }
 	string SelectedFontFamily { get; }
 	Vector2 NormalizedWindowPosition { get; }
 	Font ResolveFont();
@@ -27,6 +29,7 @@ internal interface IShellUiFeature
 	bool TrySetFontFamily(string fontFamily, out bool persisted, out string error);
 	void CloseMenu();
 	void CloseInfiniteStorage();
+	void AcknowledgeMultiplayerRisk();
 	void SetWindowPosition(Vector2 position);
 	bool SetLastMainTab(string value);
 	bool SetLastTeleportView(string value);
@@ -265,9 +268,13 @@ internal sealed class PluginUiFeatureAdapter :
 	internal PluginUiFeatureAdapter(CheatMenuPlugin plugin) =>
 		_plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
 
+	private bool EnsureGameplayAccess(string actionId) => _plugin.EnsureGameplayAccess(actionId, "UI");
+
 	float IShellUiFeature.UiScale => _plugin.UiScale;
 	string IShellUiFeature.ShortcutLabel => _plugin.ShortcutLabel;
 	string IShellUiFeature.CurrentMap => Provider.map ?? string.Empty;
+	RuntimeSessionKind IShellUiFeature.SessionKind => _plugin.CurrentSessionState.Kind;
+	bool IShellUiFeature.MultiplayerRiskAcknowledged => _plugin.IsMultiplayerRiskAcknowledged;
 	string IShellUiFeature.SelectedFontFamily => _plugin.SelectedFontFamily;
 	Vector2 IShellUiFeature.NormalizedWindowPosition => _plugin.NormalizedWindowPosition;
 	Font IShellUiFeature.ResolveFont() => SystemFontProvider.Resolve(_plugin.PluginLogger);
@@ -276,6 +283,7 @@ internal sealed class PluginUiFeatureAdapter :
 		_plugin.TrySetFontFamily(fontFamily, out persisted, out error);
 	void IShellUiFeature.CloseMenu() => _plugin.CloseMenu();
 	void IShellUiFeature.CloseInfiniteStorage() => _plugin.CloseInfiniteStorage();
+	void IShellUiFeature.AcknowledgeMultiplayerRisk() => _plugin.AcknowledgeMultiplayerRisk();
 	void IShellUiFeature.SetWindowPosition(Vector2 position) => _plugin.SetWindowPosition(position);
 	bool IShellUiFeature.SetLastMainTab(string value) => _plugin.SetLastMainTab(value);
 	bool IShellUiFeature.SetLastTeleportView(string value) => _plugin.SetLastTeleportView(value);
@@ -295,8 +303,10 @@ internal sealed class PluginUiFeatureAdapter :
 	bool ICatalogUiFeature.IsVehicleFavorite(VehicleAsset asset) => _plugin.Favorites?.IsVehicleFavorite(asset) ?? false;
 	bool ICatalogUiFeature.TrySetItemFavorite(ItemAsset asset, bool value) => _plugin.Favorites?.TrySetItemFavorite(asset, value) ?? false;
 	bool ICatalogUiFeature.TrySetVehicleFavorite(VehicleAsset asset, bool value) => _plugin.Favorites?.TrySetVehicleFavorite(asset, value) ?? false;
-	bool ICatalogUiFeature.GiveItem(ItemAsset asset, byte amount) => _plugin.Actions.GiveItem(asset, amount);
-	int ICatalogUiFeature.SpawnVehicles(VehicleAsset asset, int amount) => _plugin.Actions.SpawnVehicles(asset, amount);
+	bool ICatalogUiFeature.GiveItem(ItemAsset asset, byte amount) =>
+		EnsureGameplayAccess("catalog.give-item") && _plugin.Actions.GiveItem(asset, amount);
+	int ICatalogUiFeature.SpawnVehicles(VehicleAsset asset, int amount) =>
+		EnsureGameplayAccess("catalog.spawn-vehicle") ? _plugin.Actions.SpawnVehicles(asset, amount) : 0;
 	bool ICatalogUiFeature.ApplyVehicleThumbnailSettings(int width, float framing) => _plugin.ApplyVehicleThumbnailSettings(width, framing);
 	void ICatalogUiFeature.RefreshCatalog() => _plugin.RefreshCatalog();
 	bool ICatalogUiFeature.TryGetOriginal(object instance, WorkshopTextField field, out string source)
@@ -321,8 +331,10 @@ internal sealed class PluginUiFeatureAdapter :
 		position = player.transform.position;
 		return true;
 	}
-	bool ITeleportUiFeature.TeleportToMapPosition(Vector3 position) => _plugin.Actions.TeleportToMapPosition(position);
-	bool ITeleportUiFeature.Teleport(TeleportPoint point) => _plugin.Actions.Teleport(point);
+	bool ITeleportUiFeature.TeleportToMapPosition(Vector3 position) =>
+		EnsureGameplayAccess("teleport.map") && _plugin.Actions.TeleportToMapPosition(position);
+	bool ITeleportUiFeature.Teleport(TeleportPoint point) =>
+		EnsureGameplayAccess("teleport.saved") && _plugin.Actions.Teleport(point);
 
 	uint IWorldUiFeature.Cycle => Math.Max(1u, LightingManager.cycle);
 	uint IWorldUiFeature.Time => LightingManager.time;
@@ -332,19 +344,22 @@ internal sealed class PluginUiFeatureAdapter :
 	int IWorldUiFeature.WorkshopItemCount => _plugin.Catalog?.WorkshopItemCount ?? 0;
 	int IWorldUiFeature.VehicleCount => _plugin.Catalog?.Vehicles.Count ?? 0;
 	int IWorldUiFeature.WorkshopVehicleCount => _plugin.Catalog?.WorkshopVehicleCount ?? 0;
-	void IWorldUiFeature.SetTime(uint value) => _plugin.Actions.SetTime(value);
-	void IWorldUiFeature.SetDay() => _plugin.Actions.SetDay();
-	void IWorldUiFeature.SetNight() => _plugin.Actions.SetNight();
-	void IWorldUiFeature.SetFreezeTime(bool value) => _plugin.Actions.SetFreezeTime(value);
-	void IWorldUiFeature.SetFullMoon(bool value) => _plugin.Actions.SetFullMoon(value);
-	bool IWorldUiFeature.CallAirdrop() => _plugin.Actions.CallAirdrop();
-	bool IWorldUiFeature.StartRain() => _plugin.Actions.StartRain();
-	bool IWorldUiFeature.StartSnow() => _plugin.Actions.StartSnow();
-	void IWorldUiFeature.ClearWeather() => _plugin.Actions.ClearWeather();
-	void IWorldUiFeature.DisableWeather() => _plugin.Actions.DisableWeather();
+	void IWorldUiFeature.SetTime(uint value) { if (EnsureGameplayAccess("world.set-time")) _plugin.Actions.SetTime(value); }
+	void IWorldUiFeature.SetDay() { if (EnsureGameplayAccess(GlobalShortcutActions.SetDay)) _plugin.Actions.SetDay(); }
+	void IWorldUiFeature.SetNight() { if (EnsureGameplayAccess(GlobalShortcutActions.SetNight)) _plugin.Actions.SetNight(); }
+	void IWorldUiFeature.SetFreezeTime(bool value)
+	{
+		if (!value || EnsureGameplayAccess(GlobalShortcutActions.ToggleFreezeTime)) _plugin.Actions.SetFreezeTime(value);
+	}
+	void IWorldUiFeature.SetFullMoon(bool value) { if (EnsureGameplayAccess(GlobalShortcutActions.ToggleFullMoon)) _plugin.Actions.SetFullMoon(value); }
+	bool IWorldUiFeature.CallAirdrop() => EnsureGameplayAccess(GlobalShortcutActions.CallAirdrop) && _plugin.Actions.CallAirdrop();
+	bool IWorldUiFeature.StartRain() => EnsureGameplayAccess("world.start-rain") && _plugin.Actions.StartRain();
+	bool IWorldUiFeature.StartSnow() => EnsureGameplayAccess("world.start-snow") && _plugin.Actions.StartSnow();
+	void IWorldUiFeature.ClearWeather() { if (EnsureGameplayAccess(GlobalShortcutActions.ClearWeather)) _plugin.Actions.ClearWeather(); }
+	void IWorldUiFeature.DisableWeather() { if (EnsureGameplayAccess(GlobalShortcutActions.DisableWeather)) _plugin.Actions.DisableWeather(); }
 	void IWorldUiFeature.RefreshCatalog() => _plugin.RefreshCatalog();
 
-	bool IInfiniteStorageUiFeature.IsAvailable => _plugin.InfiniteStorage != null;
+	bool IInfiniteStorageUiFeature.IsAvailable => _plugin.InfiniteStorage != null && _plugin.CanUseSnapshotStorage;
 	bool IInfiniteStorageUiFeature.Enabled => _plugin.InfiniteStorage?.Enabled ?? false;
 	bool IInfiniteStorageUiFeature.PickupPriorityEnabled => _plugin.IsInfiniteStoragePickupPriorityEnabled;
 	bool IInfiniteStorageUiFeature.DestructionWarningAcknowledged =>
@@ -439,14 +454,19 @@ internal sealed class PluginUiFeatureAdapter :
 	void IInventoryUiFeature.SetProtectEquipped(bool value) => _plugin.SetInventoryArrangeProtectEquipped(value);
 	void IInventoryUiFeature.SetFixHotkeyItems(bool value) => _plugin.SetInventoryArrangeFixHotkeyItems(value);
 	InventoryArrangeResult IInventoryUiFeature.Execute(InventoryArrangeScope scope, InventoryArrangeAction action, bool preview) =>
-		preview ? _plugin.InventoryArrange?.Preview(scope, action) : _plugin.InventoryArrange?.Execute(scope, action, "工具页");
-	InventoryArrangeResult IInventoryUiFeature.Undo() => _plugin.InventoryArrange?.Undo();
+		preview ? _plugin.InventoryArrange?.Preview(scope, action) :
+		(EnsureGameplayAccess("inventory.arrange") ? _plugin.InventoryArrange?.Execute(scope, action, "工具页") : null);
+	InventoryArrangeResult IInventoryUiFeature.Undo() =>
+		EnsureGameplayAccess("inventory.undo") ? _plugin.InventoryArrange?.Undo() : null;
 
 	bool IAutoPickupUiFeature.IsAvailable => _plugin.AutoPickup != null;
 	AutoPickupSettings IAutoPickupUiFeature.Settings => _plugin.AutoPickup?.Settings ?? new AutoPickupSettings();
 	AutoPickupRuleDocument IAutoPickupUiFeature.Rules => _plugin.AutoPickup?.Rules ?? new AutoPickupRuleDocument();
 	AutoPickupDiagnosticsSnapshot IAutoPickupUiFeature.Diagnostics => _plugin.AutoPickup?.Diagnostics ?? new AutoPickupDiagnosticsSnapshot();
-	void IAutoPickupUiFeature.SetEnabled(bool value) => _plugin.SetAutoPickupEnabled(value);
+	void IAutoPickupUiFeature.SetEnabled(bool value)
+	{
+		if (!value || EnsureGameplayAccess(GlobalShortcutActions.ToggleAutoPickup)) _plugin.SetAutoPickupEnabled(value);
+	}
 	void IAutoPickupUiFeature.SetRange(float value) => _plugin.SetAutoPickupRange(value);
 	void IAutoPickupUiFeature.SetFrequency(float value) => _plugin.SetAutoPickupFrequency(value);
 	void IAutoPickupUiFeature.SetRequestsPerTick(int value) => _plugin.SetAutoPickupRequestsPerTick(value);
@@ -498,7 +518,10 @@ internal sealed class PluginUiFeatureAdapter :
 	MinimapSettings IMinimapUiFeature.Settings => _plugin.Minimap?.Settings ?? _plugin.GetMinimapSettings();
 	MinimapBackgroundState IMinimapUiFeature.BackgroundState => _plugin.Minimap?.BackgroundState ?? MinimapBackgroundState.Disabled;
 	OverheadOcclusionDiagnostics IMinimapUiFeature.OcclusionDiagnostics => _plugin.Minimap?.OcclusionDiagnostics ?? default;
-	void IMinimapUiFeature.UpdateSettings(Action<MinimapSettings> change) => _plugin.UpdateMinimapSettings(change);
+	void IMinimapUiFeature.UpdateSettings(Action<MinimapSettings> change)
+	{
+		_plugin.UpdateMinimapSettings(change);
+	}
 	private string GetItemDisplayName(ItemAsset asset)
 	{
 		return Translation != null && Translation.TryGetTranslation(asset, WorkshopTextField.ItemName, out string translated) &&
@@ -513,13 +536,19 @@ internal sealed class PluginUiFeatureAdapter :
 	bool IInteractionUiFeature.ShowId => _plugin.PointTool?.ShowId ?? false;
 	bool IInteractionUiFeature.ShowHealth => _plugin.PointTool?.ShowHealth ?? false;
 	bool IInteractionUiFeature.CreatureHealthBarEnabled => _plugin.CreatureHealthBarEnabled;
-	void IInteractionUiFeature.SetPointToolEnabled(bool value) => _plugin.SetPointToolEnabled(value);
+	void IInteractionUiFeature.SetPointToolEnabled(bool value)
+	{
+		if (!value || EnsureGameplayAccess(GlobalShortcutActions.TogglePointToolEnabled)) _plugin.SetPointToolEnabled(value);
+	}
 	void IInteractionUiFeature.SetMode(PointToolMode value) => _plugin.SetPointToolMode(value);
 	void IInteractionUiFeature.SetRange(float value) => _plugin.SetPointToolRange(value);
 	void IInteractionUiFeature.SetShowTargetName(bool value) => _plugin.SetPointToolShowTargetName(value);
 	void IInteractionUiFeature.SetShowId(bool value) => _plugin.SetPointToolShowId(value);
 	void IInteractionUiFeature.SetShowHealth(bool value) => _plugin.SetPointToolShowHealth(value);
-	void IInteractionUiFeature.SetCreatureHealthBarEnabled(bool value) => _plugin.SetCreatureHealthBarEnabled(value);
+	void IInteractionUiFeature.SetCreatureHealthBarEnabled(bool value)
+	{
+		if (!value || EnsureGameplayAccess(GlobalShortcutActions.ToggleCreatureHealthBars)) _plugin.SetCreatureHealthBarEnabled(value);
+	}
 
 	bool IMovementUiFeature.IsAvailable => _plugin.Movement != null;
 	FlightMode IMovementUiFeature.Mode => _plugin.Movement?.Mode ?? FlightMode.WorldAxis;
@@ -528,8 +557,14 @@ internal sealed class PluginUiFeatureAdapter :
 	float IMovementUiFeature.FlightSpeed => _plugin.Movement?.FlightSpeed ?? 1f;
 	float IMovementUiFeature.VerticalSpeed => _plugin.Movement?.VerticalSpeed ?? 1f;
 	bool IMovementUiFeature.SafeExit => _plugin.Movement?.SafeExit ?? false;
-	void IMovementUiFeature.SetFlight(bool value) => _plugin.Movement?.SetFlight(value);
-	void IMovementUiFeature.SetNoclip(bool value) => _plugin.Movement?.SetNoclip(value);
+	void IMovementUiFeature.SetFlight(bool value)
+	{
+		if (!value || EnsureGameplayAccess(GlobalShortcutActions.ToggleFlight)) _plugin.Movement?.SetFlight(value);
+	}
+	void IMovementUiFeature.SetNoclip(bool value)
+	{
+		if (!value || EnsureGameplayAccess(GlobalShortcutActions.ToggleNoclip)) _plugin.Movement?.SetNoclip(value);
+	}
 	void IMovementUiFeature.SetFlightSpeed(float value) => _plugin.SetFlightSpeed(value);
 	void IMovementUiFeature.SetFlightVerticalSpeed(float value) => _plugin.SetFlightVerticalSpeed(value);
 	void IMovementUiFeature.SetFlightMode(FlightMode value) => _plugin.SetFlightMode(value);

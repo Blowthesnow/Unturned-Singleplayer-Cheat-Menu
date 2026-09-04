@@ -23,7 +23,7 @@ using UnturnedSingleplayerCheatMenu.UI;
 
 namespace UnturnedSingleplayerCheatMenu;
 
-[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "1.995.0")]
+[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "2.0.0")]
 [BepInProcess("Unturned.exe")]
 public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
@@ -31,7 +31,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
-	public const string PluginVersion = "1.995.0";
+	public const string PluginVersion = "2.0.0";
 	private const int CurrentMinimapSchemaVersion = 3;
 
 	private ConfigEntry<string> _language;
@@ -254,6 +254,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private PluginUiRoot _uiRoot;
 
 	private PluginRuntimeContext _runtimeContext;
+	private readonly MultiplayerRiskAcknowledgement _multiplayerRiskAcknowledgement = new MultiplayerRiskAcknowledgement();
+	private RuntimeSessionState _runtimeSession = new RuntimeSessionState(RuntimeSessionKind.Frontend, string.Empty, false);
 
 	private VehicleIconRenderer _vehicleIconRenderer;
 
@@ -293,6 +295,20 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	};
 
 	internal static CheatMenuPlugin Instance { get; private set; }
+	internal RuntimeSessionState CurrentSessionState => _runtimeSession;
+	internal bool IsMultiplayerRiskAcknowledged => _multiplayerRiskAcknowledgement.IsAccepted;
+	internal GameplayFeatureAccess CurrentGameplayAccess =>
+		GameplayFeatureAccessPolicy.Evaluate(_runtimeSession, _multiplayerRiskAcknowledgement.IsAccepted);
+	internal bool CanExecuteGameplay
+	{
+		get
+		{
+			ObserveRuntimeSession();
+			return GameplayFeatureAccessPolicy.IsAllowed(CurrentGameplayAccess);
+		}
+	}
+	internal bool CanOpenClientMenu => _runtimeSession.CanOpenClientMenu;
+	internal bool CanUseSnapshotStorage => _runtimeSession.CanUseSnapshotStorage;
 
 	internal ManualLogSource PluginLogger => Logger;
 
@@ -331,7 +347,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal string ShortcutLabel => GetShortcutLabel("menu.toggle");
 
 	internal bool IsMenuOpen => _menuOpen;
-	internal bool IsMinimapLayoutEditActive => Minimap?.Settings.LayoutEditMode ?? false;
+	internal bool IsMinimapLayoutEditActive => CanExecuteGameplay && (Minimap?.Settings.LayoutEditMode ?? false);
 
 	internal bool IsInfiniteStorageOpen => _infiniteStorageOpen;
 
@@ -480,26 +496,68 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void HandleArrangeCurrentShortcut(string inputSource)
 	{
+		if (!EnsureGameplayAccess("inventory.arrange.current", inputSource)) return;
 		InventoryArrangeResult obj = InventoryArrange?.Execute(InventoryArrangeScope.CurrentContext, InventoryArrangeAction.Arrange, inputSource);
 		base.Logger.LogInfo(obj?.Message ?? "Inventory arrange is not ready.");
 	}
 
 	private void HandleArrangeAllCarriedShortcut(string inputSource)
 	{
+		if (!EnsureGameplayAccess("inventory.arrange.all-carried", inputSource)) return;
 		InventoryArrangeResult obj = InventoryArrange?.Execute(InventoryArrangeScope.AllCarried, InventoryArrangeAction.Arrange, inputSource);
 		base.Logger.LogInfo(obj?.Message ?? "Inventory arrange is not ready.");
 	}
 
-	private bool EnsureShortcutSingleplayer(string actionId, string inputSource)
+	internal bool ObserveRuntimeSession()
 	{
-		if (SingleplayerGuard.IsReady)
+		RuntimeSessionState state = RuntimeSessionBoundary.CaptureCurrent();
+		_runtimeSession = state;
+		bool changed = _multiplayerRiskAcknowledgement.Observe(RuntimeSessionBoundary.CaptureConnectionKey(state));
+		if (changed)
 		{
-			return true;
+			_ui?.OnSessionStateChanged();
 		}
-		string text = "单人世界不可用：" + SingleplayerGuard.RejectionReason;
+		return changed;
+	}
+
+	internal bool EnsureGameplayAccess(string actionId, string inputSource)
+	{
+		ObserveRuntimeSession();
+		GameplayFeatureAccess access = CurrentGameplayAccess;
+		if (GameplayFeatureAccessPolicy.IsAllowed(access))
+			return true;
+		if (access == GameplayFeatureAccess.RequiresMultiplayerAcknowledgement)
+		{
+			base.Logger.LogWarning($"全局快捷键 {actionId} ({inputSource}) 等待本次多人会话风险确认。");
+			_ui?.ShowMultiplayerRiskConfirmation();
+			return false;
+		}
+		string text = GetGameplayAccessFailure(access);
 		base.Logger.LogWarning($"全局快捷键 {actionId} ({inputSource}) 被拒绝：{text}");
 		_ui?.ShowGlobalShortcutStatus(text, warning: true);
 		return false;
+	}
+
+	internal void AcknowledgeMultiplayerRisk()
+	{
+		ObserveRuntimeSession();
+		if (_runtimeSession.IsUnsupportedClientSession)
+		{
+			_multiplayerRiskAcknowledgement.AcceptCurrent();
+			_ui?.OnSessionStateChanged();
+			base.Logger.LogWarning("Multiplayer gameplay risk acknowledged for this connection only; gameplay remains unsupported.");
+		}
+	}
+
+	private static string GetGameplayAccessFailure(GameplayFeatureAccess access)
+	{
+		return access switch
+		{
+			GameplayFeatureAccess.DeniedNotReady => PluginLocalization.Translate("本地玩家尚未生成。"),
+			GameplayFeatureAccess.DeniedDedicatedServer => PluginLocalization.Translate("独立专用服务器不运行客户端玩法功能。"),
+			GameplayFeatureAccess.DeniedUnsupportedSession => PluginLocalization.Translate("当前会话不支持玩法功能。"),
+			_ => PluginLocalization.Translate("无法识别当前会话，玩法功能已停止。")
+		};
 	}
 
 	private void ReportShortcut(string actionId, string inputSource, string message, bool warning = false)
@@ -510,56 +568,56 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void HandleGodModeShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleGodMode, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleGodMode, inputSource)) return;
 		Actions.SetGodMode(!Actions.GodModeEnabled);
 		ReportShortcut(GlobalShortcutActions.ToggleGodMode, inputSource, Actions.GodModeEnabled ? "无敌模式已开启。" : "无敌模式已关闭。");
 	}
 
 	private void HandleInfiniteNeedsShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleInfiniteNeeds, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleInfiniteNeeds, inputSource)) return;
 		Actions.SetInfiniteNeeds(!Actions.InfiniteNeedsEnabled);
 		ReportShortcut(GlobalShortcutActions.ToggleInfiniteNeeds, inputSource, Actions.InfiniteNeedsEnabled ? "无限生存状态已开启。" : "无限生存状态已关闭。");
 	}
 
 	private void HandleRestoreEverythingShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.RestoreEverything, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.RestoreEverything, inputSource)) return;
 		bool result = Actions.RestoreEverything();
 		ReportShortcut(GlobalShortcutActions.RestoreEverything, inputSource, result ? "角色状态已全部恢复。" : "恢复失败。", !result);
 	}
 
 	private void HandleRefillNeedsShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.RefillNeeds, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.RefillNeeds, inputSource)) return;
 		bool result = Actions.RefillNeeds();
 		ReportShortcut(GlobalShortcutActions.RefillNeeds, inputSource, result ? "生存状态已补满。" : "补满失败。", !result);
 	}
 
 	private void HandleFlightShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleFlight, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleFlight, inputSource)) return;
 		Movement.SetFlight(!Movement.FlightEnabled);
 		ReportShortcut(GlobalShortcutActions.ToggleFlight, inputSource, Movement.FlightEnabled ? "飞行已开启。" : "飞行已关闭。");
 	}
 
 	private void HandleNoclipShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleNoclip, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleNoclip, inputSource)) return;
 		Movement.SetNoclip(!Movement.NoclipEnabled);
 		ReportShortcut(GlobalShortcutActions.ToggleNoclip, inputSource, Movement.NoclipEnabled ? "穿墙已开启。" : "穿墙已关闭。");
 	}
 
 	private void HandlePointToolEnabledShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.TogglePointToolEnabled, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.TogglePointToolEnabled, inputSource)) return;
 		SetPointToolEnabled(!PointTool.Enabled);
 		ReportShortcut(GlobalShortcutActions.TogglePointToolEnabled, inputSource, PointTool.Enabled ? "准星工具已开启。" : "准星工具已关闭。");
 	}
 
 	private void HandleNextPointToolModeShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.NextPointToolMode, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.NextPointToolMode, inputSource)) return;
 		int index = Array.IndexOf(ShortcutPointToolModes, PointTool.Mode);
 		PointToolMode nextMode = ShortcutPointToolModes[(index + 1 + ShortcutPointToolModes.Length) % ShortcutPointToolModes.Length];
 		SetPointToolMode(nextMode);
@@ -568,21 +626,21 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void HandleCreatureHealthBarsShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleCreatureHealthBars, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleCreatureHealthBars, inputSource)) return;
 		SetCreatureHealthBarEnabled(!CreatureHealthBarEnabled);
 		ReportShortcut(GlobalShortcutActions.ToggleCreatureHealthBars, inputSource, CreatureHealthBarEnabled ? "生物生命条已开启。" : "生物生命条已关闭。");
 	}
 
 	private void HandleAutoPickupShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleAutoPickup, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleAutoPickup, inputSource)) return;
 		SetAutoPickupEnabled(!(_autoPickupEnabled?.Value ?? false));
 		ReportShortcut(GlobalShortcutActions.ToggleAutoPickup, inputSource, (_autoPickupEnabled?.Value ?? false) ? "自动拾取已开启。" : "自动拾取已关闭。");
 	}
 
 	private void HandleMinimapToggleShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleMinimap, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleMinimap, inputSource)) return;
 		bool enabled = false;
 		UpdateMinimapSettings(settings =>
 		{
@@ -609,7 +667,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		string actionId = direction == MinimapZoomDirection.In
 			? GlobalShortcutActions.ZoomMinimapIn
 			: GlobalShortcutActions.ZoomMinimapOut;
-		if (!EnsureShortcutSingleplayer(actionId, inputSource)) return;
+		if (!EnsureGameplayAccess(actionId, inputSource)) return;
 		float radius = 100f;
 		UpdateMinimapSettings(settings =>
 		{
@@ -624,56 +682,62 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void HandleInfiniteStorageEnabledShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleInfiniteStorageEnabled, inputSource)) return;
+		ObserveRuntimeSession();
+		if (!CanUseSnapshotStorage)
+		{
+			ReportShortcut(GlobalShortcutActions.ToggleInfiniteStorageEnabled, inputSource,
+				PluginLocalization.Translate("Snapshot 无限储存仅在真正的单人世界中可用。"), warning: true);
+			return;
+		}
 		SetInfiniteStorageEnabled(!(_infiniteStorageEnabled?.Value ?? false));
 		ReportShortcut(GlobalShortcutActions.ToggleInfiniteStorageEnabled, inputSource, (_infiniteStorageEnabled?.Value ?? false) ? "无限储存功能已开启。" : "无限储存功能已关闭。");
 	}
 
 	private void HandleFreezeTimeShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleFreezeTime, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleFreezeTime, inputSource)) return;
 		Actions.SetFreezeTime(!Actions.FreezeTimeEnabled);
 		ReportShortcut(GlobalShortcutActions.ToggleFreezeTime, inputSource, Actions.FreezeTimeEnabled ? "时间已冻结。" : "时间已恢复流动。");
 	}
 
 	private void HandleSetDayShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.SetDay, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.SetDay, inputSource)) return;
 		Actions.SetDay();
 		ReportShortcut(GlobalShortcutActions.SetDay, inputSource, "已切换到白天。");
 	}
 
 	private void HandleSetNightShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.SetNight, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.SetNight, inputSource)) return;
 		Actions.SetNight();
 		ReportShortcut(GlobalShortcutActions.SetNight, inputSource, "已切换到夜晚。");
 	}
 
 	private void HandleFullMoonShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ToggleFullMoon, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ToggleFullMoon, inputSource)) return;
 		Actions.SetFullMoon(!LightingManager.isFullMoon);
 		ReportShortcut(GlobalShortcutActions.ToggleFullMoon, inputSource, LightingManager.isFullMoon ? "已开启满月。" : "已关闭满月。");
 	}
 
 	private void HandleClearWeatherShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.ClearWeather, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.ClearWeather, inputSource)) return;
 		Actions.ClearWeather();
 		ReportShortcut(GlobalShortcutActions.ClearWeather, inputSource, "当前天气已清除，后续仍可自然调度。");
 	}
 
 	private void HandleDisableWeatherShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.DisableWeather, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.DisableWeather, inputSource)) return;
 		Actions.DisableWeather();
 		ReportShortcut(GlobalShortcutActions.DisableWeather, inputSource, "当前天气和自然天气调度已关闭。", warning: true);
 	}
 
 	private void HandleCallAirdropShortcut(string inputSource)
 	{
-		if (!EnsureShortcutSingleplayer(GlobalShortcutActions.CallAirdrop, inputSource)) return;
+		if (!EnsureGameplayAccess(GlobalShortcutActions.CallAirdrop, inputSource)) return;
 		bool result = Actions.CallAirdrop();
 		ReportShortcut(GlobalShortcutActions.CallAirdrop, inputSource, result ? "空投已呼叫。" : "空投呼叫失败。", !result);
 	}
@@ -859,6 +923,11 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	private void Awake()
 	{
 		Instance = this;
+		if (Dedicator.isStandaloneDedicatedServer)
+		{
+			base.Logger.LogWarning("Client UI/gameplay features are inactive on a standalone dedicated server.");
+			return;
+		}
 		_runtimeContext = new PluginRuntimeContext(this, base.Logger, _inputCapture);
 		try
 		{
@@ -884,15 +953,15 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		PluginLocalization.Initialize(_language.Value, Provider.language);
 		_fontFamily = base.Config.Bind("Interface", "FontFamily", "Microsoft YaHei UI", "Installed system font used by the plugin UI. Only Chinese-capable fonts can be selected. / 插件界面使用的系统字体；只能选择支持中文的字体。");
 		SystemFontProvider.ConfigurePreferredFamily(_fontFamily.Value, base.Logger);
-		_toggleShortcut = base.Config.Bind("General", "ToggleShortcut", new KeyboardShortcut(KeyCode.End), PluginLocalization.Translate("打开或关闭单人作弊菜单。默认 End，可自由修改。仅在真正的单人世界中生效。"));
+		_toggleShortcut = base.Config.Bind("General", "ToggleShortcut", new KeyboardShortcut(KeyCode.End), PluginLocalization.Translate("打开或关闭菜单。默认 End；本地玩家生成后可用。"));
 		NormalizeConfiguredToggleShortcut();
 		_shortcutManager = new GlobalShortcutManager(base.Logger);
 		_infiniteStorageShortcut = base.Config.Bind("General", "InfiniteStorageShortcut", new KeyboardShortcut(KeyCode.Keypad0, KeyCode.LeftControl), "打开或关闭独立的无限储存页面。默认左 Ctrl + 数字小键盘 0。");
 		NormalizeConfiguredInfiniteStorageShortcut();
 		_shortcutManager.Register("infinite-storage.toggle", "无限储存", _infiniteStorageShortcut, new KeyboardShortcut(KeyCode.Keypad0, KeyCode.LeftControl), HandleInfiniteStorageShortcut);
 		_shortcutManager.Register("menu.toggle", "打开或关闭菜单", _toggleShortcut, new KeyboardShortcut(KeyCode.End), HandleToggleShortcut);
-		_arrangeCurrentShortcut = base.Config.Bind("General", "ArrangeCurrentShortcut", new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl), "整理当前容器；可在右下角全局快捷键窗口中修改。默认 Ctrl+I。仅在单人模式生效。");
-		_arrangeAllCarriedShortcut = base.Config.Bind("General", "ArrangeAllCarriedShortcut", new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl, KeyCode.LeftShift), "整理全部随身容器；可在右下角全局快捷键窗口中修改。默认 Ctrl+Shift+I。仅在单人模式生效。");
+		_arrangeCurrentShortcut = base.Config.Bind("General", "ArrangeCurrentShortcut", new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl), "整理当前容器；默认 Ctrl+I。单人受支持，多人需按本次连接确认且不受支持。");
+		_arrangeAllCarriedShortcut = base.Config.Bind("General", "ArrangeAllCarriedShortcut", new KeyboardShortcut(KeyCode.I, KeyCode.LeftControl, KeyCode.LeftShift), "整理全部随身容器；默认 Ctrl+Shift+I。单人受支持，多人需按本次连接确认且不受支持。");
 		_inventoryArrangeCustomKeys = base.Config.Bind("InventoryArrange", "CustomKeys", "Type:Ascending,Area:Descending,Name:Ascending", "自定义排序链，最多 5 项，例如 Type:Ascending,Quality:Descending,Area:Descending。");
 		_inventoryArrangePreset = base.Config.Bind("InventoryArrange", "Preset", "Compatibility", "Compatibility, Compact, Type, Name, LargeFirst, SmallFirst, Quality, Rarity, StackFill, Ammo, Hotkey, LowMovement, Custom.");
 		_inventoryArrangeAutoRotate = base.Config.Bind("InventoryArrange", "AutoRotate", defaultValue: true, "允许整理时自动旋转物品。");
@@ -964,13 +1033,14 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_pointToolMode = base.Config.Bind("PointTool", "Mode", "Smart", "Inspect, Repair, Teleport, Utility, Delete, or Smart.");
 		_pointToolRange = base.Config.Bind("PointTool", "Range", 100f, "Maximum crosshair interaction range in meters.");
 		_pointToolShowTargetName = base.Config.Bind("PointTool", "ShowTargetName", defaultValue: true, "Show the target name in the point HUD.");
-		InventoryArrange = new InventoryArrangeFeature(base.Logger, GetInventoryArrangeSettings);
+		InventoryArrange = new InventoryArrangeFeature(base.Logger, GetInventoryArrangeSettings,
+			() => CanExecuteGameplay, () => RuntimeSessionBoundary.CaptureConnectionKey(CurrentSessionState));
 		_pointToolShowId = base.Config.Bind("PointTool", "ShowId", defaultValue: true, "Show target ID and GUID in the point HUD.");
 		_pointToolShowHealth = base.Config.Bind("PointTool", "ShowHealth", defaultValue: true, "Show target health or durability in the point HUD.");
 		_pointToolShowHud = base.Config.Bind("Interface", "ShowPointToolHud", defaultValue: true, "Show the point-tool HUD.");
-		_creatureHealthBarEnabled = base.Config.Bind("CreatureHealthBar", "Enabled", defaultValue: false, "Show zombie and animal health bars in singleplayer.");
-		_autoPickupEnabled = base.Config.Bind("AutoPickup", "Enabled", defaultValue: false, "Enable automatic pickup in a true singleplayer world.");
-		_infiniteStorageEnabled = base.Config.Bind("InfiniteStorage", "Enabled", defaultValue: false, "Enable the persistent infinite storage. Disabled by default.");
+		_creatureHealthBarEnabled = base.Config.Bind("CreatureHealthBar", "Enabled", defaultValue: false, "Show zombie and animal health bars when gameplay authorization is active; supported only in singleplayer.");
+		_autoPickupEnabled = base.Config.Bind("AutoPickup", "Enabled", defaultValue: false, "Request automatic pickup; effective only while gameplay authorization is active and supported only in singleplayer.");
+		_infiniteStorageEnabled = base.Config.Bind("InfiniteStorage", "Enabled", defaultValue: false, "Request persistent Snapshot infinite storage; effective only in a true singleplayer world. Disabled by default.");
 		_infiniteStoragePickupPriority = base.Config.Bind("InfiniteStorage", "PickupPriority", defaultValue: false, "Store automatically picked-up items in infinite storage before trying the carried inventory.");
 		_infiniteStorageCraftingEnabled = base.Config.Bind("InfiniteStorage", "CraftingAdapterEnabled", defaultValue: true, "Enable the same-DLL crafting adapter. Snapshot Core remains independent.");
 		_infiniteStorageAmmoRefillEnabled = base.Config.Bind("InfiniteStorage", "AmmoRefillAdapterEnabled", defaultValue: true, "Enable the same-DLL ammo refill adapter. Snapshot Core remains independent.");
@@ -992,7 +1062,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_autoPickupUseMinimapRange = base.Config.Bind("AutoPickup", "UseMinimapRange", defaultValue: false, "When explicitly enabled, automatic pickup range follows the minimap visible radius.");
 		_autoPickupUseMinimapRarityFilter = base.Config.Bind("AutoPickup", "UseMinimapRarityFilter", defaultValue: false, "When explicitly enabled, the minimap rarity mask also limits automatic pickup.");
 		_minimapSchemaVersion = base.Config.Bind("Minimap", "SchemaVersion", 0, "Internal minimap settings migration version.");
-		_minimapEnabled = base.Config.Bind("Minimap", "Enabled", defaultValue: false, "Enable the singleplayer minimap HUD.");
+		_minimapEnabled = base.Config.Bind("Minimap", "Enabled", defaultValue: false, "Request the minimap HUD; effective only while gameplay authorization is active and supported only in singleplayer.");
 		_minimapShape = base.Config.Bind("Minimap", "Shape", "Circle", "Circle or Square.");
 		_minimapAnchor = base.Config.Bind("Minimap", "Anchor", "TopLeft", "TopLeft, TopRight, BottomLeft, or BottomRight.");
 		_minimapOffsetX = base.Config.Bind("Minimap", "OffsetX", 20f, "Horizontal distance from the selected screen anchor.");
@@ -1098,8 +1168,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		Favorites = new FavoriteStore(base.Logger);
 		Teleports = new TeleportStore(base.Logger);
 		TeleportMaps = new TeleportMapService(base.Logger);
-		Actions = new CheatActions(base.Logger);
-		Movement = new MovementCheatService(base.Logger)
+		Actions = new CheatActions(base.Logger, () => CanExecuteGameplay);
+		Movement = new MovementCheatService(base.Logger, () => CanExecuteGameplay)
 		{
 			FlightSpeed = Mathf.Clamp(_flightSpeed.Value, 1f, 10f),
 			VerticalSpeed = Mathf.Clamp(_flightVerticalSpeed.Value, 1f, 10f),
@@ -1123,8 +1193,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			BarScaleReferenceDistance = ReadConfigFloat("CreatureHealthBar", "BarScaleReferenceDistance", 18f, "Distance in meters at which the health bar uses its base size."),
 			MaxBarScale = ReadConfigFloat("CreatureHealthBar", "MaxBarScale", 1.5f, "Maximum near-distance health bar scale."),
 			Diagnostics = ReadConfigBool("CreatureHealthBar", "Diagnostics", false, "Enable health bar diagnostics.")
-		}, _creatureHealthBarHud);
-		PointTool = new PointToolService(base.Logger, _pointToolHud)
+		}, _creatureHealthBarHud, () => CanExecuteGameplay);
+		PointTool = new PointToolService(base.Logger, _pointToolHud, () => CanExecuteGameplay)
 		{
 			Enabled = _pointToolEnabled.Value,
 			Mode = ParsePointToolMode(_pointToolMode.Value),
@@ -1135,8 +1205,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			ShowHud = _pointToolShowHud.Value
 		};
 		_nearbyItemIndex = new NearbyItemIndex();
-		AutoPickup = new AutoPickupFeature(base.Logger, GetAutoPickupSettings(), _autoPickupRulesPath.Value, _nearbyItemIndex);
-		Minimap = new MinimapFeature(base.Logger, _uiRoot, Teleports, _nearbyItemIndex, GetMinimapSettings(), HandleMinimapSettingsChanged);
+		AutoPickup = new AutoPickupFeature(base.Logger, GetAutoPickupSettings(), _autoPickupRulesPath.Value,
+			_nearbyItemIndex, () => CanExecuteGameplay);
+		Minimap = new MinimapFeature(base.Logger, _uiRoot, Teleports, _nearbyItemIndex,
+			GetMinimapSettings(), HandleMinimapSettingsChanged, () => CanExecuteGameplay);
 		_snapshotStorageModules = new SnapshotModuleRegistry();
 		InfiniteStorage = new SnapshotInfiniteStorageRuntime(base.Logger, _snapshotStorageModules)
 		{
@@ -1160,7 +1232,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		Favorites.Load();
 		Teleports.Load();
 		_runtimeContext.SubscribeLifecycle();
-		base.Logger.LogInfo("Unturned Singleplayer Cheat Menu " + PluginVersion + " 已加载。快捷键：" + ShortcutLabel + "；严格限制：单人模式。");
+		base.Logger.LogInfo("Unturned Singleplayer Cheat Menu " + PluginVersion + " 已加载。快捷键：" + ShortcutLabel + "；玩法支持范围：单人；多人需按连接确认且不受支持；Snapshot 仅限单人。");
 		base.Logger.LogInfo("Plugin UI language: " + PluginLocalization.CurrentLanguageName + "; configured=" + _language.Value + "; Unturned=" + Provider.language + ".");
 		Version version = typeof(BaseUnityPlugin).Assembly.GetName().Version;
 		base.Logger.LogInfo($"检测环境：Unturned {Provider.APP_VERSION}，Unity {Application.unityVersion}，BepInEx {version}。");
@@ -1236,9 +1308,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void HandleToggleShortcut(string inputSource)
 	{
-		if (!SingleplayerGuard.IsReady)
+		ObserveRuntimeSession();
+		if (!CanOpenClientMenu)
 		{
-			base.Logger.LogWarning("未打开菜单：" + SingleplayerGuard.RejectionReason);
+			base.Logger.LogWarning("未打开菜单：" + GetGameplayAccessFailure(CurrentGameplayAccess));
 			return;
 		}
 		SetMenuOpen(!_menuOpen);
@@ -1254,9 +1327,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	private void HandleInfiniteStorageShortcut(string inputSource)
 	{
-		if (!SingleplayerGuard.IsReady)
+		ObserveRuntimeSession();
+		if (!CanUseSnapshotStorage)
 		{
-			base.Logger.LogWarning("Cannot open infinite storage: " + SingleplayerGuard.RejectionReason);
+			base.Logger.LogWarning("Cannot open infinite storage: " + PluginLocalization.Translate("Snapshot 无限储存仅在真正的单人世界中可用。"));
 			return;
 		}
 		SetInfiniteStorageOpen(!_infiniteStorageOpen);
@@ -1460,9 +1534,9 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal void SetPointToolEnabled(bool value)
 	{
-		PointTool.Enabled = value && SingleplayerGuard.IsReady;
-		PersistInterfaceState(_pointToolEnabled, PointTool.Enabled);
-		if (!PointTool.Enabled)
+		PointTool.Enabled = value;
+		PersistInterfaceState(_pointToolEnabled, value);
+		if (!value)
 		{
 			_pointToolHud.ClearPointIfCreated();
 		}
@@ -1472,34 +1546,32 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal void SetCreatureHealthBarEnabled(bool value)
 	{
-		bool enabled = value && SingleplayerGuard.IsReady;
-		PersistInterfaceState(_creatureHealthBarEnabled, enabled);
+		PersistInterfaceState(_creatureHealthBarEnabled, value);
 		if (CreatureHealthBars != null)
 		{
-			CreatureHealthBars.SetEnabled(enabled);
+			CreatureHealthBars.SetEnabled(value);
 		}
 	}
 
 	internal void SetAutoPickupEnabled(bool value)
 	{
-		PersistInterfaceState(_autoPickupEnabled, value && SingleplayerGuard.IsReady);
+		PersistInterfaceState(_autoPickupEnabled, value);
 		RefreshAutoPickupSettings();
 	}
 
 	internal void SetInfiniteStorageEnabled(bool value)
 	{
-		bool enabled = value && SingleplayerGuard.IsReady;
-		PersistInterfaceState(_infiniteStorageEnabled, enabled);
+		PersistInterfaceState(_infiniteStorageEnabled, value);
 		if (InfiniteStorage != null)
 		{
-			InfiniteStorage.Enabled = enabled;
-			if (!enabled) InfiniteStorage.Flush();
+			InfiniteStorage.Enabled = value;
+			if (!value) InfiniteStorage.Flush();
 		}
 	}
 
 	internal void SetInfiniteStoragePickupPriority(bool value)
 	{
-		PersistInterfaceState(_infiniteStoragePickupPriority, value && SingleplayerGuard.IsReady);
+		PersistInterfaceState(_infiniteStoragePickupPriority, value);
 	}
 
 	internal void SetAutoPickupRange(float value)
@@ -1693,8 +1765,11 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal void UpdateMinimapSettings(Action<MinimapSettings> change)
 	{
 		MinimapSettings settings = Minimap?.Settings ?? GetMinimapSettings();
+		bool wasEnabled = settings.Enabled;
 		change?.Invoke(settings);
 		settings.Normalize();
+		if (settings.Enabled && !wasEnabled && !EnsureGameplayAccess("minimap.enable", "UI"))
+			return;
 		PersistMinimapSettings(settings);
 		Minimap?.ApplySettings(settings);
 		SynchronizeMinimapLayoutInput(settings.LayoutEditMode);
@@ -1884,17 +1959,20 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		return result;
 	}
 
-	internal void RefreshCatalog()
+	internal void RefreshCatalog(bool scanWorkshopLocalization = true)
 	{
 		Catalog.Refresh();
 		Icons.Clear();
-		WorkshopLocalizationService workshopLocalization = WorkshopLocalization;
-		if (workshopLocalization == null || !workshopLocalization.IsTranslationRunning)
+		if (scanWorkshopLocalization)
 		{
-			WorkshopLocalizationService workshopLocalization2 = WorkshopLocalization;
-			if (workshopLocalization2 == null || workshopLocalization2.SnapshotVersion == 0)
+			WorkshopLocalizationService workshopLocalization = WorkshopLocalization;
+			if (workshopLocalization == null || !workshopLocalization.IsTranslationRunning)
 			{
-				WorkshopLocalization?.ScanCurrentAssets();
+				WorkshopLocalizationService workshopLocalization2 = WorkshopLocalization;
+				if (workshopLocalization2 == null || workshopLocalization2.SnapshotVersion == 0)
+				{
+					WorkshopLocalization?.ScanCurrentAssets();
+				}
 			}
 		}
 		_runtimeContext?.SynchronizeWorkshopVersions();
@@ -1904,7 +1982,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal void SetMenuOpen(bool open)
 	{
-		if (open && !_uiRoot.CanOpenWindow("the main menu"))
+		ObserveRuntimeSession();
+		if (open && (!CanOpenClientMenu || !_uiRoot.CanOpenWindow("the main menu")))
 		{
 			return;
 		}
@@ -1912,7 +1991,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			SetInfiniteStorageOpen(open: false);
 		}
-		if (_menuOpen != open && (!open || SingleplayerGuard.IsReady))
+		if (_menuOpen != open)
 		{
 			_menuOpen = open;
 			if (open)
@@ -1935,11 +2014,12 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	internal void SetInfiniteStorageOpen(bool open)
 	{
-		if (open && !_uiRoot.CanOpenWindow("infinite storage"))
+		ObserveRuntimeSession();
+		if (open && (!CanUseSnapshotStorage || !_uiRoot.CanOpenWindow("infinite storage")))
 		{
 			return;
 		}
-		if (_infiniteStorageOpen == open || (open && !SingleplayerGuard.IsReady))
+		if (_infiniteStorageOpen == open)
 		{
 			return;
 		}
@@ -1983,13 +2063,10 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_snapshotAmmoRefillModule?.RefreshAssets();
 		Catalog.MarkDirty();
 		Icons.Clear();
+		WorkshopLocalization?.OnAssetsRefreshed();
 		if (_menuOpen || _infiniteStorageOpen)
 		{
-			RefreshCatalog();
-		}
-		else
-		{
-			WorkshopLocalization?.OnAssetsRefreshed();
+			RefreshCatalog(scanWorkshopLocalization: false);
 		}
 	}
 

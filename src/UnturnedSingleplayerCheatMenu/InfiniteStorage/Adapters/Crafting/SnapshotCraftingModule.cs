@@ -48,9 +48,9 @@ internal sealed class SnapshotCraftingModule : ISnapshotStorageModule
 			parameters.Results == null) return Array.Empty<SnapshotCraftingSyntheticItem>();
 		ItemAsset requested = supply.FindItemAsset();
 		if (requested == null) return Array.Empty<SnapshotCraftingSyntheticItem>();
-		ItemGroupView group = _storage.Groups.FirstOrDefault(value =>
-			value.AssetId == requested.id && value.AssetGuid == requested.GUID);
-		if (group == null) return Array.Empty<SnapshotCraftingSyntheticItem>();
+		ItemGroupIdentity identity = new ItemGroupIdentity(requested.id, requested.GUID);
+		if (!_storage.TryGetGroup(identity, out ItemGroupView group))
+			return Array.Empty<SnapshotCraftingSyntheticItem>();
 
 		ItemJar itemToIgnore = parameters.ItemToIgnore;
 		PlayerInventorySearchResultV2[] eligibleNativeResults = parameters.Results
@@ -87,18 +87,24 @@ internal sealed class SnapshotCraftingModule : ISnapshotStorageModule
 		return result;
 	}
 
-	internal bool ConsumeWhole(SnapshotCraftingSyntheticItem synthetic)
+	internal SnapshotKernelTransaction BeginTransaction() => _storage.BeginTransaction();
+
+	internal SnapshotTransactionCommitResult CommitBatch(SnapshotKernelTransaction transaction) =>
+		_storage.Commit(transaction);
+
+	internal bool ConsumeWhole(SnapshotCraftingSyntheticItem synthetic,
+		SnapshotKernelTransaction transaction)
 	{
-		if (synthetic?.Snapshot == null || !SnapshotCraftingPlanner.TryPlanSelected(_storage.Groups,
-			synthetic.Identity, synthetic.Snapshot, 1, SnapshotCraftingCountingMethod.TotalItems,
+		if (synthetic?.Snapshot == null || !_storage.TryGetGroup(synthetic.Identity, out ItemGroupView group) ||
+			!SnapshotCraftingPlanner.TryPlanSelected(group, synthetic.Identity, synthetic.Snapshot, 1,
+			SnapshotCraftingCountingMethod.TotalItems,
 			countEmptyAsOne: false, preserveZeroResidual: false, out SnapshotCraftingPlan plan, out _))
 			return false;
-		SnapshotKernelTransaction transaction = _storage.BeginTransaction();
-		return transaction != null && plan.Apply(transaction).Success && _storage.Commit(transaction).Success;
+		return transaction != null && plan.Apply(transaction).Success;
 	}
 
 	internal uint ConsumeAmount(SnapshotCraftingSyntheticItem synthetic, uint desiredAmount,
-		bool alwaysDeleteAtZeroAmount)
+		bool alwaysDeleteAtZeroAmount, SnapshotKernelTransaction transaction)
 	{
 		if (synthetic?.Snapshot == null || desiredAmount == 0) return 0;
 		ItemAsset asset = Assets.find(EAssetType.ITEM, synthetic.Identity.AssetId) as ItemAsset;
@@ -107,24 +113,24 @@ internal sealed class SnapshotCraftingModule : ISnapshotStorageModule
 		if (removed == 0) return 0;
 		bool preserveZero = removed == synthetic.Snapshot.Amount &&
 			!alwaysDeleteAtZeroAmount && !asset.ShouldDeleteAtZeroAmount;
-		if (!SnapshotCraftingPlanner.TryPlanSelected(_storage.Groups, synthetic.Identity,
+		if (!_storage.TryGetGroup(synthetic.Identity, out ItemGroupView group) ||
+			!SnapshotCraftingPlanner.TryPlanSelected(group, synthetic.Identity,
 			synthetic.Snapshot, removed, SnapshotCraftingCountingMethod.TotalAmount,
 			countEmptyAsOne: false, preserveZero, out SnapshotCraftingPlan plan, out _)) return 0;
-		SnapshotKernelTransaction transaction = _storage.BeginTransaction();
-		return transaction != null && plan.Apply(transaction).Success && _storage.Commit(transaction).Success
+		return transaction != null && plan.Apply(transaction).Success
 			? removed
 			: 0;
 	}
 
-	internal bool StoreProduced(Item item)
+	internal bool StoreProduced(Item item, SnapshotKernelTransaction transaction)
 	{
 		ItemAsset asset = item?.GetAsset();
-		if (asset == null) return false;
+		if (asset == null || transaction == null) return false;
 		ItemSnapshot snapshot = Canonicalize(asset, item);
 		ItemGroupIdentity identity = new ItemGroupIdentity(asset.id, asset.GUID);
 		Item fullItem = new Item(asset, EItemOrigin.ADMIN);
 		if (!_storage.RegisterDefaultTemplate(identity, Canonicalize(asset, fullItem)).Success) return false;
-		return _storage.StoreSnapshot(identity, snapshot).Success;
+		return transaction.Store(identity, snapshot, 1).Success;
 	}
 
 	internal SnapshotKernelCheckpoint CaptureCheckpoint() => _storage.CaptureCheckpoint();

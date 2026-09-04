@@ -7,6 +7,7 @@ internal interface ISnapshotStorageRuntimePort
 {
 	bool IsOperational { get; }
 	IReadOnlyList<ItemGroupView> Groups { get; }
+	bool TryGetGroup(ItemGroupIdentity identity, out ItemGroupView group);
 	SnapshotKernelTransaction BeginTransaction();
 	SnapshotTransactionCommitResult Commit(SnapshotKernelTransaction transaction);
 	SnapshotKernelCheckpoint CaptureCheckpoint();

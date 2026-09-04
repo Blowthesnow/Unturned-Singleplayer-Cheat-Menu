@@ -978,7 +978,12 @@ string minimapSource = string.Join("\n", Directory.EnumerateFiles(minimapSourceD
 string uiSource = string.Join("\n", Directory.EnumerateFiles(uiSourceDirectory, "*.cs").OrderBy(path => path, StringComparer.Ordinal).Select(File.ReadAllText));
 Assert(uiSource.Contains("for (byte page = PlayerInventory.SLOTS; page < PlayerInventory.STORAGE", StringComparison.Ordinal),
     "The whitelist/blacklist picker must enumerate the complete carried inventory, including the Hands page.");
-Assert(runtimeSource.Contains("SingleplayerGuard.IsReady", StringComparison.Ordinal), "Every runtime pump must retain the singleplayer hard gate.");
+Assert(runtimeSource.Contains("_canExecuteGameplay()", StringComparison.Ordinal) &&
+      runtimeSource.Contains("ResetRuntime(\"玩法授权未就绪\")", StringComparison.Ordinal),
+    "Every automatic-pickup path must stop and clear pending work while gameplay authorization is unavailable.");
+Assert(pluginSource.Contains("PersistInterfaceState(_autoPickupEnabled, value);", StringComparison.Ordinal) &&
+      !pluginSource.Contains("PersistInterfaceState(_autoPickupEnabled, value &&", StringComparison.Ordinal),
+    "Temporary gameplay denial must not overwrite the user's requested AutoPickup setting.");
 Assert(!rawItemIndexSource.Contains("AutoPickupDropGate", StringComparison.Ordinal) &&
       !rawItemIndexSource.Contains("AllowsQuality", StringComparison.Ordinal) &&
       !rawItemIndexSource.Contains("ItemFilterMatcher", StringComparison.Ordinal) &&
@@ -987,6 +992,8 @@ Assert(!rawItemIndexSource.Contains("AutoPickupDropGate", StringComparison.Ordin
 Assert(runtimeSource.Contains("AutoPickupCandidateAdapter", StringComparison.Ordinal) &&
       !runtimeSource.Contains("internal sealed class DropScanner", StringComparison.Ordinal),
     "AutoPickup must consume the raw index through its own adapter instead of owning Region enumeration.");
+Assert(runtimeSource.Contains("ReferenceEquals(drop, candidate.Drop)", StringComparison.Ordinal),
+    "A reused region/instance ID must not make a different world's ItemDrop current for an older AutoPickup candidate.");
 Assert(!runtimeSource.Contains("DropScanner.", StringComparison.Ordinal),
     "AutoPickupRuntime still references the removed DropScanner type.");
 Assert(runtimeSource.Contains("ResolveEffectiveRange()", StringComparison.Ordinal) &&
@@ -1032,6 +1039,10 @@ Assert(runtimeSource.Contains("AutoPickupStorageCommitCoordinator.Execute", Stri
        !runtimeSource.Contains("Action<AutoPickupCandidate> _rollbackStoredCandidate", StringComparison.Ordinal) &&
        !runtimeSource.Contains("Action<AutoPickupCandidate> _lockStorage", StringComparison.Ordinal),
     "NativePickupExecutor does not observe rollback failure or enforce storage-authoritative world quarantine.");
+Assert(runtimeSource.Contains("SnapshotBackgroundStoreCompletionRouter.Route(", StringComparison.Ordinal) &&
+       runtimeSource.Contains("BuildDetachedBackgroundStoreAttempt", StringComparison.Ordinal) &&
+       runtimeSource.Contains("未触碰当前世界的掉落、背包或储存内存", StringComparison.Ordinal),
+    "A detached background store must be recorded without finalizing, resuming, quarantining, or natively picking up a current-world drop.");
 Assert(runtimeSource.Contains("plugin?.IsInfiniteStoragePickupPriorityEnabled == true", StringComparison.Ordinal) && runtimeSource.Contains("plugin.InfiniteStorage?.IsOperational == true", StringComparison.Ordinal),
     "Pickup priority must require both its setting and an operational infinite-storage runtime.");
 Assert(runtimeSource.Contains("!_settings.AllowsQuality(candidate.Quality)", StringComparison.Ordinal),

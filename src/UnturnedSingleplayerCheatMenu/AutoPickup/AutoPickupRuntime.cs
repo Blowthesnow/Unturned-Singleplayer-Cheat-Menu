@@ -6,6 +6,8 @@ using BepInEx;
 using BepInEx.Logging;
 using SDG.Unturned;
 using UnityEngine;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.Runtime;
+using UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel;
 using UnturnedSingleplayerCheatMenu.Minimap;
 using UnturnedSingleplayerCheatMenu.Services;
 
@@ -106,7 +108,8 @@ internal sealed class AutoPickupCandidateAdapter
 		for (int i = 0; i < region.drops.Count; i++)
 		{
 			ItemDrop drop = region.drops[i];
-			if (drop != null && drop.instanceID == candidate.InstanceId && drop.model != null)
+			if (ReferenceEquals(drop, candidate.Drop) && drop.instanceID == candidate.InstanceId &&
+				drop.model != null)
 			{
 				return true;
 			}
@@ -290,13 +293,15 @@ internal sealed class NativePickupExecutor
 	private readonly Func<AutoPickupCandidate, bool> _lockStorage;
 	private readonly Func<bool> _preferInfiniteStorage;
 	private readonly Func<bool> _requiresReconciliation;
+	private readonly Func<bool> _canExecuteGameplay;
 
 	internal NativePickupExecutor(Func<AutoPickupCandidate, bool> storeCandidate = null,
 		Func<AutoPickupCandidate, bool> rollbackStoredCandidate = null,
 		Func<AutoPickupCandidate, bool> quarantineWorldDrop = null,
 		Func<AutoPickupCandidate, bool> lockStorage = null,
 		Func<bool> preferInfiniteStorage = null,
-		Func<bool> requiresReconciliation = null)
+		Func<bool> requiresReconciliation = null,
+		Func<bool> canExecuteGameplay = null)
 	{
 		_storeCandidate = storeCandidate;
 		_rollbackStoredCandidate = rollbackStoredCandidate;
@@ -304,14 +309,16 @@ internal sealed class NativePickupExecutor
 		_lockStorage = lockStorage;
 		_preferInfiniteStorage = preferInfiniteStorage;
 		_requiresReconciliation = requiresReconciliation;
+		_canExecuteGameplay = canExecuteGameplay ?? (() => CheatMenuPlugin.Instance?.CanExecuteGameplay == true);
 	}
 
-	public NativePickupAttempt Execute(AutoPickupCandidate candidate, float requestRange)
+	public NativePickupAttempt Execute(AutoPickupCandidate candidate, float requestRange,
+		bool allowInfiniteStorage = true)
 	{
-		if (!SingleplayerGuard.IsReady)
+		if (!_canExecuteGameplay())
 		{
 			return new NativePickupAttempt(AutoPickupResultKind.UnknownFailure, default, default,
-				SingleplayerGuard.RejectionReason);
+				"玩法授权未就绪。");
 		}
 		Player player = Player.LocalPlayer;
 		if (candidate == null || player == null || !AutoPickupCandidateAdapter.IsCurrent(candidate))
@@ -326,7 +333,7 @@ internal sealed class NativePickupExecutor
 				$"实际距离 {Mathf.Sqrt(currentDistanceSquared):0.0}m 超过拾取距离 {requestRange:0.0}m。");
 		}
 		AutoPickupInventoryEvidence currentInventory = CaptureInventoryEvidence(player.inventory, candidate);
-		bool prefersInfiniteStorage = _preferInfiniteStorage?.Invoke() == true;
+		bool prefersInfiniteStorage = allowInfiniteStorage && _preferInfiniteStorage?.Invoke() == true;
 		bool nativePickupAvailable = HasInventorySpace(player.inventory, candidate.Asset);
 		NativePickupAttempt storageAttempt = default;
 		NativePickupAttempt nativeAttempt = default;
@@ -339,6 +346,7 @@ internal sealed class NativePickupExecutor
 			nativePickupAvailable,
 			tryInfiniteStorage: () =>
 			{
+				if (!allowInfiniteStorage) return false;
 				storageAttempted = true;
 				AutoPickupStorageCallbackResult callbackResult =
 					AutoPickupFinalAttemptPolicy.CaptureStorageCallback(() =>
@@ -413,7 +421,6 @@ internal sealed class NativePickupExecutor
 	private bool TryStoreCandidate(AutoPickupCandidate candidate,
 		AutoPickupInventoryEvidence inventoryEvidence, out NativePickupAttempt attempt)
 	{
-		attempt = default;
 		AutoPickupStorageCommitResult result = AutoPickupStorageCommitCoordinator.Execute(
 			storeSnapshot: () => _storeCandidate != null && _storeCandidate(candidate),
 			removeWorldDrop: delegate
@@ -425,6 +432,66 @@ internal sealed class NativePickupExecutor
 			rollbackSnapshot: () => _rollbackStoredCandidate != null && _rollbackStoredCandidate(candidate),
 			quarantineWorldDrop: () => _quarantineWorldDrop != null && _quarantineWorldDrop(candidate),
 			lockStorage: () => _lockStorage?.Invoke(candidate) == true);
+		return TryBuildStorageAttempt(result, inventoryEvidence, out attempt);
+	}
+
+	internal bool FinalizePersistedCandidate(AutoPickupCandidate candidate,
+		AutoPickupInventoryEvidence inventoryEvidence, out NativePickupAttempt attempt,
+		out AutoPickupStorageCommitResult result)
+	{
+		result = AutoPickupStorageCommitCoordinator.Execute(
+			storeSnapshot: () => true,
+			removeWorldDrop: delegate
+			{
+				if (!AutoPickupCandidateAdapter.IsCurrent(candidate)) return false;
+				ItemManager.ReceiveDestroyItem(candidate.RegionX, candidate.RegionY,
+					candidate.InstanceId, true);
+				return !AutoPickupCandidateAdapter.IsCurrent(candidate);
+			},
+			rollbackSnapshot: () => _rollbackStoredCandidate != null &&
+				_rollbackStoredCandidate(candidate),
+			quarantineWorldDrop: () => _quarantineWorldDrop != null &&
+				_quarantineWorldDrop(candidate),
+			lockStorage: () => _lockStorage?.Invoke(candidate) == true);
+		return TryBuildStorageAttempt(result, inventoryEvidence, out attempt);
+	}
+
+	internal NativePickupAttempt BuildUncertainBackgroundStoreAttempt(
+		AutoPickupCandidate candidate, AutoPickupInventoryEvidence inventoryEvidence,
+		string errorCode, bool markerAlreadyPersisted = false)
+	{
+		bool markerPersisted = markerAlreadyPersisted;
+		bool quarantined = false;
+		try
+		{
+			if (!markerPersisted) markerPersisted = _lockStorage?.Invoke(candidate) == true;
+		}
+		catch (Exception) { }
+		try { quarantined = _quarantineWorldDrop?.Invoke(candidate) == true; }
+		catch (Exception) { }
+		string detail = "后台储存提交结果不确定；无限储存已锁定，掉落" +
+			(quarantined ? "保持隔离" : "隔离失败") + "。错误=" +
+			(errorCode ?? "missing-result") + "; marker=" + markerPersisted + ".";
+		return new NativePickupAttempt(AutoPickupResultKind.ReconciliationRequired,
+			inventoryEvidence, inventoryEvidence, detail, suppressRetry: true);
+	}
+
+	internal static NativePickupAttempt BuildDetachedBackgroundStoreAttempt(
+		AutoPickupInventoryEvidence inventoryEvidence, string errorCode,
+		bool reconciliationRequired, bool markerPersisted)
+	{
+		string detail = "后台储存完成时原会话已经结束；未触碰当前世界的掉落、背包或储存内存。错误=" +
+			(errorCode ?? "missing-result") + "; reconciliation=" + reconciliationRequired +
+			"; marker=" + markerPersisted + ".";
+		return new NativePickupAttempt(
+			reconciliationRequired ? AutoPickupResultKind.ReconciliationRequired : AutoPickupResultKind.StaleDrop,
+			inventoryEvidence, inventoryEvidence, detail, suppressRetry: true);
+	}
+
+	private static bool TryBuildStorageAttempt(AutoPickupStorageCommitResult result,
+		AutoPickupInventoryEvidence inventoryEvidence, out NativePickupAttempt attempt)
+	{
+		attempt = default;
 		if (!result.StoredSnapshot) return false;
 		if (result.Success)
 		{
@@ -509,7 +576,17 @@ internal sealed class AutoPickupFeature
 		public float RequestedAt;
 	}
 
+	private sealed class PendingStoragePickup
+	{
+		public AutoPickupCandidate Candidate;
+		public AutoPickupInventoryEvidence InventoryBefore;
+		public float RequestRange;
+		public SnapshotInfiniteStorageRuntime Runtime;
+		public SnapshotBackgroundStoreHandle Handle;
+	}
+
 	private readonly ManualLogSource _log;
+	private readonly Func<bool> _canExecuteGameplay;
 
 	private readonly NearbyItemIndex _itemIndex;
 
@@ -524,6 +601,7 @@ internal sealed class AutoPickupFeature
 	private readonly AutoPickupRuleStore _store;
 
 	private readonly Dictionary<uint, PendingPickup> _pending = new Dictionary<uint, PendingPickup>();
+	private PendingStoragePickup _pendingStorage;
 
 	private AutoPickupSettings _settings;
 
@@ -565,14 +643,16 @@ internal sealed class AutoPickupFeature
 
 	public AutoPickupDiagnosticsSnapshot Diagnostics => new AutoPickupDiagnosticsSnapshot(_candidateCount, _scanCount, _requestedCount, _pickedUpCount, _filteredCount, _failureCount, _retryCount, _lastScanTime, _lastFailure, _state);
 
-	public AutoPickupFeature(ManualLogSource log, AutoPickupSettings settings, string rulesPath, NearbyItemIndex itemIndex = null)
+	public AutoPickupFeature(ManualLogSource log, AutoPickupSettings settings, string rulesPath,
+		NearbyItemIndex itemIndex = null, Func<bool> canExecuteGameplay = null)
 	{
 		_log = log;
+		_canExecuteGameplay = canExecuteGameplay ?? (() => CheatMenuPlugin.Instance?.CanExecuteGameplay == true);
 		_itemIndex = itemIndex ?? new NearbyItemIndex();
 		_settings = (settings ?? new AutoPickupSettings()).Normalize().Clone();
 		_executor = new NativePickupExecutor(StoreCandidate, RollbackStoredCandidate,
 			QuarantineWorldDrop, LockInfiniteStorage, PreferInfiniteStorage,
-			RequiresInfiniteStorageReconciliation);
+			RequiresInfiniteStorageReconciliation, _canExecuteGameplay);
 		string path = Path.IsPathRooted(rulesPath ?? string.Empty) ? rulesPath : Path.Combine(Paths.ConfigPath, string.IsNullOrWhiteSpace(rulesPath) ? "AutoPickup.rules.json" : rulesPath);
 		_store = new AutoPickupRuleStore(path, message => _log?.LogInfo(message), message => _log?.LogError(message));
 		AutoPickupDropGate.Install();
@@ -603,6 +683,27 @@ internal sealed class AutoPickupFeature
 		Transform root = model.parent == null ? model : model.parent;
 		root.gameObject.SetActive(false);
 		return !root.gameObject.activeSelf;
+	}
+
+	private static bool SuspendWorldDrop(AutoPickupCandidate candidate)
+	{
+		if (!AutoPickupCandidateAdapter.IsCurrent(candidate)) return false;
+		Transform model = candidate?.Drop?.model;
+		if (model == null) return false;
+		Transform root = model.parent == null ? model : model.parent;
+		if (!root.gameObject.activeSelf) return false;
+		root.gameObject.SetActive(false);
+		return !root.gameObject.activeSelf;
+	}
+
+	private static bool ResumeWorldDrop(AutoPickupCandidate candidate)
+	{
+		if (!AutoPickupCandidateAdapter.IsCurrent(candidate)) return false;
+		Transform model = candidate?.Drop?.model;
+		if (model == null) return false;
+		Transform root = model.parent == null ? model : model.parent;
+		root.gameObject.SetActive(true);
+		return root.gameObject.activeSelf;
 	}
 
 	private static bool LockInfiniteStorage(AutoPickupCandidate candidate)
@@ -668,7 +769,7 @@ internal sealed class AutoPickupFeature
 	{
 		radius = ResolveEffectiveRange();
 		frequencyHz = _settings.FrequencyHz;
-		if (!_settings.Enabled || !SingleplayerGuard.IsReady)
+		if (!_settings.Enabled || !_canExecuteGameplay())
 		{
 			return false;
 		}
@@ -685,6 +786,12 @@ internal sealed class AutoPickupFeature
 	{
 		AutoPickupDropGate.Attach(Player.LocalPlayer?.inventory);
 		float now = Time.realtimeSinceStartup;
+		if (_pendingStorage != null)
+		{
+			if (!CompletePendingStorage(now, wait: false))
+				_state = "无限储存后台落盘中";
+			return;
+		}
 		string worldKey = BuildWorldKey();
 		if (!string.Equals(worldKey, _worldKey, StringComparison.Ordinal))
 		{
@@ -697,9 +804,9 @@ internal sealed class AutoPickupFeature
 			_state = "已关闭";
 			return;
 		}
-		if (!SingleplayerGuard.IsReady)
+		if (!_canExecuteGameplay())
 		{
-			ResetRuntime("单人门禁未就绪");
+			ResetRuntime("玩法授权未就绪");
 			return;
 		}
 		if (RequiresInfiniteStorageReconciliation())
@@ -767,7 +874,23 @@ internal sealed class AutoPickupFeature
 				_retryCount++;
 				continue;
 			}
-			NativePickupAttempt attempt = _executor.Execute(candidate, effectiveRange);
+			bool preferInfiniteStorage = PreferInfiniteStorage();
+			string backgroundError = string.Empty;
+			if (preferInfiniteStorage && TryBeginPendingStorage(candidate, effectiveRange,
+				out backgroundError))
+			{
+				budget--;
+				_state = "无限储存后台落盘中";
+				break;
+			}
+			NativePickupAttempt attempt = _executor.Execute(candidate, effectiveRange,
+				allowInfiniteStorage: !preferInfiniteStorage);
+			if (preferInfiniteStorage && !string.IsNullOrWhiteSpace(backgroundError) &&
+				_settings.Diagnostics >= AutoPickupDiagnosticsLevel.Failures)
+			{
+				_log?.LogWarning("[AutoPickupBackgroundStore] staging failed; using one native-only fallback. " +
+					"instance=" + candidate.InstanceId + " error=" + backgroundError);
+			}
 			budget--;
 			RecordAttempt(candidate, attempt, now);
 		}
@@ -879,6 +1002,94 @@ internal sealed class AutoPickupFeature
 		}
 	}
 
+	private bool TryBeginPendingStorage(AutoPickupCandidate candidate, float requestRange,
+		out string errorCode)
+	{
+		errorCode = string.Empty;
+		SnapshotInfiniteStorageRuntime runtime = CheatMenuPlugin.Instance?.InfiniteStorage;
+		if (runtime == null || candidate?.Asset == null)
+		{
+			errorCode = "runtime-or-asset-unavailable";
+			return false;
+		}
+		AutoPickupInventoryEvidence inventoryBefore = NativePickupExecutor.CaptureInventoryEvidence(
+			Player.LocalPlayer?.inventory, candidate);
+		if (!SuspendWorldDrop(candidate))
+		{
+			errorCode = "world-drop-suspend-failed";
+			return false;
+		}
+		Item item = new Item(candidate.Asset.id, candidate.Amount, candidate.Quality,
+			candidate.State == null ? Array.Empty<byte>() : (byte[])candidate.State.Clone());
+		if (!runtime.TryBeginStoreCandidateInBackground(item, candidate.Asset,
+			out SnapshotBackgroundStoreHandle handle, out errorCode))
+		{
+			ResumeWorldDrop(candidate);
+			return false;
+		}
+		_pendingStorage = new PendingStoragePickup
+		{
+			Candidate = candidate,
+			InventoryBefore = inventoryBefore,
+			RequestRange = requestRange,
+			Runtime = runtime,
+			Handle = handle
+		};
+		return true;
+	}
+
+	private bool CompletePendingStorage(float now, bool wait)
+	{
+		PendingStoragePickup pending = _pendingStorage;
+		if (pending == null) return true;
+		if (pending.Runtime == null || !pending.Runtime.TryCompleteBackgroundStore(
+			pending.Handle, wait, out SnapshotBackgroundStoreCompletionResult completion)) return false;
+		_pendingStorage = null;
+		SnapshotTransactionCommitResult commit = completion?.Transaction;
+
+		NativePickupAttempt attempt = SnapshotBackgroundStoreCompletionRouter.Route(
+			completion,
+			onDetached: () => NativePickupExecutor.BuildDetachedBackgroundStoreAttempt(
+				pending.InventoryBefore, commit?.ErrorCode,
+				completion.RequiresReconciliation,
+				completion.ReconciliationMarkerPersisted),
+			onCommittedCurrentSession: delegate
+			{
+				if (!AutoPickupCandidateAdapter.IsCurrent(pending.Candidate))
+				{
+					bool markerPersisted = pending.Runtime.LatchBackgroundStoreReconciliation(
+						"autopickup-background-store-world-drop-not-current-after-persist;instance=" +
+						pending.Candidate.InstanceId + ";asset=" + pending.Candidate.Asset.id);
+					return _executor.BuildUncertainBackgroundStoreAttempt(
+						pending.Candidate, pending.InventoryBefore,
+						"world-drop-not-current-after-persist", markerPersisted);
+				}
+				_executor.FinalizePersistedCandidate(pending.Candidate, pending.InventoryBefore,
+					out NativePickupAttempt finalizedAttempt,
+					out AutoPickupStorageCommitResult finalization);
+				if (finalization.SnapshotRollbackSucceeded) ResumeWorldDrop(pending.Candidate);
+				return finalizedAttempt;
+			},
+			onSafeFailureCurrentSession: delegate
+			{
+				ResumeWorldDrop(pending.Candidate);
+				return _executor.Execute(pending.Candidate, pending.RequestRange,
+					allowInfiniteStorage: false);
+			},
+			onUncertainCurrentSession: delegate
+			{
+				bool markerPersisted = pending.Runtime.LatchBackgroundStoreReconciliation(
+					"autopickup-background-store-uncertain;instance=" +
+					pending.Candidate.InstanceId + ";asset=" + pending.Candidate.Asset.id +
+					";error=" + (commit?.ErrorCode ?? "missing-result"));
+				return _executor.BuildUncertainBackgroundStoreAttempt(
+					pending.Candidate, pending.InventoryBefore,
+					commit?.ErrorCode ?? "background-store-missing-result", markerPersisted);
+			});
+		RecordAttempt(pending.Candidate, attempt, now);
+		return true;
+	}
+
 	private void RecordSuppressedNativeOutcome(AutoPickupCandidate candidate, string detail)
 	{
 		_failureCount++;
@@ -907,6 +1118,15 @@ internal sealed class AutoPickupFeature
 
 	public void Dispose()
 	{
+		if (_pendingStorage != null)
+		{
+			try { CompletePendingStorage(Time.realtimeSinceStartup, wait: true); }
+			catch (Exception exception)
+			{
+				_log?.LogError("[AutoPickupBackgroundStore] teardown completion failed; " +
+					"InfiniteStorage teardown will fail closed.\n" + exception);
+			}
+		}
 		AutoPickupDropGate.Dispose();
 	}
 

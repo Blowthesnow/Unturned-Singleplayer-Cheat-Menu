@@ -306,7 +306,7 @@ internal static class ZombieRegionRetentionPatch
 		MinimapSettings settings = CheatMenuPlugin.Instance?.Minimap?.Settings;
 		Player player = Player.LocalPlayer;
 		bool enabled = ZombieRegionRetentionPolicy.IsEnabled(
-			SingleplayerGuard.IsReady,
+			RuntimeSessionBoundary.CaptureCurrent().IsSupportedGameplay,
 			settings?.Enabled == true,
 			settings?.ShowZombies == true) && player != null;
 		if (!enabled)

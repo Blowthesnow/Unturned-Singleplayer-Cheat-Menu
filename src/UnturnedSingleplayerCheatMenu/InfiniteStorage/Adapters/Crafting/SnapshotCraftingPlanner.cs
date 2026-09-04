@@ -13,6 +13,12 @@ internal enum SnapshotCraftingSearchRole
 
 internal static class SnapshotCraftingSearchPolicy
 {
+	internal static bool ShouldHandleSearchContents(
+		bool moduleOperational,
+		int? activeSearchCount,
+		bool hasResults) =>
+		moduleOperational && activeSearchCount.GetValueOrDefault() > 0 && hasResults;
+
 	internal static bool ShouldInjectSynthetic(SnapshotCraftingSearchRole role) =>
 		role == SnapshotCraftingSearchRole.Supply;
 
@@ -80,17 +86,36 @@ internal static class SnapshotCraftingPlanner
 		bool countEmptyAsOne, bool preserveZeroResidual, out SnapshotCraftingPlan plan,
 		out string errorCode)
 	{
+		if (groups == null || selectedSnapshot == null || requiredUnits <= 0 ||
+			(countingMethod != SnapshotCraftingCountingMethod.TotalItems &&
+			 countingMethod != SnapshotCraftingCountingMethod.TotalAmount))
+		{
+			plan = null;
+			errorCode = "invalid-requirement";
+			return false;
+		}
+		ItemGroupView group = groups.FirstOrDefault(value => value.Identity.Equals(identity));
+		return TryPlanSelected(group, identity, selectedSnapshot, requiredUnits, countingMethod,
+			countEmptyAsOne, preserveZeroResidual, out plan, out errorCode);
+	}
+
+	internal static bool TryPlanSelected(ItemGroupView group, ItemGroupIdentity identity,
+		ItemSnapshot selectedSnapshot, long requiredUnits, SnapshotCraftingCountingMethod countingMethod,
+		bool countEmptyAsOne, bool preserveZeroResidual, out SnapshotCraftingPlan plan,
+		out string errorCode)
+	{
 		plan = null;
 		errorCode = string.Empty;
-		if (groups == null || selectedSnapshot == null || requiredUnits <= 0 ||
+		if (selectedSnapshot == null || requiredUnits <= 0 ||
 			(countingMethod != SnapshotCraftingCountingMethod.TotalItems &&
 			 countingMethod != SnapshotCraftingCountingMethod.TotalAmount))
 		{
 			errorCode = "invalid-requirement";
 			return false;
 		}
-		ItemGroupView group = groups.FirstOrDefault(value => value.Identity.Equals(identity));
-		SnapshotBucketView bucket = group?.Buckets.FirstOrDefault(value => value.Snapshot.Equals(selectedSnapshot));
+		SnapshotBucketView bucket = group != null && group.Identity.Equals(identity)
+			? group.Buckets.FirstOrDefault(value => value.Snapshot.Equals(selectedSnapshot))
+			: null;
 		if (bucket == null)
 		{
 			errorCode = "snapshot-not-found";

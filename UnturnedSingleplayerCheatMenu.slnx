@@ -19,6 +19,7 @@
   <Project Path="tests/MovementSpeedSmoke/MovementSpeedSmoke.csproj" />
   <Project Path="tests/FlightModeSmoke/FlightModeSmoke.csproj" />
   <Project Path="tests/PointToolActionSmoke/PointToolActionSmoke.csproj" />
+  <Project Path="tests/RuntimeBoundarySmoke/RuntimeBoundarySmoke.csproj" />
   <Project Path="tests/ShortcutToggleSmoke/ShortcutToggleSmoke.csproj" />
   <Project Path="tests/TeleportSerializationSmoke/TeleportSerializationSmoke.csproj" />
   <Project Path="tests/UiArchitectureSmoke/UiArchitectureSmoke.csproj" />

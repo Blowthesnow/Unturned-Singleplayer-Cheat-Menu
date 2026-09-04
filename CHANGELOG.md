@@ -4,7 +4,53 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-## [1.995.0] - 2026-09-04 (current source; unreleased)
+## [2.0.0] - 2026-09-05
+
+### Added
+
+- Added a live session-status badge and an explicit, in-memory risk acknowledgement for unsupported multiplayer/listen-server gameplay. The acknowledgement applies only to the current connection and is invalidated by disconnects, server/map changes, or local-player recreation.
+- Added `RuntimeBoundarySmoke` for frontend/loading/singleplayer/multiplayer/listen-server/dedicated-server classification and acknowledgement invalidation, plus a source-only Snapshot performance probe for clone, point-lookup, staging, serialization, and foreground/background persistence measurements.
+
+### Changed
+
+- Split client-menu readiness from gameplay authorization. A connected client can open the menu after its local player spawns; singleplayer remains the only supported gameplay environment, while acknowledged multiplayer execution is unsupported best-effort.
+- Kept Workshop localization outside gameplay authorization. Session changes no longer cancel active translation, and asset refreshes during a batch coalesce into one deferred rescan.
+- Moved AutoPickup's Snapshot-priority persistence to one background operation at a time. The world drop is suspended while the candidate is written, finalized only after persistence succeeds, and otherwise resumes or enters fail-closed reconciliation according to the commit result.
+- Batched all Snapshot material/output mutations from one native craft request into one thread-local transaction and one outer commit, and replaced whole-warehouse scans with exact ItemGroup lookup.
+
+### Fixed
+
+- Repaired view-direction flight for the current Unturned runtime: configured directional bindings drive movement, W/S follows camera pitch and yaw, Space/Ctrl has fixed world-Y priority, diagonals are normalized, and zero/non-finite directions fail over safely.
+- Prevented the crafting `SearchContents` Postfix from peeking a null thread-local context during unrelated native inventory searches, which could interrupt attachment-slot and rarity-color refresh.
+- Made null, missing, or unresolved asset origins classify as unknown instead of Workshop.
+- Bound Inventory Arrange undo journals to the connection that created them, so an undo cannot cross a disconnect or server/map transition.
+- Preserved requested automation and UI settings when gameplay authorization is temporarily unavailable, while mutation paths still stop immediately.
+- Bound an in-flight AutoPickup Snapshot write to its originating connection and exact `ItemDrop` object. A completion arriving after a scene/session change can no longer apply to the active kernel, finalize or resume a current-world drop, or trigger native fallback; committed or uncertain old-session writes are latched only at their original persistence path.
+- Moved the Workshop localization Pump to the first isolated runtime step after frame de-duplication, so failures in session observation, icon work, or UI maintenance cannot starve translation completion, cache application, or deferred rescans.
+
+### Removed
+
+- Removed the legacy all-or-nothing `SingleplayerGuard`; session classification and gameplay authorization now use `RuntimeSessionPolicy`, `RuntimeSessionBoundary`, and `GameplayFeatureAccessPolicy`.
+- Removed the global `PlayerInventory.forceAddItem` crafting Prefix. Only the two verified crafted-output calls inside `HandleCraftRequestInternal` are rewritten, leaving attachment, reward, condition, and unrelated native grants untouched.
+
+### Security
+
+- Kept Snapshot Infinite Storage and zombie-region retention hard-disabled outside a true `Singleplayer_<slot>` session, with capability rechecks at runtime, module, transaction, and persistence entry points rather than waiting for the next frame pump.
+- Made unknown sessions fail closed, rolled back transactions when authorization disappears before commit, persisted reconciliation on uncertain background outcomes, and kept standalone dedicated-server startup inert before client UI, runtime services, or Harmony patches are initialized.
+
+### Documentation
+
+- Updated the bilingual usage, contribution, security, runtime-boundary, Snapshot living-reference, and external-API inventory documentation for the 2.0 behavior and evidence boundaries.
+
+### Verification
+
+- Re-audited the current Unturned runtime ABI, including `PlayerLook.aim`, configured movement bindings, the two crafted-output grant sites, and attachment searches through `PlayerInventory.SearchContents`.
+- Release solution build completed with zero warnings and zero errors; all 27 recursively discovered `*Smoke.csproj` projects were individually rebuilt and run with `--no-build`: 27/27 PASS.
+- The external API inventory generated twice with 1,601 rows and identical SHA-256 `87E0B7BB1D29356AF5A77F616F761D0A7803693E71422EA0A1C36313846A2797`.
+- The final `2.0.0.0` DLL is 1,150,464 bytes with SHA-256 `93FED6974CBF793B8619AE66D2846DFE60F1532AF5E030C2C7DA62EED059FECD`. The validated three-file Plugin-Only ZIP is 434,585 bytes with SHA-256 `338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD88953417621CA70C85`.
+- The final 2.0 DLL/package was not deployed or restarted in the real game during release preparation. Earlier diagnostic/deployment evidence does not constitute final-package gameplay acceptance.
+
+## [1.995.0] - 2026-09-04 (source checkpoint; unreleased)
 
 ### Added
 

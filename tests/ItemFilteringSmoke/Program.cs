@@ -34,6 +34,11 @@ Check(!AssetOriginClassifier.IsOfficial(originTestAsset), "Workshop origin shoul
 assetOriginField.SetValue(originTestAsset, otherOrigin);
 Check(!AssetOriginClassifier.IsOfficial(originTestAsset) && !AssetOriginClassifier.IsWorkshop(originTestAsset),
     "Map or miscellaneous origin should remain outside official and workshop.");
+assetOriginField.SetValue(originTestAsset, null);
+Check(!AssetOriginClassifier.IsOfficial(originTestAsset) && !AssetOriginClassifier.IsWorkshop(originTestAsset),
+    "An asset with no origin must remain unknown instead of being classified as Workshop by lifted nullable inequality.");
+Check(!AssetOriginClassifier.IsOfficial(null) && !AssetOriginClassifier.IsWorkshop(null),
+    "A null asset must remain unknown instead of being classified as Workshop.");
 
 ItemFilterSnapshot gun = new(
     ItemPrimaryCategory.Weapons,

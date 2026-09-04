@@ -82,6 +82,84 @@ internal sealed partial class CheatMenuOverlayUi
 		}
 	}
 
+	internal void ShowMultiplayerRiskConfirmation()
+	{
+		if (_multiplayerRiskRoot != null)
+		{
+			_multiplayerRiskRoot.transform.SetAsLastSibling();
+			return;
+		}
+		PrepareModalOpen();
+		if (_root == null)
+			return;
+
+		_multiplayerRiskRoot = CreateObject("MultiplayerRiskOverlay", _uiRoot.ModalLayer, typeof(Image));
+		_fluentHandles.RegisterScope(_multiplayerRiskRoot);
+		Stretch(_multiplayerRiskRoot.GetComponent<RectTransform>());
+		_multiplayerRiskRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.68f);
+
+		GameObject dialog = CreateObject("MultiplayerRiskDialog", _multiplayerRiskRoot.transform, typeof(Image));
+		Image dialogImage = dialog.GetComponent<Image>();
+		dialogImage.color = CheatMenuStyle.Panel;
+		_fluentControls.StyleSurface(dialog, dialogImage, ControlLibrary.Core.FluentSurfaceRole.Raised, CheatMenuStyle.Theme.RadiusPanel);
+		Outline outline = dialog.AddComponent<Outline>();
+		outline.effectColor = CheatMenuStyle.Warning;
+		outline.effectDistance = Vector2.one;
+		outline.useGraphicAlpha = false;
+		RectTransform dialogRect = dialog.GetComponent<RectTransform>();
+		Vector2 center = dialogRect.anchorMax = new Vector2(0.5f, 0.5f);
+		dialogRect.anchorMin = center;
+		dialogRect.pivot = center;
+		dialogRect.sizeDelta = new Vector2(680f, 300f);
+		VerticalLayoutGroup layout = dialog.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(24, 24, 16, 16);
+		layout.spacing = CheatMenuStyle.Theme.Space3;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+
+		CreateText(dialog.transform, "多人玩法风险确认", 19, CheatMenuStyle.Warning,
+			TextAnchor.MiddleLeft, FontStyle.Bold);
+		Text warning = CreateText(dialog.transform,
+			"玩法功能仅在单人世界中受支持。多人/服务器会话中的操作可能被拒绝、回档、断开连接或导致账号处罚；Workshop 翻译不受此确认影响。",
+			14, CheatMenuStyle.Text, TextAnchor.UpperLeft);
+		SetLayout(warning.gameObject, -1f, 120f);
+
+		GameObject actions = CreateRow(dialog.transform, 42f, 10f);
+		CreateFlexibleSpacer(actions.transform);
+		CreateButton(actions.transform, "关闭菜单", CloseMenuFromMultiplayerRisk,
+			"不确认多人玩法风险并关闭插件菜单。", 132f, 38f, CheatMenuStyle.Surface);
+		Button continueButton = CreateButton(actions.transform, "本次会话继续", AcceptMultiplayerRisk,
+			"仅为当前连接确认不受支持的多人玩法风险。", 160f, 38f, CheatMenuStyle.Danger);
+		_uiRoot.RegisterModal(_multiplayerRiskRoot, CloseMenuFromMultiplayerRisk, continueButton.gameObject);
+		AnimateModalEnter(_multiplayerRiskRoot, dialog.transform);
+	}
+
+	private void AcceptMultiplayerRisk()
+	{
+		_shellPresenter.AcknowledgeMultiplayerRisk();
+		HideMultiplayerRiskConfirmation();
+		RefreshHeader();
+		SetStatus("已为本次连接确认多人玩法风险；该环境仍不受支持。", 6f, StatusKind.Warning);
+	}
+
+	private void CloseMenuFromMultiplayerRisk()
+	{
+		HideMultiplayerRiskConfirmation();
+		_shellPresenter.CloseMenu();
+	}
+
+	private void HideMultiplayerRiskConfirmation()
+	{
+		if (_multiplayerRiskRoot != null)
+		{
+			GameObject root = _multiplayerRiskRoot;
+			_multiplayerRiskRoot = null;
+			QueueModalExit(root, ResolveModalVisual(root));
+		}
+	}
+
 	private void ShowFontPicker()
 	{
 		PrepareModalOpen();

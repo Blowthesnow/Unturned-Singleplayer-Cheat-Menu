@@ -6,21 +6,21 @@
 >
 > The replacement uses a new Snapshot schema 1 and a different versioned path. A missing new file means an empty warehouse.
 >
-> This document describes source and automated Smoke evidence. It is not deployment evidence or real-game acceptance. During this implementation task the game has not been started, the deployed DLL has not been replaced, and no real legacy file has been claimed or modified.
+> This document keeps source/Smoke, deployment integrity, and real-game acceptance separate. The diagnostic attachment root-fix build was accepted in game, then replaced by a clean diagnostics-free repack; no retired legacy storage file has been claimed or modified.
 
 ## Current status
 
-The active `1.995.0` source implementation is the Snapshot Kernel. Automated source gates have passed at the current source-checkpoint working point; independent review and real-game acceptance are still separate milestones.
+The active `2.0.0` source implementation is the Snapshot Kernel. Automated source gates have passed at the current source-checkpoint working point; independent review and real-game acceptance are still separate milestones.
 
 | Layer | Current meaning |
 | --- | --- |
 | Source | Snapshot model, schema 1 persistence, identity/session state machine, Runtime integration, UI hierarchy, and three internal adapters exist in the working tree. |
 | Targeted Smoke | Kernel, persistence, identity/session, Crafting, AmmoRefill, Decomposition, registry, AutoPickup, UI, and single-DLL integration slices pass. |
-| Full repository | Solution Release is 0 warnings / 0 errors. All 26 recursively discovered Smoke projects were individually built and then run with `--no-build`: 26/26 PASS. |
-| API inventory | Two consecutive generations produced 1,586 rows and identical SHA-256 `09DEFAB1A2640AC68A1E47050E14936B878C46FBFB23BDFAAD9A116F08A3D020`. |
-| Product artifact | One `1.995.0.0` main DLL, 1,115,648 bytes, SHA-256 `0B5D302469CFA8779CF1F43D4D58723CD73EF7F6C77E5998D481834201393FA7`. |
-| Deployment | Not performed for this source checkpoint; the installed DLL and loader state were not re-verified. |
-| Real game | Not started and not accepted. |
+| Full repository | Solution Release is 0 warnings / 0 errors. All 27 recursively discovered Smoke projects were individually rebuilt and then run with `--no-build`: 27/27 PASS. |
+| API inventory | Two consecutive generations produced 1,601 rows and identical SHA-256 `87E0B7BB1D29356AF5A77F616F761D0A7803693E71422EA0A1C36313846A2797`. |
+| Product artifact | One final `2.0.0.0` main DLL, 1,150,464 bytes, SHA-256 `93FED6974CBF793B8619AE66D2846DFE60F1532AF5E030C2C7DA62EED059FECD`; the validated three-file Plugin-Only ZIP is 434,585 bytes, SHA-256 `338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD88953417621CA70C85`. |
+| Deployment | The final 2.0 DLL has not been deployed. The last audited installed pre-release checkpoint remains the 1,133,056-byte `1.995.0.0` DLL with SHA-256 `E32DC3F939528EB404299FCE3F61874600A4F9E05D166C140372B06CA83D20E4`; the prior clean `AECD6A47...` build is retained as `UnturnedSingleplayerCheatMenu.dll.20260904-221438.before`. |
+| Real game | The diagnostic `DC87DA54...` build restored attachment slots and rarity colors. The final 2.0 DLL/package has not received a restarted-game acceptance run. |
 
 The safe release statement is: the current source fixed point may be released only after the full gates in this document pass and the independent Standards/Spec review reports no actionable P0/P1/P2 findings. This is not a zero-bug guarantee.
 
@@ -200,6 +200,8 @@ The stable singleplayer identity includes:
 
 The current Assembly-CSharp ABI exposes five valid slots, 0 through 4. Non-singleplayer IDs, invalid slots, and disagreement between `SteamPlayerID.characterID` and `Characters.selected` fail closed.
 
+This identity rule is intentionally stricter than the plugin's menu boundary. A multiplayer client may open the main menu and may acknowledge unsupported gameplay for that connection, but it cannot create, load, save, migrate, or reuse a Snapshot v1 identity. Runtime entry points re-check true-singleplayer capability immediately rather than waiting for the next frame Pump, and temporary authorization loss does not rewrite the user's requested feature configuration.
+
 The same account and map in slot 0 and slot 1 resolve to different storage paths. The same complete identity is stable across repeated resolution.
 
 An ordinary activation/load/save failure latches that complete identity. Later frame pumps do not retry I/O or create repeated backups. That attempt latch clears after identity change, disable/re-enable, or an explicit lifecycle reset; reconciliation latches follow the stricter rule below.
@@ -241,14 +243,15 @@ All three default to enabled to preserve existing feature availability. They reg
 ### Crafting
 
 - Snapshot synthetic items are supply-only. The private U3 search is classified explicitly by comparing its `inputStatus` object with `status.targetStatus`; target searches never receive synthetic page-255 results, and reflection/ABI failure is treated as Target (fail-closed).
+- The global `PlayerInventory.SearchContents` Postfix enters Snapshot logic only when the current thread has a non-null, non-empty crafting-search context stack. Every other caller, including `FindAttachmentsByCaliber`, passes through without reading the stack or changing results.
 - Supply search removes the exact non-null `ItemToIgnore` `ItemJar` by reference identity before adding or counting Snapshot results. FillTargetItem and RepairTargetItem therefore require a real native target; a target existing only in Snapshot storage cannot make the blueprint craftable or consume same-asset materials.
 - Synthetic search items mirror native `IncludeEmpty`, `ExcludeFullAmount`, `IncludeMaxQuality`, counting, and prioritization fields.
 - Search expansion is bounded by the blueprint requirement rather than the warehouse’s potentially huge `Count`.
 - `Delete` removes one exact snapshot instance.
 - `DeleteAmount` is the only crafting path that may reinterpret amount and create a residual amount snapshot; quality/state are retained.
-- Crafted output first uses native inventory. If full, the output is stored as one exact Snapshot.
+- Only the two verified crafted-output `forceAddItem(Item, bool)` call sites inside `HandleCraftRequestInternal` are transpiled to the Snapshot-aware bridge. The global `PlayerInventory.forceAddItem` method is not patched, so conditions, rewards, attachment changes, harvesting, clothing, storage, and mod callbacks retain native behavior. Crafted output first uses native inventory; if full, it is stored as one exact Snapshot.
 - A native crafting exception restores the Snapshot checkpoint to persistence before restoring native inventory. If storage rollback fails, native restoration is skipped, memory returns to the last successfully persisted Snapshot state, mutation latches closed, and persistent reconciliation is recorded; this prevents duplicate materials or outputs.
-- Native additions produced by rollback run inside a tested ThreadStatic rollback scope and bypass the crafting-output interceptor. The scope always resets, including exceptional exits.
+- Native additions produced by rollback remain outside the two transpiled output call sites. The rollback scope still resets through `finally`, including exceptional exits, while the output bridge explicitly fails open to native behavior when no active crafting output context exists.
 
 ### AmmoRefill
 

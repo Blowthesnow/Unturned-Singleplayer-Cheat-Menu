@@ -101,6 +101,18 @@ internal sealed class SnapshotKernel
 			.ToArray();
 	}
 
+	internal bool TryGetGroup(ItemGroupIdentity identity, out ItemGroupView group)
+	{
+		if (_groups.TryGetValue(identity.AssetId, out ItemGroupState state) &&
+			state.Identity.Equals(identity))
+		{
+			group = state.ToView();
+			return true;
+		}
+		group = null;
+		return false;
+	}
+
 	internal SnapshotDocument ExportDocument(SnapshotStorageIdentity identity)
 	{
 		SnapshotDocument document = SnapshotDocument.Empty(identity);

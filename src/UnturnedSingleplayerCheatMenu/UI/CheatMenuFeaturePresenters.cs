@@ -24,6 +24,8 @@ internal sealed class ShellPresenter
 	internal float UiScale => _feature.UiScale;
 	internal string ShortcutLabel => _feature.ShortcutLabel;
 	internal string CurrentMap => _feature.CurrentMap;
+	internal RuntimeSessionKind SessionKind => _feature.SessionKind;
+	internal bool MultiplayerRiskAcknowledged => _feature.MultiplayerRiskAcknowledged;
 	internal string SelectedFontFamily => _feature.SelectedFontFamily;
 	internal Vector2 NormalizedWindowPosition => _feature.NormalizedWindowPosition;
 	internal Font ResolveFont() => _feature.ResolveFont();
@@ -33,6 +35,7 @@ internal sealed class ShellPresenter
 
 	internal void CloseMenu() => _feature.CloseMenu();
 	internal void CloseInfiniteStorage() => _feature.CloseInfiniteStorage();
+	internal void AcknowledgeMultiplayerRisk() => _feature.AcknowledgeMultiplayerRisk();
 	internal void SetWindowPosition(Vector2 position) => _feature.SetWindowPosition(position);
 	internal bool SetLastMainTab(string value) => _feature.SetLastMainTab(value);
 	internal bool SetLastTeleportView(string value) => _feature.SetLastTeleportView(value);
