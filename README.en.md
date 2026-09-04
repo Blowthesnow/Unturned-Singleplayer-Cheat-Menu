@@ -1,54 +1,287 @@
 # Unturned Singleplayer Cheat Menu
 
-[中文说明](README.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
+[中文说明](README.md) · [Releases](https://github.com/Blowthesnow/Unturned-Singleplayer-Cheat-Menu/releases) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
-A bilingual Chinese/English BepInEx 5 in-game menu whose gameplay support target is **Unturned singleplayer worlds**. It scans the asset registry already loaded by the running game, so vanilla, map-provided, and Workshop items and vehicles can appear automatically. The current source version is `2.0.0`.
+![Version](https://img.shields.io/badge/version-2.0.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-27%2F27%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
 
-> Gameplay features are designed, tested, and supported only for Unturned singleplayer worlds. The plugin may remain installed while you choose a BattlEye launch, and the menu may open in a multiplayer client session if BepInEx successfully loads and the local player exists. Gameplay-feature use in multiplayer/server sessions is unsupported and at your own risk. Workshop translation is a local content feature: it is not controlled by the singleplayer/multiplayer gameplay gate or multiplayer-risk acknowledgement, and entering multiplayer does not cancel it. The project does not stop, disable, modify, or bypass BattlEye, and does not guarantee that BattlEye will allow BepInEx, this plugin, or the connection to continue.
+**A bilingual BepInEx 5 toolkit built for Unturned singleplayer worlds.** Instead of relying on a hard-coded item or vehicle catalog, it reads the assets already loaded by the running game. Vanilla content, map-provided assets, and Workshop mods appear according to the current installation and world.
 
-**Default shortcut: press `End` after the local player has spawned to open or close the menu.**
+Beyond asset discovery, version 2.0 combines runtime localization, player controls, favorites, inventory arrangement, automatic pickup, Snapshot Infinite Storage, crosshair interaction, creature health bars, flight and noclip, map teleportation, a configurable minimap, and time/weather controls.
 
-> **Screenshot note: the project screenshots currently show the 1.1 interface; screenshots will be updated together for 2.0.**
+**Default shortcut: press `End` after the local player has spawned.**
 
-![Items tab scanning vanilla, map-provided, and Workshop assets](docs/images/items-tab.png)
+> Gameplay features officially target singleplayer worlds. Asset localization is an independent local-content feature. See “Runtime boundaries” below for the complete session matrix.
+
+## Unique core capability: runtime localization for vanilla and Workshop assets
+
+**Across the publicly discoverable Unturned plugin ecosystem, we found no second plugin dedicated to this complete path: scan the loaded vanilla and Workshop assets at runtime → translate in batches → cache by asset and field → apply text to the plugin catalog and Unturned display paths.** This is not a prebuilt static language pack or an offline map-file converter; it follows the content actually loaded by the current game process.
+
+| Common approach | What it handles | Key difference from this project |
+| --- | --- | --- |
+| [Native Unturned localization](https://docs.smartlydressedgames.com/en/latest/assets/asset-definitions.html#localization) / Workshop language packs | Pre-authored per-language `.dat` files beside known assets | Requires maintained static files and does not automatically fill missing text for arbitrary assets loaded in the current run |
+| [Unturned Map Translator](https://steamcommunity.com/sharedfiles/filedetails/?id=3365019362) | Selects a map outside the game and generates or overwrites language files | An offline file converter rather than an in-game runtime plugin |
+| [XUnity.AutoTranslator](https://github.com/bbepis/XUnity.AutoTranslator) | Generic text/resource translation across many Unity games | Does not specialize in enumerating Unturned `Assets`, classifying vanilla/Workshop origin, or maintaining a field-level asset catalog |
+| [Server chat translation plugins](https://imperialplugins.com/Unturned/Products/Translation) | Player chat messages and channels | Does not translate Item, Vehicle, Quest, NPC, Object, or Vendor assets |
+
+- Scans item names and descriptions, vehicle names, action text and hints, NPC names/dialogue/responses, quest names and descriptions, loaded `ObjectAsset` names and interaction-dialogue display names, and vendor text.
+- Processes only supported types and fields that the current process successfully loaded into the `Assets` mapping; it does not promise every unloaded asset, map file, or piece of map text.
+- Isolates cache entries by asset type, GUID, field, and cache schema, so fields on the same asset remain independent.
+- Preserves existing Chinese localization and protects rich-text tags, formatting placeholders, and dialogue controls.
+- Provides scanning, translation queues, batching, retries, cache hits, forced retranslation, progress reporting, and local text application.
+- Supports up to two API keys working in parallel, with batch sizes from `1–100`.
+- Includes 18 provider/protocol presets: Tencent TMT, Baidu Translate, Google Cloud, Microsoft Translator, DeepL, Youdao, OpenAI, OpenAI Compatible, Azure OpenAI, Anthropic, Gemini, Ollama, OpenRouter, DeepSeek, SiliconFlow, LM Studio, Tencent Hunyuan, and Baidu Qianfan.
+- Never modifies original `.dat` or AssetBundle files. Entering multiplayer, closing the menu, or changing connections does not automatically cancel an active translation batch.
 
 <details>
-<summary><strong>View more interface screenshots</strong></summary>
+<summary><strong>View screenshot: asset scanning and localization settings</strong></summary>
 
-### Player stats and skills
-
-![Character tab with survival stats, experience, reputation, and skills](docs/images/character-tab.png)
-
-### Vehicle browser and spawning
-
-![Vehicles tab with automatic discovery and rendered thumbnails](docs/images/vehicles-tab.png)
-
-### Favorites
-
-![Favorites tab for saved items and vehicles](docs/images/favorites-tab.png)
-
-### Teleport points
-
-![Teleports tab with named map-scoped positions](docs/images/teleports-tab.png)
-
-### Time, weather, and world events
-
-![World controls for time, weather, full moon, airdrops, and rescanning](docs/images/world-tab.png)
+![Runtime vanilla and Workshop asset localization with cache, parallel keys, and progress](docs/images/v2/workshop-localization.png)
 
 </details>
 
-## Features
+> Search boundary: the “no second plugin found” statement is based on public GitHub, Thunderstore, Nexus, Steam Workshop, and Unturned plugin-market searches through 2026-09-05. Private or unindexed implementations are outside that claim.
 
-- Player controls: god mode, infinite survival stats, healing, configurable health/food/water/immunity/stamina/oxygen, experience, reputation, and max skills.
-- Items: automatic loaded-asset scan, primary and exact-type filters, origin, rarity, equipment slot, gun-action and multi-select fire-mode filters, name/ID/GUID/source search, pagination, game-generated thumbnails fitted to their real texture aspect ratio, and quantities from `1–255`.
-- Vehicles: automatic loaded-asset scan, engine categories, search, pagination, aspect-correct model thumbnails from a uniform generated camera (asset-authored `Icon2/Icon` framing is ignored), configurable `128 × 96`, `192 × 144`, or `256 × 192` output with framing control and per-configuration disk caching, and batches from `1–20` placed in front of the player.
-- Favorites: persistent item and vehicle favorites keyed by asset GUID, with direct actions from the favorites tab.
-- Teleports: map and list views, zoom/pan, player and saved-point markers, safe map-click landing on terrain or available building tops, customizable marker shapes/colors, and persistent map-scoped positions.
-- World controls: time slider, day/night, time freeze, full moon, airdrop, rain, snow, weather clearing, and asset rescan.
-- Tools: crosshair interaction with Smart, Inspect, Repair, Teleport, Utility, and Delete modes; middle-mouse activation; configurable target HUD fields; and Shift-guarded deletion.
-- Movement: native-simulation flight and noclip with separate horizontal/vertical speed multipliers and safe-exit recovery.
-- Minimap: circular or square HUD, editable anchor/offset/size/radius, player/group/teleport/world/item markers, six rarity filters, floor indicators, and native-map/realtime/fallback background modes.
-- Automatic-pickup integration: optional minimap-range and minimap-rarity linkage, both disabled by default so existing pickup behavior does not change implicitly.
+## Complete v2.0.0 feature set
+
+### Player controls
+
+- God mode and infinite survival stats.
+- One-click healing, injury treatment, and survival-stat refill.
+- Exact health, food, water, immunity, stamina, and oxygen values.
+- Custom experience/reputation changes and one-click maximum skills.
+
+<details>
+<summary><strong>View screenshot: player controls and skills</strong></summary>
+
+![Player survival stats, experience, reputation, and skills](docs/images/v2/player-status.png)
+
+</details>
+
+### Item catalog
+
+- Reads the currently loaded `ItemAsset` set, including vanilla, map-provided, and Workshop content.
+- Filters by primary category, exact item type, origin, rarity, equipment slot, gun action, and multiple fire modes.
+- Searches by name, ID, GUID, and source, with pagination and independent state for the normal/favorites catalogs.
+- Uses game-generated thumbnails and localized names, fitted to each texture's real aspect ratio.
+- Gives configurable quantities from `1–255`.
+
+<details>
+<summary><strong>View screenshot: loaded item catalog</strong></summary>
+
+![Loaded vanilla, map-provided, and Workshop item catalog](docs/images/v2/item-browser.png)
+
+</details>
+
+### Vehicle catalog
+
+- Reads the currently loaded `VehicleAsset` set and groups land vehicles, fixed-wing aircraft, helicopters, airships, and boats.
+- Supports name/ID/GUID/source search, pagination, and batches from `1–20`.
+- Generates every thumbnail from the real model with one auto-framing camera and the highest available LOD rather than asset-authored `Icon2/Icon` framing.
+- Supports `128 × 96`, `192 × 144`, and `256 × 192` output, framing control, and GUID/render-configuration disk caching.
+- Places vehicle batches in a ground array in front of the player instead of overlapping them.
+
+<details>
+<summary><strong>View screenshot: loaded vehicle catalog</strong></summary>
+
+![Loaded vehicle categories, search, thumbnails, and batch spawning](docs/images/v2/vehicle-browser.png)
+
+</details>
+
+### Favorites
+
+- Adds/removes item and vehicle favorites directly from catalog cards.
+- Persists favorites by asset GUID without deleting temporarily unloaded Workshop assets.
+- Keeps separate item/vehicle category, search, quantity, and pagination state, with direct give/spawn actions.
+
+<details>
+<summary><strong>View screenshot: item and vehicle favorites</strong></summary>
+
+![Favorites categories and saved item cards](docs/images/v2/favorites-items.png)
+
+</details>
+
+### Snapshot Infinite Storage
+
+- Preserves exact native `{id, amount, quality, state[]}` data rather than conflating quality, state, or instance count.
+- Separates storage by world, Steam ID, and character slot with versioned paths, strict identity validation, and collision checks.
+- Supports Store All, exact-bucket withdrawal, search, pagination, default templates, and permanent-destruction confirmation.
+- Provides independently configurable same-DLL Crafting, Ammo Refill, and Decomposition adapters.
+- Can receive automatic pickup through the Snapshot-priority path with conservative background persistence and world-drop handoff.
+- Protects primary, backup, candidate-history, and reconciliation-marker paths with atomic writes, TOCTOU checks, and fail-closed recovery.
+
+### Inventory arrangement
+
+- Previews and arranges the current container or all carried pages with presets such as Compact.
+- Supports rotation, cross-page placement, equipment/hotkey protection, compression-only, merge-only, and undo.
+- Ctrl/Shift click can consolidate same-asset items across an open storage container.
+- Cancels when preflight cannot place everything and preserves rollback boundaries for apply, native drag, and failure paths.
+
+<details>
+<summary><strong>View screenshot: inventory arrangement</strong></summary>
+
+![Inventory presets, scope, protection, compression, merging, and undo](docs/images/v2/inventory-arrange.png)
+
+</details>
+
+### Automatic pickup
+
+- Configurable range, scan frequency, per-cycle request limit, menu-open pause, and death pause.
+- Post-drop suppression duration, quality threshold, six rarity levels, allow/block lists, and diagnostic counters.
+- Optional minimap-range and minimap-rarity linkage, both disabled by default.
+- Selectable native-inventory or Snapshot-priority delivery with handling for legal `amount=0`, timeouts, uncertain native outcomes, and recovery.
+
+<details>
+<summary><strong>View screenshot: automatic-pickup rules</strong></summary>
+
+![Automatic-pickup range, frequency, quality, rarity, and list settings](docs/images/v2/auto-pickup.png)
+
+</details>
+
+### Crosshair interaction
+
+- Smart, Inspect, Repair, Teleport, Utility, and Delete modes activated with middle mouse.
+- Smart mode selects one semantic action for the current target; no-target paths can still inspect world surfaces or use safe coordinate fallback.
+- Delete requires `Shift`; name, ID/GUID, and health/durability HUD fields are individually configurable.
+
+<details>
+<summary><strong>View screenshot: crosshair interaction tool</strong></summary>
+
+![Crosshair interaction modes, target fields, and range settings](docs/images/v2/crosshair-tools.png)
+
+</details>
+
+### Creature health bars
+
+- Shows current and maximum health for crosshair-targeted or actually damaged zombies and animals.
+- Shares the plugin font, accent, canvas lifecycle, and scene cleanup.
+
+<details>
+<summary><strong>View screenshot: in-game creature health bars</strong></summary>
+
+![In-game zombie health bars](docs/images/v2/creature-health-bars.png)
+
+</details>
+
+### Movement tools
+
+- Flight and noclip stay inside Unturned's native movement simulation with separate horizontal/vertical multipliers.
+- View-direction flight reads configured movement bindings; W/S follows camera pitch/yaw, while Space/Ctrl keeps fixed world-Y priority.
+- Diagonal movement is normalized and zero/non-finite camera directions fall back safely.
+- Disabling noclip searches for a safe position; leaving authorization, dying, or entering a vehicle restores native movement state.
+
+<details>
+<summary><strong>View screenshot: flight and noclip</strong></summary>
+
+![Flight mode, noclip, speed multipliers, and safe-exit settings](docs/images/v2/movement-tools.png)
+
+</details>
+
+### Map and teleport points
+
+- Saves multiple named positions with map-scoped coordinates, orientation, and creation time.
+- Switches between waypoint list and GPS map; the map supports zoom, pan, player position, and saved markers.
+- Map clicks resolve terrain, available rooftops, and nearby safe fallback positions.
+- Waypoints support star, square, circle, and diamond shapes plus preset/custom colors.
+
+<details>
+<summary><strong>View screenshots: map and teleport points (2)</strong></summary>
+
+**Named waypoint list**
+
+![Map-scoped named teleport points](docs/images/v2/teleport-points.png)
+
+**GPS map**
+
+![Zoomable map GPS with player and saved markers](docs/images/v2/teleport-map.png)
+
+</details>
+
+### Minimap
+
+- Circular/square HUD, anchor, offset, size, visible radius, and direct drag/scale layout editing.
+- North-up or view-relative rotation with compass and world coordinates.
+- Player, group-native, waypoint, zombie, animal, other-player, and ground-item markers with six rarity levels and floor handling.
+- Native-map crop, realtime surface, realtime height slice, and fallback grid backgrounds with configured building/cave detection.
+- Bounded zombie-region retention prevents marker loss at scan boundaries without unbounded memory growth.
+
+<details>
+<summary><strong>View screenshots: minimap settings and in-game layouts (3)</strong></summary>
+
+**Settings**
+
+![Minimap shape, anchor, background, scan, and marker settings](docs/images/v2/minimap-settings.png)
+
+**Circular realtime-surface HUD**
+
+![Circular realtime-surface minimap](docs/images/v2/minimap-hud-circle.png)
+
+**Square native-map-crop HUD**
+
+![Square native-map-crop minimap](docs/images/v2/minimap-hud-square.png)
+
+</details>
+
+### Time, weather, and world events
+
+- Bilingual 12-hour time ring with drag, wheel, keyboard, day, and night controls.
+- Time freeze, forced full moon, and airdrop requests.
+- Rain, blizzard, current-weather clearing, and weather-scheduler shutdown.
+- Manual rescan of currently loaded assets.
+
+<details>
+<summary><strong>View screenshot: time, weather, and world events</strong></summary>
+
+![12-hour time ring, weather, full moon, and world events](docs/images/v2/world-controls.png)
+
+</details>
+
+### Interface, shortcuts, and persistence
+
+- Instant Chinese/English switching, Windows system-font selection, and persistent accent color.
+- Fluent-inspired Legacy uGUI controls, responsive wide/narrow layouts, unified HUD/modal/tooltip/toast styling, and frame-driven motion.
+- One persistent `PluginUiRoot` owns menus, HUDs, input, modals, scene transitions, and deterministic cleanup.
+- Persists main page, tool subpage, teleport view, window position, and feature settings; global shortcuts include conflict detection and native-input isolation.
+
+## What changed since v1.7.0
+
+Versions `1.8.0`, `1.9.0`, `1.95.0`, `1.98.0`, and `1.995.0` were unreleased source checkpoints. Version `2.0.0` is the first formal release to deliver their combined changes to users upgrading directly from `1.7.0`.
+
+### Newly delivered in a formal release
+
+- Runtime scanning, translation queues, batching, retries, caching, progress, and local UI application for loaded vanilla and Workshop assets.
+- Field-level item, vehicle, action, NPC-dialogue, quest, loaded-`ObjectAsset` name/interaction-dialogue, and vendor localization with rich-text/placeholder protection.
+- Inventory preview, arrangement, compression, merging, cross-page placement, protected equipment/hotkeys, quick transfer, rollback, and undo.
+- Guarded automatic pickup with range, scheduling, request limits, pause gates, quality/rarity filters, allow/block lists, diagnostics, minimap integration, and Snapshot priority.
+- A global-shortcut framework with conflict detection, native-input isolation, and persistent menu/inventory-arrangement bindings.
+- Transactional BepInEx configuration initialization with exact rollback for first-run, empty, and existing files when binding or saving fails.
+- One max-radius/max-frequency nearby-item snapshot shared by the minimap and AutoPickup, avoiding duplicate scans while keeping display and pickup rules separate.
+- Snapshot Infinite Storage with same-DLL Crafting, Ammo Refill, and Decomposition adapters.
+- Creature health bars, item/vehicle hover details, and ammunition compatibility information.
+- Editable circular/square minimap with native/realtime backgrounds, world markers, rarity/floor handling, rotation, and bounded zombie-region retention.
+- Fluent-inspired Legacy uGUI controls, accent color, system fonts, responsive layout, and frame-driven motion.
+
+### Major changes
+
+- The unreleased early Infinite Storage design was replaced by the Snapshot Kernel with exact native item state, strict session identity, atomic primary/backup files, and persistent reconciliation.
+- Localization expanded to 18 provider/protocol presets, two parallel API keys, and `1–100` batch sizes; its lifecycle is independent of gameplay authorization.
+- Item/vehicle thumbnails now preserve real aspect ratio; every vehicle render uses a consistent auto-framing camera, highest available LOD, and configuration-scoped cache.
+- The time slider became a bilingual 12-hour time ring.
+- UI ownership moved to a persistent root with responsive shells, shared fonts/theme, and deterministic view cleanup.
+- Menu readiness and gameplay authorization are separate; live session status and per-connection multiplayer acknowledgement were added while singleplayer remains the supported gameplay target.
+- Snapshot-priority AutoPickup persistence became one background operation, and one native craft request now shares one outer Snapshot transaction.
+
+### Fixes and data-safety hardening
+
+- Fixed Snapshot quality/state/count conflation, malformed documents, external writes, replacement races, rollback, and uncertain-commit paths.
+- Fixed AutoPickup duplication/loss risks around legal `amount=0`, timeouts, uncertain native outcomes, storage fallback, and reconciliation.
+- Fixed unnecessary inventory rebuilds, lost hotkey bindings, and undo journals surviving connection changes.
+- Repaired view-direction flight, vertical-control priority, diagonal speed, and local flight-viewmodel tilt for the current Unturned runtime.
+- Removed global Crafting `SearchContents`/`forceAddItem` interference with attachment slots, rarity display, rewards, and unrelated native grants.
+- Fixed unresolved asset origins being mislabeled as Workshop, malformed bare `<color>` tags, localization gaps, and scene/Canvas/input/modal/tooltip/toast lifetime residue.
+- Bound stale Snapshot background callbacks to their original connection and exact `ItemDrop`, so they cannot act on the current world after a session change.
+- Moved the Workshop localization Pump to the first isolated runtime step so other UI/session failures cannot starve completion or deferred rescans.
+
+## Runtime boundaries
 
 Menu readiness and gameplay authorization are separate boundaries. The main menu can open in a connected singleplayer or multiplayer client after the local player exists. Singleplayer gameplay is immediately available. Multiplayer and non-singleplayer listen hosts retain a persistent unsupported warning, and the first gameplay action or gameplay-automation enablement requests acknowledgement for that connection only. Disconnecting, changing servers, reconnecting to a map, or recreating the local player invalidates the acknowledgement.
 
