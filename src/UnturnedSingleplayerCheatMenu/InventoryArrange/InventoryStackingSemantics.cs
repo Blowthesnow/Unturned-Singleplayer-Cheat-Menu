@@ -55,20 +55,9 @@ internal static class InventoryStackingSemantics
 		}
 
 		Dictionary<string, InventoryArrangeItem> beforeByKey = before.ToDictionary(value => value.ItemKey, StringComparer.Ordinal);
-		HashSet<string> assetsWithCurrentCrossAssetTargets = new HashSet<string>(before
-			.Where(value => value.IsAmmoContainer && !value.IsProtected && !value.IsHotkeyBound)
-			.SelectMany(value => (value.AmmoDirectSourceAssetGuids ?? Array.Empty<string>())
-				.Select(AmmoRefillIdentity.NormalizeAssetGuid)
-				.Where(sourceAsset => !string.Equals(sourceAsset,
-					AmmoRefillIdentity.NormalizeAssetGuid(value.AssetGuid), StringComparison.Ordinal))), StringComparer.Ordinal);
-		HashSet<string> unsafeBridgeItemKeys = new HashSet<string>(before
-			.Where(value => value.IsAmmoContainer && !value.IsProtected && !value.IsHotkeyBound &&
-				assetsWithCurrentCrossAssetTargets.Contains(AmmoRefillIdentity.NormalizeAssetGuid(value.AssetGuid)) &&
-				(value.AmmoDirectSourceAssetGuids ?? Array.Empty<string>())
-					.Select(AmmoRefillIdentity.NormalizeAssetGuid)
-					.Any(sourceAsset => !string.Equals(sourceAsset,
-						AmmoRefillIdentity.NormalizeAssetGuid(value.AssetGuid), StringComparison.Ordinal)))
-			.Select(value => value.ItemKey), StringComparer.Ordinal);
+		Dictionary<string, AmmoRefillAssetRules> rulesByKey = before.ToDictionary(value => value.ItemKey,
+			value => new AmmoRefillAssetRules(value.AssetGuid, value.IsMagazine, value.IsAmmoSource,
+				value.AmmoDirectSourceAssetGuids), StringComparer.Ordinal);
 		Dictionary<string, long> outboundByItem = new Dictionary<string, long>(StringComparer.Ordinal);
 		Dictionary<string, long> outboundBySourceIdentity = new Dictionary<string, long>(StringComparer.Ordinal);
 		Dictionary<string, long> ledgerDelta = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -85,7 +74,8 @@ internal static class InventoryStackingSemantics
 			string targetAsset = AmmoRefillIdentity.NormalizeAssetGuid(target.AssetGuid);
 			if (!string.Equals(sourceAsset, transfer.SourceAssetGuid, StringComparison.Ordinal) ||
 				!string.Equals(targetAsset, transfer.TargetAssetGuid, StringComparison.Ordinal) ||
-				unsafeBridgeItemKeys.Contains(source.ItemKey) ||
+				(source.IsAmmoContainer && !rulesByKey[source.ItemKey]
+					.CanDonateWithoutIndirectConversionTo(rulesByKey[target.ItemKey])) ||
 				!(target.AmmoDirectSourceAssetGuids ?? Array.Empty<string>())
 					.Select(AmmoRefillIdentity.NormalizeAssetGuid).Contains(sourceAsset, StringComparer.Ordinal))
 			{

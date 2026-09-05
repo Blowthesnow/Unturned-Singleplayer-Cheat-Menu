@@ -159,11 +159,10 @@ Check(selectableSource.Contains("DetailedTooltipDelaySeconds = 0.45f", StringCom
     "Tooltip browsing still has the two-second cold delay or lacks owner/warm-window continuity.");
 Check(toastSource.Contains("private void BeginEnter(ToastEntry entry)", StringComparison.Ordinal) &&
       toastSource.Contains("private void BeginExit(ToastEntry entry)", StringComparison.Ordinal) &&
-      toastSource.Contains("UiMotionChannel.ToastHeight", StringComparison.Ordinal) &&
+      toastSource.Contains("UiMotionChannel.ToastReflow", StringComparison.Ordinal) &&
       toastSource.Contains("blocksRaycasts = false", StringComparison.Ordinal) &&
-      toastSource.Contains("layout.childControlWidth = true", StringComparison.Ordinal) &&
-      toastSource.Contains("layout.childControlHeight = true", StringComparison.Ordinal) &&
-      toastSource.Contains("layout.childForceExpandHeight = false", StringComparison.Ordinal),
+      !toastSource.Contains("VerticalLayoutGroup", StringComparison.Ordinal) &&
+      !toastSource.Contains("preferredHeight =", StringComparison.Ordinal),
     "Toast entry/exit/reflow motion or click-through behavior is incomplete.");
 int modalRegistrations = allOverlaySource.Split("RegisterModal(", StringSplitOptions.None).Length - 1;
 int modalAnimations = allOverlaySource.Split("AnimateModalEnter(_", StringSplitOptions.None).Length - 1;

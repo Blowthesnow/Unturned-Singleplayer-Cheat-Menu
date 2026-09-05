@@ -24,24 +24,26 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		InventoryArrangeSettings inventoryArrangeSettings = _inventoryPresenter.CaptureSettings();
 		string text = PluginLocalization.Translate(InventorySortRegistry.GetDisplayName(inventoryArrangeSettings.Preset));
-		CreateLabel(panel, "安全背包整理", 17, CheatMenuStyle.Text);
 		CreateLabel(panel, "排序预设：" + text + "；默认禁止自动掉落。", 13, CheatMenuStyle.Muted);
-		GameObject gameObject = CreateRow(panel, 44f, 8f);
+		GameObject selectorRow = CreateRow(panel, 44f, CheatMenuStyle.Theme.Space2);
+		GameObject gameObject = CreateRow(selectorRow.transform, 44f, CheatMenuStyle.Theme.Space2);
+		SetLayout(gameObject, 0f, -1f, 1f);
 		CreateLabel(gameObject.transform, "排序预设", 14, CheatMenuStyle.Text, 110f);
 		Button presetButton = null;
 		presetButton = CreateButton(gameObject.transform, text + " ▼", delegate
 		{
 			ToggleInventoryPresetDrawer(presetButton);
 		}, "点击后从列表直接选择一个整理预设，预设的具体规则可将鼠标移到选项上查看。", 0f, 40f, CheatMenuStyle.Surface, 13);
-		SetLayout(presetButton.gameObject, -1f, -1f, 1f);
-		GameObject scopeRow = CreateRow(panel, 44f, 8f);
+		SetLayout(presetButton.gameObject, 0f, -1f, 1f);
+		GameObject scopeRow = CreateRow(selectorRow.transform, 44f, CheatMenuStyle.Theme.Space2);
+		SetLayout(scopeRow, 0f, -1f, 1f);
 		CreateLabel(scopeRow.transform, "整理范围", 14, CheatMenuStyle.Text, 110f);
 		Button scopeButton = null;
 		scopeButton = CreateButton(scopeRow.transform, "配置随身页 ▼", delegate
 		{
 			ToggleInventoryScopeDrawer(scopeButton);
 		}, "分别开启或关闭背包、背心、上衣和裤子储物页；关闭的页面不会参与整理。", 0f, 40f, CheatMenuStyle.Surface, 13);
-		SetLayout(scopeButton.gameObject, -1f, -1f, 1f);
+		SetLayout(scopeButton.gameObject, 0f, -1f, 1f);
 		if (inventoryArrangeSettings.Preset == InventorySortPreset.Custom)
 		{
 			CreateLabel(panel, "自定义排序链（最多 5 项）：Key:Direction,Key:Direction", 12, CheatMenuStyle.Muted);
@@ -86,7 +88,7 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateButton(gameObject4.transform, "整理全部随身", delegate
 		{
 			ShowInventoryArrangeResult(InventoryArrangeScope.AllCarried, InventoryArrangeAction.Arrange, preview: false);
-		}, "整理所有随身页，不处理当前储物箱；默认保护装备并固定热键物品。", 150f, 34f, CheatMenuStyle.Accent, 13);
+		}, "整理所有随身页，不处理当前储物箱；默认保护装备并固定热键物品。", 150f, 34f, CheatMenuStyle.Surface, 13);
 		GameObject gameObject5 = CreateRow(panel, 40f, 7f);
 		CreateButton(gameObject5.transform, "仅压缩", delegate
 		{

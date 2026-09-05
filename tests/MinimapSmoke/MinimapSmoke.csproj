@@ -19,5 +19,6 @@
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\OverheadOcclusionModel.cs" Link="OverheadOcclusionModel.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapMarkerPolicies.cs" Link="MinimapMarkerPolicies.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\BackgroundStateMachine.cs" Link="BackgroundStateMachine.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapTeleportRecovery.cs" Link="MinimapTeleportRecovery.cs" />
   </ItemGroup>
 </Project>

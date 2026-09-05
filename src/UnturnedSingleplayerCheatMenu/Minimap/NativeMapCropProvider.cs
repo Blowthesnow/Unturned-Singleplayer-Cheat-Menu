@@ -13,6 +13,7 @@ internal sealed class NativeMapCropProvider : IDisposable
 	private string _loadedPath = string.Empty;
 	private string _loadedMap = string.Empty;
 	private string _lastFailure = string.Empty;
+	internal bool IsPlayerInsideNativeBounds { get; private set; }
 
 	public NativeMapCropProvider(ManualLogSource log)
 	{
@@ -21,6 +22,7 @@ internal sealed class NativeMapCropProvider : IDisposable
 
 	public NativeMapCropSnapshot Capture(Vector3 center, float radius)
 	{
+		IsPlayerInsideNativeBounds = false;
 		EnsureLoaded();
 		if (_texture == null)
 		{
@@ -31,6 +33,8 @@ internal sealed class NativeMapCropProvider : IDisposable
 
 		CartographyVolume volume = CartographyVolumeManager.Get().GetMainVolume();
 		Vector2 normalizedCenter = ProjectWorldPositionToNativeMap(center, volume);
+		IsPlayerInsideNativeBounds = normalizedCenter.x >= 0f && normalizedCenter.x <= 1f &&
+			normalizedCenter.y >= 0f && normalizedCenter.y <= 1f;
 		float halfWidth;
 		float halfHeight;
 		float mapYaw;
@@ -52,11 +56,18 @@ internal sealed class NativeMapCropProvider : IDisposable
 
 		halfWidth = Mathf.Max(0.0001f, halfWidth);
 		halfHeight = Mathf.Max(0.0001f, halfHeight);
-		Rect uv = new Rect(normalizedCenter.x - halfWidth, normalizedCenter.y - halfHeight,
-			halfWidth * 2f, halfHeight * 2f);
-		bool covers = uv.xMin >= 0f && uv.yMin >= 0f && uv.xMax <= 1f && uv.yMax <= 1f;
-		return new NativeMapCropSnapshot(_texture, uv, mapYaw, true, covers,
-			covers ? "原生 Map.png 局部裁剪" : "可见半径超出 Map.png 边界");
+		MinimapNativeCropWindow crop = MinimapRenderPolicy.ResolveNativeCrop(
+			normalizedCenter.x, normalizedCenter.y, halfWidth, halfHeight);
+		Rect uv = new Rect(crop.UvX, crop.UvY, crop.UvWidth, crop.UvHeight);
+		Rect viewport = new Rect(crop.ViewportX, crop.ViewportY,
+			crop.ViewportWidth, crop.ViewportHeight);
+		string status = crop.CoversVisibleRadius
+			? "原生 Map.png 局部裁剪"
+			: crop.HasVisibleTexture
+				? "原生 Map.png 边缘裁剪，越界区域使用网格"
+				: "当前位置超出 Map.png，使用网格边界";
+		return new NativeMapCropSnapshot(_texture, uv, viewport, mapYaw, true,
+			crop.CoversVisibleRadius, status);
 	}
 
 	private static Vector2 ProjectWorldPositionToNativeMap(Vector3 worldPosition, CartographyVolume volume)
@@ -73,6 +84,7 @@ internal sealed class NativeMapCropProvider : IDisposable
 
 	public void HandleSceneChanged()
 	{
+		IsPlayerInsideNativeBounds = false;
 		DestroyTexture();
 		_loadedMap = string.Empty;
 		_loadedPath = string.Empty;

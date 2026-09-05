@@ -94,6 +94,46 @@ static string LotFingerprint(IEnumerable<AmmoRefillLot> lots) => string.Join(";"
 
 InventoryArrangePlanner planner = new();
 
+// CN_Foray_20 accepts both CN_Guerrilla_Low_60 and its incoming 200-round box source.
+const string forayGuid = "626994d391194520b3c12b49dfb2b536";
+const string lightBoxGuid = "87aadc89276643b489adf51091df8c37";
+const string heavyBoxGuid = "7a459d8955344caeb13a31d5425c00e5";
+List<InventoryArrangeItem> screenshotAmmo =
+[
+    Item("light-box", 0, stackingKind: ItemStackingKind.AmmoContainer, amount: 60, maxAmount: 60,
+        assetGuid: lightBoxGuid, state: "box-state", quality: 73, isMagazine: false,
+        isAmmoSource: true, directSources: [lightBoxGuid, heavyBoxGuid]),
+    Item("foray-mag", 1, stackingKind: ItemStackingKind.AmmoContainer, amount: 16, maxAmount: 20,
+        assetGuid: forayGuid, state: "mag-state", quality: 61,
+        directSources: [lightBoxGuid, heavyBoxGuid, forayGuid])
+];
+foreach (var input in new[] { screenshotAmmo, screenshotAmmo.AsEnumerable().Reverse().ToList() })
+{
+    InventoryArrangePlan refill = Plan(planner, input, Settings(InventoryArrangeAction.Merge, autoRefill: true));
+    Check(refill.IsSuccess && refill.Placements.Single(x => x.Item.ItemKey == "foray-mag").Item.Amount == 20 &&
+          refill.Placements.Single(x => x.Item.ItemKey == "light-box").Item.Amount == 56,
+        "Screenshot regression: a directly compatible refillable box must supply four rounds (60+16 -> 56+20).");
+    Check(InventoryStackingSemantics.TryValidateTransition(input, refill.Placements.Select(x => x.Item),
+        refill.AmmoTransfers, out _), "Refill ledger must accept the safe direct bridge and conserve identities.");
+    InventoryArrangePlan repeat = Plan(planner, refill.Placements.Select(x => x.Item).ToList(),
+        Settings(InventoryArrangeAction.Merge, autoRefill: true));
+    Check(repeat.IsSuccess && repeat.AmmoChangedContainerCount == 0, "Repeated screenshot refill must be stable.");
+}
+
+// Safety is per receiving asset: one incompatible receiver must not disable a safe receiver.
+var unsafeReceiver = Item("unsafe-mag", 2, stackingKind: ItemStackingKind.AmmoContainer, amount: 0, maxAmount: 20,
+    assetGuid: "00000000000000000000000000000001", state: "", directSources: [lightBoxGuid]);
+var mixedReceivers = screenshotAmmo.Concat(new[] { unsafeReceiver }).ToList();
+var mixedPlan = Plan(planner, mixedReceivers, Settings(InventoryArrangeAction.Merge, autoRefill: true));
+Check(mixedPlan.IsSuccess && mixedPlan.Placements.Single(x => x.Item.ItemKey == "foray-mag").Item.Amount == 20 &&
+    mixedPlan.Placements.Single(x => x.Item.ItemKey == "unsafe-mag").Item.Amount == 0,
+    "An unsafe edge must remain blocked without disabling a separate directly compatible receiver.");
+var forgedAfter = mixedReceivers.Select(x => x.CloneWithAmount(x.ItemKey == "light-box" ? 56 :
+    x.ItemKey == "unsafe-mag" ? 4 : x.Amount)).ToList();
+Check(!InventoryStackingSemantics.TryValidateTransition(mixedReceivers, forgedAfter,
+    new[] { new AmmoRefillTransfer(lightBoxGuid, "light-box", unsafeReceiver.AssetGuid, "unsafe-mag", 4) }, out _),
+    "Independent ledger validation must reject a forged indirect conversion even when totals are conserved.");
+
 Check(!AmmoRefillIdentity.TryGetValidCapacity(0, out _) &&
       AmmoRefillIdentity.TryGetValidCapacity(40, out int validCapacity) && validCapacity == 40,
     "Production readers must reject zero-capacity Workshop ammo assets instead of coercing them to capacity one.");

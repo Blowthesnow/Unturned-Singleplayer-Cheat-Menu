@@ -2,7 +2,7 @@
 
 [中文说明](README.md) · [Releases](https://github.com/Blowthesnow/Unturned-Singleplayer-Cheat-Menu/releases) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
-![Version](https://img.shields.io/badge/version-2.0.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-27%2F27%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-30%2F30%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **A bilingual BepInEx 5 toolkit built for Unturned singleplayer worlds.** Instead of relying on a hard-coded item or vehicle catalog, it reads the assets already loaded by the running game. Vanilla content, map-provided assets, and Workshop mods appear according to the current installation and world.
 
@@ -287,6 +287,11 @@ Versions `1.8.0`, `1.9.0`, `1.95.0`, `1.98.0`, and `1.995.0` were unreleased sou
 - Bound stale Snapshot background callbacks to their original connection and exact `ItemDrop`, so they cannot act on the current world after a session change.
 - Moved the Workshop localization Pump to the first isolated runtime step so other UI/session failures cannot starve completion or deferred rescans.
 
+- Fixed compatible Workshop ammunition donors in inventory arrangement and Snapshot refill while preserving round conservation and rejecting indirect incompatible conversions.
+- Fixed minimap orientation, native-map edge clipping, Terrain materials, cliffs, tree canopies, low-quality water, and background recovery after native teleportation.
+- Refined responsive forms, fixed translation progress/actions above scrolling settings, collapsible provider/cache controls, and the two-column time/weather layout.
+- Fixed interrupted tooltip, selectable, and toast transitions; diagnostic minimap captures are disabled by default.
+
 ## Runtime boundaries
 
 Menu readiness and gameplay authorization are separate boundaries. The main menu can open in a connected singleplayer or multiplayer client after the local player exists. Singleplayer gameplay is immediately available. Multiplayer and non-singleplayer listen hosts retain a persistent unsupported warning, and the first gameplay action or gameplay-automation enablement requests acknowledgement for that connection only. Disconnecting, changing servers, reconnecting to a map, or recreating the local player invalidates the acknowledgement.
@@ -376,13 +381,13 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-`v2.0.0` is the first formal release since `v1.7.0`. Intermediate source checkpoints and the cumulative 2.0 changes, build, and Smoke evidence are recorded in the [main changelog](CHANGELOG.md); the v1.8 reverse-recovery boundary remains separate in the [v1.8 recovery log](docs/V1.8_RECOVERY_CHANGELOG.md). The 2.0 Release build completed with zero warnings and zero errors, and all 27 recursively discovered Smoke projects were individually rebuilt and run successfully. Source/API, package, deployment, and real-game evidence remain separate layers.
+`v2.0.0` is the first formal release since `v1.7.0`. Intermediate source checkpoints and the cumulative 2.0 changes, build, and Smoke evidence are recorded in the [main changelog](CHANGELOG.md); the v1.8 reverse-recovery boundary remains separate in the [v1.8 recovery log](docs/V1.8_RECOVERY_CHANGELOG.md). The 2.0 Release build completed with zero warnings and zero errors, and all 30 recursively discovered Smoke projects were individually rebuilt and run successfully. Source/API, package, deployment, and real-game evidence remain separate layers.
 
 v2.0.0 release artifacts:
 
 ```text
-DLL SHA-256: 93FED6974CBF793B8619AE66D2846DFE60F1532AF5E030C2C7DA62EED059FECD
-Plugin-Only ZIP SHA-256: 338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD88953417621CA70C85
+DLL SHA-256: 79AC75876C0B3B829188BB02EEB2DF5C32F04BF1AC7C025D695B44389B33F192
+Plugin-Only ZIP SHA-256: 92CFA47EB93A68A98EC122EEDB67EDC6D59F7E0A290E0207F72500009D7049D9
 ```
 
 The final 2.0 DLL/package was not deployed or tested in a restarted game during release preparation; automated gates do not substitute for real singleplayer acceptance.
@@ -397,3 +402,9 @@ Plugin source code is available under the [MIT License](LICENSE). Unturned, Unit
 The source now uses one `PluginUiRoot`; `RuntimeUpdatePatch` hooks `Provider/MenuUI/PlayerUI.Update` and dispatches one de-duplicated Update/LateUpdate per frame to `PluginRuntimeContext`. Like the working legacy branch, this static bridge does not depend on transient BepInEx or driver components that Unturned destroys during its startup scene transition. `PluginUiRoot` recreates itself if the bootstrap scene removes it. It also includes input-capture release, draggable/clamped window position persistence, and teleport-point views isolated to the current map. The production source no longer contains the legacy IMGUI menu or `UnityEngine.IMGUIModule` reference.
 
 After a Release build, recursively discover and run every `tests/**/*Smoke.csproj` project. Report source/API, build, Smoke, deployment hash, BattlEye launch, BepInEx/plugin discovery, multiplayer connection, translation continuity, and real-game interaction separately. None of these layers substitutes for real singleplayer gameplay acceptance.
+
+## Support development
+
+If this plugin helps you play or localize Unturned, you can support continued development on [Afdian](https://afdian.com/a/Blowthesnow). Sponsorship is entirely optional.
+
+<p><a href="https://afdian.com/a/Blowthesnow"><img src="docs/images/afdian-Blowthesnow.jpg" alt="Blowthesnow Afdian sponsorship QR code" width="320" /></a></p>

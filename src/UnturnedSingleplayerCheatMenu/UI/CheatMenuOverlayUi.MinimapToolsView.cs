@@ -16,9 +16,10 @@ internal sealed partial class CheatMenuOverlayUi
 	{
 		MinimapSettings settings = _minimapPresenter.CaptureSettings();
 		string backgroundState = LocalizeMinimapValue(MinimapDisplayText.BackgroundState(_minimapPresenter.BackgroundState));
-		string summary = settings.RotateWithView
-			? $"状态：{backgroundState}  ·  默认关闭  ·  随视角转动"
-			: $"状态：{backgroundState}  ·  默认关闭  ·  北向固定";
+		string summary = string.Format(PluginLocalization.Translate("状态：{0}  ·  {1}  ·  {2}"),
+			PluginLocalization.Translate(settings.Enabled ? "小地图已开启" : "小地图已关闭"),
+			backgroundState,
+			PluginLocalization.Translate(settings.RotateWithView ? "随视角转动" : "北向固定"));
 		CreateSummaryPanel(panel, summary);
 		GameObject pages = CreateRow(panel, 36f, 6f);
 		CreateMinimapPageButton(pages.transform, 0, "常规");
@@ -70,7 +71,6 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateToggleAction(display.transform, "实时建筑", settings.ShowLoadedBuildings, value => ChangeMinimap(s => s.ShowLoadedBuildings = value));
 		CreateToggleAction(display.transform, "指南针", settings.ShowCompass, value => ChangeMinimap(s => s.ShowCompass = value));
 		CreateToggleAction(display.transform, "坐标", settings.ShowCoordinates, value => ChangeMinimap(s => s.ShowCoordinates = value));
-		CreateLabel(panel, "圆形与正方形视口均已预创建；切换不会在画布重建期间销毁后重建。", 12, CheatMenuStyle.Muted);
 	}
 
 	private void BuildMinimapMarkerPage(Transform panel, MinimapSettings settings)
@@ -125,9 +125,9 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateMinimapCompactSlider(row4.transform, "楼板排除", settings.FloorExclusionMaxThickness,
 			0f, 5f, 0.25f, " 米", value => s => s.FloorExclusionMaxThickness = value);
 		CreateMinimapCompactSlider(row4.transform, "切片上方", settings.UndergroundSliceAbove,
-			MinimapSettings.MinUndergroundSlice, MinimapSettings.MaxUndergroundSlice, 0.5f, " 米", value => s => s.UndergroundSliceAbove = value);
+			MinimapSettings.MinUndergroundSlice, MinimapSettings.MaxUndergroundSliceAbove, 0.5f, " 米", value => s => s.UndergroundSliceAbove = value);
 		CreateMinimapSlider(panel, "切片下方", settings.UndergroundSliceBelow,
-			MinimapSettings.MinUndergroundSlice, MinimapSettings.MaxUndergroundSlice, 0.5f, " 米", value => s => s.UndergroundSliceBelow = value);
+			MinimapSettings.MinUndergroundSlice, MinimapSettings.MaxUndergroundSliceBelow, 16f, " 米", value => s => s.UndergroundSliceBelow = value);
 		CreateLabel(panel, "安全关系必须满足：楼板排除 ≤ 退出厚度 < 进入厚度；无效组合会回退默认值。", 12, CheatMenuStyle.Warning);
 	}
 

@@ -33,9 +33,11 @@ internal sealed partial class CheatMenuOverlayUi
 		float num = snapshot.NormalizedTime;
 
 		const float primaryCardHeight = 460f;
-		GameObject cardRow = CreateRow(transform, primaryCardHeight, CheatMenuStyle.Theme.Space3);
-		cardRow.GetComponent<HorizontalLayoutGroup>().childForceExpandHeight = true;
+		GameObject cardRow = CreateRow(transform, 0f, CheatMenuStyle.Theme.Space3);
+		cardRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.UpperLeft;
 		GameObject timeCard = CreateWorldCard(cardRow.transform, "TimeCard", primaryCardHeight);
+		SetLayout(timeCard, 360f, primaryCardHeight, 1f, 0f);
+		timeCard.GetComponent<LayoutElement>().minWidth = 360f;
 		CreateLabel(timeCard.transform, "时间", 17, CheatMenuStyle.Text);
 		_timeCurrentText = CreateLabel(timeCard.transform, $"当前时间：{snapshot.Time:N0} / {cycle:N0}（{num:P0}）", 14);
 		_timeRing = CreateWorldTimeRing(timeCard.transform, num, delegate(float hours)
@@ -73,7 +75,11 @@ internal sealed partial class CheatMenuOverlayUi
 			SetStatus(value ? "已开启满月。" : "已关闭满月。");
 		}, "强制启用或关闭当前世界的满月状态。");
 
-		GameObject eventCard = CreateWorldCard(cardRow.transform, "WorldEventsCard", primaryCardHeight);
+		GameObject detailsColumn = CreateObject("WorldDetailsColumn", cardRow.transform);
+		AddVerticalLayout(detailsColumn, CheatMenuStyle.Theme.Space3, new RectOffset(0, 0, 0, 0));
+		SetLayout(detailsColumn, 360f, -1f, 1f, 0f);
+		detailsColumn.GetComponent<LayoutElement>().minWidth = 360f;
+		GameObject eventCard = CreateWorldCard(detailsColumn.transform, "WorldEventsCard", -1f);
 		CreateLabel(eventCard.transform, "世界事件", 17, CheatMenuStyle.Text);
 		GameObject eventRow1 = CreateRow(eventCard.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateAction(eventRow1.transform, "立即呼叫空投", delegate
@@ -103,10 +109,10 @@ internal sealed partial class CheatMenuOverlayUi
 			SetStatus("当前天气和自然天气调度已关闭。", 3f, StatusKind.Warning);
 		}, "结束当前天气并关闭后续自然天气调度。");
 
-		GameObject scanCard = CreateWorldCard(transform, "ScanInfoCard", 184f);
+		GameObject scanCard = CreateWorldCard(detailsColumn.transform, "ScanInfoCard", -1f);
 		CreateLabel(scanCard.transform, "扫描信息", 17, CheatMenuStyle.Text);
-		CreateLabel(scanCard.transform, $"物品：{snapshot.ItemCount}（模组 {snapshot.WorkshopItemCount}）    车辆：{snapshot.VehicleCount}（模组 {snapshot.WorkshopVehicleCount}）", 14);
-		CreateLabel(scanCard.transform, "只显示 Unturned 当前已成功加载的原版、地图随附和 Workshop 资产。", 12, CheatMenuStyle.Muted);
+		CreateFlowLabel(scanCard.transform, $"物品：{snapshot.ItemCount}（模组 {snapshot.WorkshopItemCount}）    车辆：{snapshot.VehicleCount}（模组 {snapshot.WorkshopVehicleCount}）", CheatMenuStyle.Text);
+		CreateFlowLabel(scanCard.transform, "只显示 Unturned 当前已成功加载的原版、地图随附和 Workshop 资产。", CheatMenuStyle.Muted);
 		GameObject scanActions = CreateRow(scanCard.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateButton(scanActions.transform, "重新扫描模组资产", delegate
 		{

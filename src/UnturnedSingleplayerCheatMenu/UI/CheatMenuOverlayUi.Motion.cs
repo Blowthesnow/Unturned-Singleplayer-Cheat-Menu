@@ -23,14 +23,16 @@ internal sealed partial class CheatMenuOverlayUi
 			blocksRaycasts: true);
 	}
 
-	private void ShowHoverExplanationVisual(RectTransform tooltipRect)
+	private void ShowHoverExplanationVisual(RectTransform tooltipRect, bool warm)
 	{
 		if (_hoverExplanationRoot == null || tooltipRect == null) return;
 		bool wasActive = _hoverExplanationRoot.activeSelf;
 		_hoverExplanationRoot.SetActive(value: true);
 		CanvasGroup group = UiTransientMotion.EnsureCanvasGroup(_hoverExplanationRoot, blocksRaycasts: false);
-		if (_suppressTransientMotion || _uiRoot.Motion == null)
+		if (warm || _suppressTransientMotion || _uiRoot.Motion == null)
 		{
+			// Warm browsing must also retire a pending exit completion, not just skip the delay.
+			_uiRoot.Motion?.Cancel(_hoverExplanationRoot, includeChildren: true);
 			group.alpha = 1f;
 			tooltipRect.localScale = Vector3.one;
 			return;

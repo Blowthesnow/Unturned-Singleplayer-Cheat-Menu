@@ -47,7 +47,7 @@ internal sealed partial class CheatMenuOverlayUi
 		GameObject statGrid = CreateObject("CharacterStatTwoColumnGrid", transform);
 		AddVerticalLayout(statGrid, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
 		SetLayout(statGrid, -1f, CheatMenuStyle.Theme.ControlDefault * 3f + CheatMenuStyle.Theme.Space2 * 2f, 1f, 0f);
-		GameObject statRow1 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space3);
+		GameObject statRow1 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateLabeledInput(statRow1.transform, "生命", _healthTarget, delegate(string value)
 		{
 			_healthTarget = value;
@@ -56,7 +56,7 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			_foodTarget = value;
 		}, width: 0f);
-		GameObject statRow2 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space3);
+		GameObject statRow2 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateLabeledInput(statRow2.transform, "水分", _waterTarget, delegate(string value)
 		{
 			_waterTarget = value;
@@ -65,7 +65,7 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			_virusTarget = value;
 		}, width: 0f);
-		GameObject statRow3 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space3);
+		GameObject statRow3 = CreateRow(statGrid.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateLabeledInput(statRow3.transform, "体力", _staminaTarget, delegate(string value)
 		{
 			_staminaTarget = value;

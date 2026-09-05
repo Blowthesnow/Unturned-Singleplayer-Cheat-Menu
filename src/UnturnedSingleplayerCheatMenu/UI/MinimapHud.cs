@@ -17,6 +17,8 @@ internal sealed class MinimapHud : IDisposable
 	{
 		internal GameObject Root;
 		internal RectTransform MapContent;
+		internal RawImage BackgroundUnderlay;
+		internal RawImage NativeMapUnderlay;
 		internal RawImage Background;
 		internal RawImage ObjectOverlay;
 		internal Image Player;
@@ -164,6 +166,9 @@ internal sealed class MinimapHud : IDisposable
 		mapContentObject.transform.SetParent(root.transform, false);
 		RectTransform mapContent = mapContentObject.GetComponent<RectTransform>();
 		Center(mapContent);
+		RawImage backgroundUnderlay = CreateRawImage("BackgroundUnderlay", mapContent.transform);
+		backgroundUnderlay.texture = _gridTexture;
+		RawImage nativeMapUnderlay = CreateRawImage("NativeMapUnderlay", mapContent.transform);
 		RawImage background = CreateRawImage("Background", mapContent.transform);
 		background.texture = _gridTexture;
 		RawImage objectOverlay = CreateRawImage("LoadedBuildings", mapContent.transform);
@@ -198,6 +203,8 @@ internal sealed class MinimapHud : IDisposable
 		{
 			Root = root,
 			MapContent = mapContent,
+			BackgroundUnderlay = backgroundUnderlay,
+			NativeMapUnderlay = nativeMapUnderlay,
 			Background = background,
 			ObjectOverlay = objectOverlay,
 			Player = player,
@@ -534,24 +541,51 @@ internal sealed class MinimapHud : IDisposable
 			view.HasState = true;
 		}
 		bool showObjects = MinimapRenderPolicy.ShowsLoadedObjects(state, objects != null);
-		SetRawImage(view.ObjectOverlay, showObjects ? objects : null, new Rect(0f, 1f, 1f, -1f),
+		SetRawImage(view.ObjectOverlay, showObjects ? objects : null, new Rect(0f, 0f, 1f, 1f),
 			showObjects ? Color.white : Color.clear);
+		ApplyBackgroundViewport(view.BackgroundUnderlay, new Rect(0f, 0f, 1f, 1f));
+		SetRawImage(view.BackgroundUnderlay, _gridTexture, new Rect(0f, 0f, 1f, 1f),
+			state == MinimapBackgroundState.Disabled ? Color.clear : Color.white);
+		bool showNativeUnderlay = MinimapRenderPolicy.ShowsNativeUnderlay(
+			state, nativeMap.IsAvailable) && nativeMap.ViewportRect.width > 0f &&
+			nativeMap.ViewportRect.height > 0f;
+		ApplyBackgroundViewport(view.NativeMapUnderlay,
+			showNativeUnderlay ? nativeMap.ViewportRect : new Rect(0f, 0f, 1f, 1f));
+		SetRawImage(view.NativeMapUnderlay, showNativeUnderlay ? nativeMap.Texture : null,
+			showNativeUnderlay ? nativeMap.UvRect : new Rect(0f, 0f, 1f, 1f),
+			showNativeUnderlay ? Color.white : Color.clear);
 		if (state == MinimapBackgroundState.NativeMapCrop && nativeMap.IsAvailable)
 		{
-			SetRawImage(view.Background, nativeMap.Texture, nativeMap.UvRect, Color.white);
+			ApplyBackgroundViewport(view.Background, nativeMap.ViewportRect);
+			SetRawImage(view.Background, nativeMap.Texture, nativeMap.UvRect,
+				nativeMap.ViewportRect.width > 0f && nativeMap.ViewportRect.height > 0f
+					? Color.white
+					: Color.clear);
 		}
 		else if ((state == MinimapBackgroundState.RealtimeSurface || state == MinimapBackgroundState.RealtimeHeightSlice) && terrain != null)
 		{
-			SetRawImage(view.Background, terrain, new Rect(0f, 1f, 1f, -1f), Color.white);
+			ApplyBackgroundViewport(view.Background, new Rect(0f, 0f, 1f, 1f));
+			SetRawImage(view.Background, terrain, new Rect(0f, 0f, 1f, 1f), Color.white);
 		}
 		else if (state == MinimapBackgroundState.Disabled)
 		{
-			SetRawImage(view.Background, _gridTexture, new Rect(0f, 0f, 1f, 1f), Color.clear);
+			ApplyBackgroundViewport(view.Background, new Rect(0f, 0f, 1f, 1f));
+			SetRawImage(view.Background, null, new Rect(0f, 0f, 1f, 1f), Color.clear);
 		}
 		else
 		{
-			SetRawImage(view.Background, _gridTexture, new Rect(0f, 0f, 1f, 1f), Color.white);
+			ApplyBackgroundViewport(view.Background, new Rect(0f, 0f, 1f, 1f));
+			SetRawImage(view.Background, null, new Rect(0f, 0f, 1f, 1f), Color.clear);
 		}
+	}
+
+	private static void ApplyBackgroundViewport(RawImage image, Rect viewport)
+	{
+		RectTransform rect = image.rectTransform;
+		rect.anchorMin = new Vector2(viewport.xMin, viewport.yMin);
+		rect.anchorMax = new Vector2(viewport.xMax, viewport.yMax);
+		rect.offsetMin = Vector2.zero;
+		rect.offsetMax = Vector2.zero;
 	}
 
 	private static void SetRawImage(RawImage image, Texture texture, Rect uvRect, Color color)

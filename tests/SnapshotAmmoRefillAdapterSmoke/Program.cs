@@ -2,6 +2,44 @@ using UnturnedSingleplayerCheatMenu.InfiniteStorage.Adapters.AmmoRefill;
 using UnturnedSingleplayerCheatMenu.InfiniteStorage.SnapshotKernel;
 using UnturnedSingleplayerCheatMenu.ItemStacking;
 
+// A refillable box is a persistent target as well as a donor, not SourceOnly.
+{
+    Guid magGuid = Guid.Parse("626994d3-9119-4520-b3c1-2b49dfb2b536");
+    Guid boxGuid = Guid.Parse("87aadc89-2766-43b4-89ad-f51091df8c37");
+    string heavyGuid = "7a459d8955344caeb13a31d5425c00e5";
+    SnapshotKernel screenshot = new SnapshotKernel();
+    var magIdentity = new ItemGroupIdentity(60080, magGuid);
+    var boxIdentity = new ItemGroupIdentity(60044, boxGuid);
+    var mag = new ItemSnapshot(60080, 16, 61, new byte[] { 8, 9 });
+    var box = new ItemSnapshot(60044, 60, 73, new byte[] { 4, 5 });
+    Assert(screenshot.Store(magIdentity, mag, 1).Success && screenshot.Store(boxIdentity, box, 1).Success,
+        "Store screenshot fixtures.");
+    var inputs = new[]
+    {
+        new SnapshotAmmoCandidate("mag", magIdentity, mag, 1, 20, SnapshotAmmoRole.Target,
+            new AmmoRefillAssetRules(magGuid.ToString("N"), true, false, new[] { boxGuid.ToString("N"), heavyGuid })),
+        new SnapshotAmmoCandidate("box", boxIdentity, box, 1, 60, SnapshotAmmoRole.Source | SnapshotAmmoRole.Target,
+            new AmmoRefillAssetRules(boxGuid.ToString("N"), false, true, new[] { boxGuid.ToString("N"), heavyGuid }))
+    };
+    Assert(SnapshotAmmoRefillPlanner.TryPlan(inputs, out var refill, out _) && refill.Changed,
+        "Screenshot regression: Snapshot refill must not reject a box whose upstream sources are directly accepted by the magazine.");
+    var tx = new SnapshotKernelTransaction(screenshot, new SnapshotStorageIdentity("world", "player"));
+    Assert(refill.Apply(tx).Success && tx.Commit(_ => SnapshotSaveResult.Succeeded()).Success, "Commit screenshot refill.");
+    var magAfter = screenshot.GetGroups().Single(x => x.AssetId == 60080).Buckets.Single();
+    var boxAfter = screenshot.GetGroups().Single(x => x.AssetId == 60044).Buckets.Single();
+    Assert(magAfter.Snapshot.Amount == 20 && boxAfter.Snapshot.Amount == 56 && refill.TotalRounds == 76 &&
+        magAfter.Count == 1 && boxAfter.Count == 1 && magAfter.Snapshot.Quality == 61 && boxAfter.Snapshot.Quality == 73 &&
+        magAfter.Snapshot.State.SequenceEqual(mag.State) && boxAfter.Snapshot.State.SequenceEqual(box.State),
+        "Snapshot refill must preserve both containers, quality, state, and all 76 rounds.");
+    var repeatedInputs = inputs.Select(x => new SnapshotAmmoCandidate(x.LotKey, x.Identity,
+        x.Identity.AssetId == 60080 ? magAfter.Snapshot : boxAfter.Snapshot, x.Count, x.Capacity, x.Role, x.Rules)).ToArray();
+    Assert(SnapshotAmmoRefillPlanner.TryPlan(repeatedInputs, out var repeated, out _) && !repeated.Changed,
+        "Repeated Snapshot refill must be stable.");
+    Assert(SnapshotAmmoRefillPlanner.TryPlan(inputs.AsEnumerable().Reverse(), out var reversed, out _) &&
+        reversed.TotalRounds == 76 && reversed.ChangedContainerCount == refill.ChangedContainerCount,
+        "Snapshot input order must not affect safe refill.");
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);

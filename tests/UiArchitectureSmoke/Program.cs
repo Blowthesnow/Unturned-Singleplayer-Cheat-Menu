@@ -330,10 +330,10 @@ Check(ReadMethodBody(fluentAdapterSource, "private FluentSelectablePalette Resol
       !ReadMethodBody(fluentAdapterSource, "private FluentSelectablePalette ResolveTogglePalette()")
           .Contains("FocusSoft", StringComparison.Ordinal),
     "Toggle keyboard focus still covers the row with an accent-derived fill.");
-Check(uiToastSource.Contains("UiMotionChannel.ToastHeight", StringComparison.Ordinal) &&
+Check(uiToastSource.Contains("UiMotionChannel.ToastReflow", StringComparison.Ordinal) &&
       uiToastSource.Contains("blocksRaycasts = false", StringComparison.Ordinal) &&
-      uiToastSource.Contains("layout.childControlWidth = true", StringComparison.Ordinal) &&
-      uiToastSource.Contains("layout.childControlHeight = true", StringComparison.Ordinal) &&
+      !uiToastSource.Contains("VerticalLayoutGroup", StringComparison.Ordinal) &&
+      !uiToastSource.Contains("preferredHeight =", StringComparison.Ordinal) &&
       overlaySelectableSource.Contains("DetailedTooltipDelaySeconds = 0.45f", StringComparison.Ordinal) &&
       overlaySelectableSource.Contains("TooltipWarmWindowSeconds = 0.70f", StringComparison.Ordinal),
     "Toast reflow/click-through or tooltip warm-navigation motion is incomplete.");
@@ -557,9 +557,9 @@ Check(infiniteStorageAmmoRefillSource.Contains("SnapshotAmmoRole.Source", String
       !ammoCompatibilityIndexSource.Contains("!(item is ItemMagazineAsset)", StringComparison.Ordinal) &&
       ammoRefillAllocatorSource.Contains("FrozenBudget", StringComparison.Ordinal) &&
       ammoRefillAllocatorSource.Contains("source.RemainingRounds -= amount", StringComparison.Ordinal) &&
-      ammoRefillAllocatorSource.Contains("assetsWithCurrentCrossAssetTargets", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("directSources.Contains(value.Lot.Rules.AssetGuid)", StringComparison.Ordinal) &&
       ammoRefillAllocatorSource.Contains("lot.IsTargetContainer", StringComparison.Ordinal) &&
-      ammoRefillAllocatorSource.Contains("unsafeBridgeLots", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("value.Lot.Rules.CanDonateWithoutIndirectConversionTo(target.Rules)", StringComparison.Ordinal) &&
       plugin.Contains("InventoryStateReader.InvalidateAmmoCompatibility()", StringComparison.Ordinal) &&
       plugin.Contains("_snapshotAmmoRefillModule?.RefreshAssets()", StringComparison.Ordinal),
     "Snapshot AmmoRefill does not preserve explicit source/target roles or the shared compatibility allocator/index.");
@@ -569,10 +569,10 @@ Check(inventoryArrangePlannerSource.Contains("item.IsAmmoSource && item.IsFungib
       inventoryArrangePlannerSource.Contains("HashSet<string> sourceOnlyKeys", StringComparison.Ordinal) &&
       inventoryArrangePlannerSource.Contains("sourceOnlyKeys.Contains(value.SourceLotKey)", StringComparison.Ordinal),
     "Inventory arrange does not adapt mapped fungible Supply ammo into the shared source-only donor pool.");
-Check(inventoryStackingSemanticsSource.Contains("unsafeBridgeItemKeys", StringComparison.Ordinal) &&
-      inventoryStackingSemanticsSource.Contains("value.IsAmmoContainer", StringComparison.Ordinal) &&
-      inventoryStackingSemanticsSource.Contains("unsafeBridgeItemKeys.Contains(source.ItemKey)", StringComparison.Ordinal),
-    "Inventory arrange ledger validation does not independently reject persistent bridge-container outflow.");
+Check(inventoryStackingSemanticsSource.Contains("source.IsAmmoContainer", StringComparison.Ordinal) &&
+      inventoryStackingSemanticsSource.Contains(".CanDonateWithoutIndirectConversionTo(rulesByKey[target.ItemKey])", StringComparison.Ordinal) &&
+      ammoRefillAllocatorSource.Contains("DirectSourceAssetGuids.All", StringComparison.Ordinal),
+    "Inventory arrange ledger validation must check donor-to-target safety rather than reject every refillable box.");
 Check(inventoryStateReaderSource.Contains("AmmoRefillIdentity.TryGetValidCapacity(asset.MaxAmount", StringComparison.Ordinal) &&
       !inventoryStateReaderSource.Contains("Math.Max(1, asset.MaxAmount)", StringComparison.Ordinal) &&
 	  unturnedAmmoCompatibilityReaderSource.Contains("target = hasExplicitTarget ? blueprint.TargetItem.FindItemAsset() : owner", StringComparison.Ordinal) &&
@@ -826,8 +826,10 @@ Check(!minimapHud.Contains("HudFrameStyle.Apply(_root, _dragSurface)", StringCom
     "MinimapRoot must remain transparent and omit the outer rectangular HUD frame in every shape mode.");
 Check(minimapHud.Contains("_uiRoot.QueueHudDestroy(_root)", StringComparison.Ordinal),
     "Minimap teardown bypasses the lifecycle-safe deferred HUD destroy queue.");
-Check(minimapHud.Contains("SetRawImage(view.ObjectOverlay, showObjects ? objects : null, new Rect(0f, 1f, 1f, -1f)", StringComparison.Ordinal),
-    "The loaded-object camera texture is not using the same vertical orientation as the terrain camera texture.");
+Check(minimapHud.Contains("SetRawImage(view.ObjectOverlay, showObjects ? objects : null, new Rect(0f, 0f, 1f, 1f)", StringComparison.Ordinal) &&
+      minimapHud.Contains("SetRawImage(view.Background, terrain, new Rect(0f, 0f, 1f, 1f)", StringComparison.Ordinal) &&
+      !minimapHud.Contains("new Rect(0f, 1f, 1f, -1f)", StringComparison.Ordinal),
+    "Terrain and loaded-object camera textures must share the same north-up, non-inverted vertical orientation.");
 Check(minimapHud.Contains("MinimapRenderPolicy.ShowsLoadedObjects(state, objects != null)", StringComparison.Ordinal) &&
       minimapHud.Contains("showObjects ? objects : null", StringComparison.Ordinal),
     "The HUD does not clear stale scene-camera textures when returning to the native map background.");
@@ -892,23 +894,100 @@ Check(minimapRenderer.Contains("internal const int DefaultResolution = 512", Str
       minimapRenderer.Contains("texture.Release()", StringComparison.Ordinal) &&
       minimapRenderer.Contains("UnityEngine.Object.Destroy(texture)", StringComparison.Ordinal),
     "Conditional minimap cameras are not armed for one Unity render frame or their render textures are not released.");
-Check(minimapRenderer.Contains("Shader.Find(\"Unlit/Texture\")", StringComparison.Ordinal) &&
-      minimapRenderer.Contains("if (_replacementShader != null)", StringComparison.Ordinal) &&
-      minimapRenderer.Contains("camera.SetReplacementShader(_replacementShader, string.Empty)", StringComparison.Ordinal) &&
+Check(minimapRenderer.Contains("MinimapSceneCameraPass.Terrain", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("MinimapSceneCameraPass.Objects", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("MinimapRenderPolicy.ResolveCameraDepth", StringComparison.Ordinal),
+    "Terrain and loaded-object cameras must use independent vertical profiles rather than sharing the player-height slice.");
+Check(minimapRenderer.Contains("camera.CopyFrom(playerCamera)", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("camera.ResetProjectionMatrix()", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("camera.ResetCullingMatrix()", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("camera.layerCullDistances = NoLayerCullDistances", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("Shader.Find(\"Unlit/Texture\")", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("SetReplacementShader(", StringComparison.Ordinal) &&
+      ReadMethodBody(minimapRenderer, "private static void ConfigureCamera(").Contains("camera.ResetReplacementShader()", StringComparison.Ordinal) &&
       minimapRenderer.Contains("texture.IsCreated()", StringComparison.Ordinal) &&
-      !minimapRenderer.Contains("Unity compatibility shader 'Unlit/Texture' is unavailable.", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("camera.Render()", StringComparison.Ordinal) &&
       !minimapRenderer.Contains("RenderWithShader", StringComparison.Ordinal),
-    "Realtime minimap cameras treat an optional compatibility shader as mandatory or bypass Unity's normal camera render loop.");
+    "Realtime minimap cameras must preserve native terrain splat, water and cutout materials after copying the player profile, without a universal texture shader override.");
 Check(minimapRenderer.Contains("internal void BeginFrame()", StringComparison.Ordinal) &&
       minimapFeature.Contains("_sceneRenderer.BeginFrame();", StringComparison.Ordinal),
     "The one-frame minimap camera activation is not retired at the start of the next plugin update.");
+Check(minimapRenderer.Contains("class MinimapMainCameraIdentityBridge", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("private void OnPreCull()", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("gameObject.tag = \"MainCamera\"", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("private void OnPostRender()", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("private void OnDisable()", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_terrainIdentityBridge.SetArmed(renderTerrain)", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("camera.depth = playerCamera != null ? playerCamera.depth + depthOffset : depthOffset", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("camera.depthTextureMode |= DepthTextureMode.Depth", StringComparison.Ordinal) &&
+      !ReadMethodBody(minimapRenderer, "private Camera CreateCamera(string name, RenderTexture target, int mask, Color clearColor)")
+          .Contains("MainCamera", StringComparison.Ordinal),
+    "The terrain camera must acquire MainCamera identity only during rendering so WaterTile/PlanarReflection execute without permanently hijacking Camera.main.");
+Check(minimapRenderer.Contains("RenderSettings.fog = false", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("RenderSettings.ambientMode = AmbientMode.Trilight", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("Palette.AMBIENT", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("QualitySettings.lodBias = float.MaxValue", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("LevelLighting.setSeaFloat(\"_Shininess\", 500f)", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("LevelLighting.setSeaColor(\"_SpecularColor\", Color.black)", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("basemapDistance", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("heightmapPixelError", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("8192f", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("PlanarReflection.postRender += HandlePlanarReflectionPostRender", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("PlanarReflection.postRender -= HandlePlanarReflectionPostRender", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("EndTerrainCapture", StringComparison.Ordinal),
+    "The high-altitude terrain camera must reproduce and fully restore Unturned's native satellite-capture lighting and terrain LOD context.");
 string minimapRendererInitialize = ReadMethodBody(minimapRenderer, "private void Initialize(int resolution)");
-Check(!minimapRendererInitialize.Contains("RayMasks.DEFAULT", StringComparison.Ordinal) &&
+Check(minimapRenderer.Contains("RayMasks.WATER | RayMasks.GROUND | RayMasks.GROUND2 | RayMasks.RESOURCE", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("RayMasks.DEFAULT | RayMasks.TRANSPARENT_FX | RayMasks.RESOURCE", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("CollectScenery(resource.model, center, radius)", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("CollectScenery(resource.skybox, center, radius)", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("MinimapLightingScope", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("LevelLighting.sun", StringComparison.Ordinal),
+    "Resource canopies must remain full height after removing the added directional-light override.");
+Check(minimapRenderer.Contains("LevelGround.GetTreesOrNullInRegion", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("LevelGround.trees", StringComparison.Ordinal),
+    "The lighting rollback must preserve spatial tree queries using the current runtime API.");
+string minimapCaptureProbe = Read(Path.Combine(sourceRoot, "Minimap", "MinimapRenderCaptureProbe.cs"));
+Check(minimapCaptureProbe.Contains("Environment.GetEnvironmentVariable(\"UNTURNED_MINIMAP_CAPTURE\")", StringComparison.Ordinal) &&
+      minimapCaptureProbe.Contains("_armed = _captureEnabled && armed", StringComparison.Ordinal),
+    "Diagnostic GPU capture must be explicitly enabled by UNTURNED_MINIMAP_CAPTURE=1 and otherwise remain unarmed.");
+Check(minimapCaptureProbe.Contains("private void OnPostRender()", StringComparison.Ordinal) &&
+      minimapCaptureProbe.Contains("frames < 3", StringComparison.Ordinal) &&
+      minimapCaptureProbe.Contains("_attempted.Add(_state)", StringComparison.Ordinal) &&
+      minimapCaptureProbe.Contains("inFrustum = GeometryUtility.TestPlanesAABB", StringComparison.Ordinal) &&
+      !minimapCaptureProbe.Contains("!GeometryUtility.TestPlanesAABB", StringComparison.Ordinal) &&
+      minimapCaptureProbe.Contains("RenderTexture.active = previous", StringComparison.Ordinal) &&
+      minimapCaptureProbe.Contains("RenderTexture.ReleaseTemporary(resolved)", StringComparison.Ordinal),
+    "Bounded water evidence must retain clipped nearby surfaces and restore temporary readback state.");
+Check(minimapRenderer.Contains("MinimapRenderCaptureProbe", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_terrainCaptureProbe.Arm(state, renderTerrain)", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_objectCaptureProbe.Arm(state, renderObjects)", StringComparison.Ordinal),
+    "Water diagnosis must capture both actual scheduled render passes rather than treating a composed HUD screenshot as render-layer evidence.");
+Check(minimapRenderer.Contains("MinimapSceneryScope", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("EObjectChart.CLIFF", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("levelObject.skybox", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_terrainSceneryScope.Arm", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_objectSceneryScope.Arm", StringComparison.Ordinal),
+    "Full-height cliff scenery, including landmark renderers, must be separated from the unchanged full-map road slice.");
+Check(minimapRenderer.Contains("if (!_waterKeywords.Begin()) return;", StringComparison.Ordinal) &&
+      ReadMethodBody(minimapRenderer, "private void EndTerrainCapture()").Contains("_waterKeywords.Restore()", StringComparison.Ordinal),
+    "Orthographic water edge blending must snapshot and restore both keyword states independently.");
+Check(minimapRenderer.Contains("Materials/Landscapes/Landscape_Forward", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("Materials/Landscapes/Landscape_Deferred", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("OriginalMaterial = originalMaterial", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("originalMaterial == _deferredTerrainMaterial", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_materialTemplateProperty.SetValue(terrain, _forwardTerrainMaterial, null)", StringComparison.Ordinal) &&
+      ReadMethodBody(minimapRenderer, "private void EndTerrainCapture()").Contains("state.OriginalMaterial", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("GraphicsSettings.apply(", StringComparison.Ordinal) &&
+      !minimapRenderer.Contains("GraphicsSettings.renderMode =", StringComparison.Ordinal),
+    "Orthographic terrain capture must scope the native Deferred-to-Forward material swap and restore the exact original without applying global graphics settings.");
+Check(minimapRendererInitialize.Contains("RayMasks.WATER | RayMasks.GROUND | RayMasks.GROUND2", StringComparison.Ordinal) &&
+      minimapRendererInitialize.Contains("RayMasks.DEFAULT | RayMasks.TRANSPARENT_FX", StringComparison.Ordinal) &&
       !minimapRendererInitialize.Contains("RayMasks.PLAYER", StringComparison.Ordinal) &&
       !minimapRendererInitialize.Contains("RayMasks.ENEMY", StringComparison.Ordinal) &&
       !minimapRendererInitialize.Contains("RayMasks.AGENT", StringComparison.Ordinal) &&
       !minimapRendererInitialize.Contains("RayMasks.ITEM", StringComparison.Ordinal),
-    "The minimap object camera includes a broad/default character, creature, or item layer.");
+    "The minimap cameras must include Workshop ground/water layers while still excluding character and item rendering.");
 Check(minimapFeature.Contains("_hud.SetRuntimeVisible(active)", StringComparison.Ordinal) &&
       !ReadMethodBody(minimapFeature, "internal void Update(float now, NearbyItemSnapshot sharedItemSnapshot = null)")
           .Contains("_hud.ApplySettings", StringComparison.Ordinal),
@@ -1025,6 +1104,10 @@ Check(plugin.Contains("Config.Bind(\"Minimap\", \"LayoutEditMode\", defaultValue
     "Minimap layout edit mode is not persisted through the protected BepInEx configuration session.");
 Check(plugin.Contains("Config.Bind(\"Minimap\", \"SchemaVersion\", 0", StringComparison.Ordinal) &&
       plugin.Contains("_minimapShowOtherFloors.Value = true", StringComparison.Ordinal) &&
+      plugin.Contains("CurrentMinimapSchemaVersion = 5", StringComparison.Ordinal) &&
+      plugin.Contains("if (minimapSchemaVersion < 5)", StringComparison.Ordinal) &&
+      plugin.Contains("_minimapUndergroundSliceBelow.Value == 48f", StringComparison.Ordinal) &&
+      plugin.Contains("MinimapSettings.DefaultUndergroundSliceBelow", StringComparison.Ordinal) &&
       plugin.Contains("_minimapSchemaVersion.Value = CurrentMinimapSchemaVersion", StringComparison.Ordinal),
     "Existing minimap configs are not migrated to the new all-floor default exactly once.");
 Check(plugin.Contains("SynchronizeMinimapLayoutInput(settings.LayoutEditMode)", StringComparison.Ordinal) &&

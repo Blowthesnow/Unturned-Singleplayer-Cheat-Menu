@@ -27,14 +27,12 @@ internal sealed class BackgroundStateMachine
 					(nativeMapAvailable ? MinimapBackgroundState.NativeMapCrop : MinimapBackgroundState.FallbackGrid));
 		}
 
-		if (!nativeMapAvailable)
-		{
-			return SetImmediate(realtimeAvailable ? MinimapBackgroundState.RealtimeSurface : MinimapBackgroundState.FallbackGrid);
-		}
 		if (!realtimeAvailable)
 		{
-			return SetImmediate(MinimapBackgroundState.NativeMapCrop);
+			return SetImmediate(nativeMapAvailable ? MinimapBackgroundState.NativeMapCrop : MinimapBackgroundState.FallbackGrid);
 		}
+		MinimapBackgroundState surfaceState = nativeMapAvailable
+			? MinimapBackgroundState.NativeMapCrop : MinimapBackgroundState.RealtimeSurface;
 
 		if (_state == MinimapBackgroundState.RealtimeHeightSlice)
 		{
@@ -47,7 +45,7 @@ internal sealed class BackgroundStateMachine
 			if (_exitCandidateSince < 0f) _exitCandidateSince = now;
 			if (Elapsed(now, _exitCandidateSince) >= Math.Max(0f, exitDelaySeconds))
 			{
-				return SetImmediate(MinimapBackgroundState.NativeMapCrop);
+				return SetImmediate(surfaceState);
 			}
 			return _state;
 		}
@@ -56,7 +54,7 @@ internal sealed class BackgroundStateMachine
 		if (!occlusion.MeetsEnterThreshold)
 		{
 			_enterCandidateSince = -1f;
-			_state = MinimapBackgroundState.NativeMapCrop;
+			_state = surfaceState;
 			return _state;
 		}
 		if (_enterCandidateSince < 0f) _enterCandidateSince = now;
@@ -64,7 +62,7 @@ internal sealed class BackgroundStateMachine
 		{
 			return SetImmediate(MinimapBackgroundState.RealtimeHeightSlice);
 		}
-		_state = MinimapBackgroundState.NativeMapCrop;
+		_state = surfaceState;
 		return _state;
 	}
 

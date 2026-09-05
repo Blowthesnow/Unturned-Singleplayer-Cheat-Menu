@@ -8,6 +8,9 @@
   <Project Path="tests/SnapshotModuleRegistrySmoke/SnapshotModuleRegistrySmoke.csproj" />
   <Project Path="tests/SnapshotRuntimeIntegrationSmoke/SnapshotRuntimeIntegrationSmoke.csproj" />
   <Project Path="tests/MinimapSmoke/MinimapSmoke.csproj" />
+  <Project Path="tests/MinimapSceneryScopeSmoke/MinimapSceneryScopeSmoke.csproj" />
+  <Project Path="tests/UiLayoutPolishSmoke/UiLayoutPolishSmoke.csproj" />
+  <Project Path="tests/UiTransientMotionSmoke/UiTransientMotionSmoke.csproj" />
   <Project Path="tests/CreatureHealthBarSmoke/CreatureHealthBarSmoke.csproj" />
   <Project Path="tests/ConfigInitializationSmoke/ConfigInitializationSmoke.csproj" />
   <Project Path="tests/AssemblyMetadataSmoke/AssemblyMetadataSmoke.csproj" />

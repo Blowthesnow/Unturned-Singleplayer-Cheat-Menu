@@ -16,9 +16,9 @@ The active `2.0.0` source implementation is the Snapshot Kernel. Automated sourc
 | --- | --- |
 | Source | Snapshot model, schema 1 persistence, identity/session state machine, Runtime integration, UI hierarchy, and three internal adapters exist in the working tree. |
 | Targeted Smoke | Kernel, persistence, identity/session, Crafting, AmmoRefill, Decomposition, registry, AutoPickup, UI, and single-DLL integration slices pass. |
-| Full repository | Solution Release is 0 warnings / 0 errors. All 27 recursively discovered Smoke projects were individually rebuilt and then run with `--no-build`: 27/27 PASS. |
-| API inventory | Two consecutive generations produced 1,601 rows and identical SHA-256 `87E0B7BB1D29356AF5A77F616F761D0A7803693E71422EA0A1C36313846A2797`. |
-| Product artifact | One final `2.0.0.0` main DLL, 1,150,464 bytes, SHA-256 `93FED6974CBF793B8619AE66D2846DFE60F1532AF5E030C2C7DA62EED059FECD`; the validated three-file Plugin-Only ZIP is 434,585 bytes, SHA-256 `338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD88953417621CA70C85`. |
+| Full repository | Solution Release is 0 warnings / 0 errors. All 30 recursively discovered Smoke projects were individually rebuilt and then run with `--no-build`: 30/30 PASS. |
+| API inventory | Two consecutive generations produced 1,680 rows and identical SHA-256 `0416CF68CDEC2A53A043DDA206A9E407D2C3DF660B829FE66EB7C562F7EBEEF9`. |
+| Product artifact | One final `2.0.0.0` main DLL, 1,187,328 bytes, SHA-256 `79AC75876C0B3B829188BB02EEB2DF5C32F04BF1AC7C025D695B44389B33F192`; the validated three-file Plugin-Only ZIP is 448,465 bytes, SHA-256 `92CFA47EB93A68A98EC122EEDB67EDC6D59F7E0A290E0207F72500009D7049D9`. |
 | Deployment | The final 2.0 DLL has not been deployed. The last audited installed pre-release checkpoint remains the 1,133,056-byte `1.995.0.0` DLL with SHA-256 `E32DC3F939528EB404299FCE3F61874600A4F9E05D166C140372B06CA83D20E4`; the prior clean `AECD6A47...` build is retained as `UnturnedSingleplayerCheatMenu.dll.20260904-221438.before`. |
 | Real game | The diagnostic `DC87DA54...` build restored attachment slots and rarity colors. The final 2.0 DLL/package has not received a restarted-game acceptance run. |
 

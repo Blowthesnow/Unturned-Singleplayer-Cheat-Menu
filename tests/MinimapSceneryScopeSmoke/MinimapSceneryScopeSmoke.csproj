@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/UnturnedSingleplayerCheatMenu/Minimap/MinimapSceneryScope.cs" Link="MinimapSceneryScope.cs" />
+    <Compile Include="../../src/UnturnedSingleplayerCheatMenu/Minimap/MinimapWaterKeywordScope.cs" Link="MinimapWaterKeywordScope.cs" />
+    <Compile Include="../../src/UnturnedSingleplayerCheatMenu/Minimap/MinimapWaterOpacityPolicy.cs" Link="MinimapWaterOpacityPolicy.cs" />
+    <Compile Include="../../src/UnturnedSingleplayerCheatMenu/Minimap/MinimapWaterOpacityScope.cs" Link="MinimapWaterOpacityScope.cs" />
+  </ItemGroup>
+</Project>

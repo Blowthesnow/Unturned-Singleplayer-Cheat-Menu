@@ -41,6 +41,9 @@ internal sealed class MinimapFeature : IDisposable
 	private float _nextRenderTime;
 	private int _itemSnapshotVersion;
 	private bool _disposed;
+	private Player _observedPlayer;
+	private bool _teleportPending;
+	private readonly MinimapTeleportRecovery _teleportRecovery = new MinimapTeleportRecovery();
 
 	internal MinimapSettings Settings => _settings.Clone();
 	internal MinimapBackgroundState BackgroundState => _state;
@@ -92,12 +95,25 @@ internal sealed class MinimapFeature : IDisposable
 		_sceneRenderer.BeginFrame();
 		EnsureHud();
 		Player player = Player.LocalPlayer;
+		BindTeleportNotifications(player);
 		bool active = _settings.Enabled && _canExecuteGameplay() && player != null &&
 			(_settings.LayoutEditMode || !PointToolService.IsInteractionPaused());
 		_hud.SetRuntimeVisible(active);
 		if (!active) return;
 
 		Vector3 center = player.transform.position;
+		bool nativeTeleport = _teleportPending;
+		_teleportPending = false;
+		bool positionJump = _teleportRecovery.ObservePosition(new MinimapWorldPoint(center.x, center.y, center.z));
+		if (nativeTeleport || positionJump)
+		{
+			_backgroundState.Reset();
+			_nextWorldScanTime = _nextMarkerProjectionTime = _nextProbeTime = _nextRenderTime = 0f;
+			_sceneRenderer.InvalidateCachedScenery();
+			sharedItemSnapshot = null; // The shared snapshot can still describe the departure point.
+			_log?.LogInfo($"[Minimap] relocation-refresh-v8: source={(nativeTeleport ? "teleport-event" : "position-jump")}, " +
+				$"destination=({center.x:F1},{center.y:F1},{center.z:F1}).");
+		}
 		float playerYaw = player.transform.rotation.eulerAngles.y;
 		_viewYaw = ResolveViewYaw(player, playerYaw);
 		if (now >= _nextProbeTime)
@@ -112,11 +128,16 @@ internal sealed class MinimapFeature : IDisposable
 		_crop = _nativeMap.Capture(center, contentRadius);
 		CartographyVolume volume = CartographyVolumeManager.Get().GetMainVolume();
 		_mapYaw = volume != null ? volume.transform.eulerAngles.y : 0f;
-		bool nativeAvailable = _crop.IsAvailable && _crop.CoversVisibleRadius;
+		bool nativeAvailable = MinimapRenderPolicy.CanUseNativeMap(
+			_crop.IsAvailable, _crop.CoversVisibleRadius);
+		bool hasVisibleNativeCrop = _crop.IsAvailable && _crop.ViewportRect.width > 0f && _crop.ViewportRect.height > 0f;
+		_teleportRecovery.ObserveDestination(nativeTeleport, hasVisibleNativeCrop, _nativeMap.IsPlayerInsideNativeBounds);
+		if (_settings.BackgroundMode == MinimapBackgroundMode.AutoNativeFirst && _teleportRecovery.NeedsRealtimeDestination)
+			nativeAvailable = false;
 		MinimapBackgroundState previousState = _state;
 		_state = _backgroundState.Update(now, _settings.BackgroundMode, nativeAvailable,
 			_sceneRenderer.IsAvailable, _occlusionDiagnostics.Summary,
-			_settings.OcclusionEnterDelaySeconds, _settings.OcclusionExitDelaySeconds);
+			nativeTeleport ? 0f : _settings.OcclusionEnterDelaySeconds, _settings.OcclusionExitDelaySeconds);
 		bool stateChanged = previousState != _state;
 		if (stateChanged)
 		{
@@ -304,6 +325,7 @@ internal sealed class MinimapFeature : IDisposable
 
 	internal void HandleSceneChanged()
 	{
+		BindTeleportNotifications(null);
 		_nativeMap.HandleSceneChanged();
 		_backgroundState.Reset();
 		_crop = NativeMapCropSnapshot.Unavailable("地图场景已切换");
@@ -320,9 +342,28 @@ internal sealed class MinimapFeature : IDisposable
 	{
 		if (_disposed) return;
 		_disposed = true;
+		BindTeleportNotifications(null);
 		_hud?.Dispose();
 		_hud = null;
 		_nativeMap.Dispose();
 		_sceneRenderer.Dispose();
+	}
+
+	private void BindTeleportNotifications(Player player)
+	{
+		if (ReferenceEquals(_observedPlayer, player)) return;
+		if (!ReferenceEquals(_observedPlayer, null)) _observedPlayer.onPlayerTeleported -= HandlePlayerTeleported;
+		_observedPlayer = player;
+		_teleportPending = false;
+		_teleportRecovery.Reset();
+		_backgroundState.Reset();
+		_nextWorldScanTime = _nextMarkerProjectionTime = _nextProbeTime = _nextRenderTime = 0f;
+		if (!ReferenceEquals(player, null)) player.onPlayerTeleported += HandlePlayerTeleported;
+	}
+
+	private void HandlePlayerTeleported(Player player, Vector3 destination)
+	{
+		// Defer all scanning/rendering to the normal update after the native move completes.
+		if (ReferenceEquals(player, _observedPlayer)) _teleportPending = true;
 	}
 }

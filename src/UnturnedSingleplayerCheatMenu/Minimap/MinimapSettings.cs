@@ -17,14 +17,15 @@ internal sealed class MinimapSettings
 	internal const float MinItemMergePixels = 2f;
 	internal const float MaxItemMergePixels = 32f;
 	internal const float MinUndergroundSlice = 0.5f;
-	internal const float MaxUndergroundSlice = 50f;
+	internal const float MaxUndergroundSliceAbove = 50f;
+	internal const float MaxUndergroundSliceBelow = 2048f;
 	internal const float MinSameFloorTolerance = 0.5f;
 	internal const float MaxSameFloorTolerance = 50f;
 	internal const float DefaultOcclusionEnterThickness = 2.5f;
 	internal const float DefaultOcclusionExitThickness = 1.5f;
 	internal const float DefaultFloorExclusionMaxThickness = 1.25f;
 	internal const float DefaultUndergroundSliceAbove = 4f;
-	internal const float DefaultUndergroundSliceBelow = 6f;
+	internal const float DefaultUndergroundSliceBelow = 2048f;
 
 	public bool Enabled { get; set; }
 	public MinimapShape Shape { get; set; } = MinimapShape.Circle;
@@ -83,8 +84,8 @@ internal sealed class MinimapSettings
 		OcclusionExitDelaySeconds = Clamp(OcclusionExitDelaySeconds, 0f, 10f);
 		OcclusionMergeGap = Clamp(OcclusionMergeGap, 0f, 5f);
 		ItemMergePixels = Clamp(ItemMergePixels, MinItemMergePixels, MaxItemMergePixels);
-		UndergroundSliceAbove = ClampOrDefault(UndergroundSliceAbove, MinUndergroundSlice, MaxUndergroundSlice, DefaultUndergroundSliceAbove);
-		UndergroundSliceBelow = ClampOrDefault(UndergroundSliceBelow, MinUndergroundSlice, MaxUndergroundSlice, DefaultUndergroundSliceBelow);
+		UndergroundSliceAbove = ClampOrDefault(UndergroundSliceAbove, MinUndergroundSlice, MaxUndergroundSliceAbove, DefaultUndergroundSliceAbove);
+		UndergroundSliceBelow = ClampOrDefault(UndergroundSliceBelow, MinUndergroundSlice, MaxUndergroundSliceBelow, DefaultUndergroundSliceBelow);
 		SameFloorTolerance = Clamp(SameFloorTolerance, MinSameFloorTolerance, MaxSameFloorTolerance);
 		ItemRarityMask &= ItemRarityMask.All;
 		return this;

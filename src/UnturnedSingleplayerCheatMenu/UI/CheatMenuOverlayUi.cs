@@ -828,6 +828,10 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		Canvas.ForceUpdateCanvases();
 		RefreshShellLayout();
 		Canvas.ForceUpdateCanvases();
+		if (_activeTab == MenuTab.Tools && _activeToolsTab == ToolsTab.Translation)
+		{
+			RebuildWorkshopLocalizationScrollLayout();
+		}
 		_panel.anchoredPosition = restoreNormalizedPosition
 			? WindowGeometry.RestoreNormalized(_shellPresenter.NormalizedWindowPosition, boundsSize, _panel.rect.size, scale)
 			: WindowGeometry.Clamp(_panel.anchoredPosition, boundsSize, _panel.rect.size, scale);
@@ -2265,7 +2269,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		}
 	}
 
-	private void ShowHoverExplanation(string message, RectTransform target, Vector2 screenPosition)
+	private void ShowHoverExplanation(string message, RectTransform target, Vector2 screenPosition, bool warm)
 	{
 		GameObject activeRoot = GetActiveOverlayRoot();
 		if (activeRoot == null || !activeRoot.activeSelf || string.IsNullOrWhiteSpace(message))
@@ -2340,7 +2344,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		}
 		RectTransformUtility.ScreenPointToLocalPointInRectangle(activeRoot.GetComponent<RectTransform>(), screenPoint, null, out var localPoint);
 		component2.anchoredPosition = localPoint;
-		ShowHoverExplanationVisual(component2);
+		ShowHoverExplanationVisual(component2, warm);
 	}
 
 	private static float GetHoverExplanationOverlapArea(Rect left, Rect right)

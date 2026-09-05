@@ -79,6 +79,7 @@ internal sealed partial class CheatMenuOverlayUi
 		if (tab == ToolsTab.Translation)
 		{
 			CreateLabel(panel.transform, GetToolsTabTitle(tab), 19, CheatMenuStyle.Text);
+			BuildWorkshopLocalizationHeader(panel.transform);
 			_workshopLocalizationScrollContent = CreateShortcutScroll(panel.transform);
 			_workshopLocalizationScrollRect = _workshopLocalizationScrollContent.GetComponentInParent<ScrollRect>();
 			_workshopLocalizationScrollRect.scrollSensitivity = 48f;
@@ -175,6 +176,7 @@ internal sealed partial class CheatMenuOverlayUi
 			ShowToolsTab(tab, invalidate: false);
 		}, string.Format(PluginLocalization.Translate("切换到“{0}”工具页面。"), PluginLocalization.Translate(label)), 0f, 40f, (_activeToolsTab == tab) ? CheatMenuStyle.Accent : CheatMenuStyle.Surface, 14);
 		_fluentControls.MarkNavigation(button);
+		button.GetComponent<OverlaySelectableVisual>()?.SetOutlineVisible(visible: true);
 		_toolsTabButtons[tab] = button;
 		SetLayout(button.gameObject, -1f, -1f, 1f);
 	}

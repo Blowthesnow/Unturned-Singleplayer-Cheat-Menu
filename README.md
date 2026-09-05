@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [Releases](https://github.com/Blowthesnow/Unturned-Singleplayer-Cheat-Menu/releases) · [更新日志](CHANGELOG.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
 
-![Version](https://img.shields.io/badge/version-2.0.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-27%2F27%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-30%2F30%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **面向 Unturned 单人世界的 BepInEx 5 中英双语工具箱。** 它不依赖写死的物品或载具表，而是读取当前游戏进程已经加载的资产；原版内容、当前地图附带内容和 Workshop 模组会按实际加载结果进入物品与载具目录。
 
@@ -287,6 +287,11 @@
 - 过期 Snapshot 后台回调绑定原连接与原 `ItemDrop`；会话已变化时不会作用于当前世界。
 - Workshop 翻译 Pump 提升为独立的首个运行步骤，其他 UI/会话模块异常不会饿死翻译完成与延迟重扫。
 
+- 修复兼容 Workshop 弹药盒无法供弹的问题；背包整理和 Snapshot 补弹仍保持弹量守恒，不通过不兼容的中间弹药转换。
+- 修复小地图朝向、原生地图边缘裁剪、地形材质、悬崖、树冠和低画质水面显示，并补充原生传送后的背景恢复。
+- 调整角色和整理表单、翻译页固定进度与操作区、接口/缓存折叠设置，以及时间与天气的双栏布局。
+- 修复 Tooltip 交接、按钮状态过渡和 Toast 退场/重排的中断问题；小地图诊断截图默认关闭。
+
 ## 运行边界
 
 菜单就绪和玩法授权是两个独立边界：只要客户端已经连接且本地玩家已生成，单人和多人客户端都可以打开主菜单。单人玩法立即可用；多人或非单人 listen host 会常驻显示“不受支持”警示，第一次尝试玩法动作或启用玩法自动化时才要求确认本次连接的风险。断线、换服、换图连接或本地玩家实例重建会使确认失效。
@@ -403,13 +408,13 @@ Get-ChildItem .\tests -Recurse -Filter '*Smoke.csproj' | Sort-Object FullName | 
 
 ## 验证
 
-`v2.0.0` 是自 `v1.7.0` 以来首个正式版本；中间源码检查点与本版累计变更、构建和 Smoke 记录见 [主更新日志](CHANGELOG.md)，v1.8 的逆向恢复边界单独记录在 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md)。2.0 Release 构建为 0 警告、0 错误，递归发现的 27 个 Smoke 项目全部逐项重建并运行通过；源码/API、发布包与真实游戏验收边界仍分别记录。
+`v2.0.0` 是自 `v1.7.0` 以来首个正式版本；中间源码检查点与本版累计变更、构建和 Smoke 记录见 [主更新日志](CHANGELOG.md)，v1.8 的逆向恢复边界单独记录在 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md)。2.0 Release 构建为 0 警告、0 错误，递归发现的 30 个 Smoke 项目全部逐项重建并运行通过；源码/API、发布包与真实游戏验收边界仍分别记录。
 
 v2.0.0 发布产物：
 
 ```text
-DLL SHA-256: 93FED6974CBF793B8619AE66D2846DFE60F1532AF5E030C2C7DA62EED059FECD
-Plugin-Only ZIP SHA-256: 338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD88953417621CA70C85
+DLL SHA-256: 79AC75876C0B3B829188BB02EEB2DF5C32F04BF1AC7C025D695B44389B33F192
+Plugin-Only ZIP SHA-256: 92CFA47EB93A68A98EC122EEDB67EDC6D59F7E0A290E0207F72500009D7049D9
 ```
 
 最终 2.0 DLL/发布包在本次发布准备中未部署、未重启游戏验收；自动化通过不能替代真实单人玩法确认。
@@ -424,3 +429,9 @@ Plugin-Only ZIP SHA-256: 338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD889534176
 当前源码使用单一 `PluginUiRoot`，由 `RuntimeUpdatePatch` 挂接 `Provider/MenuUI/PlayerUI.Update` 并按帧去重后分发 `PluginRuntimeContext` 的 Update/LateUpdate；这条静态桥与旧版相同，不依赖会在 Unturned 启动场景切换时被销毁的临时 BepInEx/Driver 组件。`PluginUiRoot` 若随启动场景丢失会自行重建。它还包含输入释放、窗口拖动/位置持久化和按当前地图隔离的传送点视图。生产源码不再包含旧 IMGUI 菜单或 `UnityEngine.IMGUIModule` 生产引用。
 
 Release 构建后应递归发现并串行运行 `tests/**/*Smoke.csproj`，不要依赖手写项目数量或旧 `bin/obj` 目录。源码/API、构建、Smoke、部署哈希、BattlEye 启动、BepInEx/plugin 发现、多人连接、翻译连续性和真实游戏交互必须分别记录；其中任何一层都不能替代真实单人玩法验收。
+
+## 赞助支持
+
+如果这个插件帮你更方便地游玩和翻译 Unturned，欢迎通过 [爱发电](https://afdian.com/a/Blowthesnow) 支持后续开发。赞助完全自愿。
+
+<p><a href="https://afdian.com/a/Blowthesnow"><img src="docs/images/afdian-Blowthesnow.jpg" alt="Blowthesnow 的爱发电赞助二维码" width="320" /></a></p>

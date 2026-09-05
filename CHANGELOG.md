@@ -20,6 +20,12 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Fixed directly compatible Workshop ammo boxes being rejected as unsafe conversion bridges during backpack arrangement and Snapshot ammo refill, while retaining exact round conservation and blocking unsupported indirect conversions.
+- Repaired realtime minimap orientation, native-map edge clipping, native Terrain material compatibility, complete cliff/tree-canopy rendering, and low-quality Water4 visibility; temporary rendering state is restored after capture.
+- Added native-teleport-driven background recovery and cache refresh for destinations without a native map image. Ordinary walking beyond map edges does not silently switch the selected background.
+- Refined responsive character and inventory forms, translation progress/actions fixed above scrolling settings, collapsible provider/cache sections, and the two-column time/weather layout.
+- Corrected tooltip handoff, selectable-state transitions, and toast departure/reflow so interrupted animations do not leave stale callbacks or jump between positions.
+- Disabled diagnostic minimap GPU readback and PNG/JSON writes by default; developers can explicitly opt in before launch with `UNTURNED_MINIMAP_CAPTURE=1`.
 - Repaired view-direction flight for the current Unturned runtime: configured directional bindings drive movement, W/S follows camera pitch and yaw, Space/Ctrl has fixed world-Y priority, diagonals are normalized, and zero/non-finite directions fail over safely.
 - Prevented the crafting `SearchContents` Postfix from peeking a null thread-local context during unrelated native inventory searches, which could interrupt attachment-slot and rarity-color refresh.
 - Made null, missing, or unresolved asset origins classify as unknown instead of Workshop.
@@ -45,9 +51,9 @@ All notable changes to this project are documented here.
 ### Verification
 
 - Re-audited the current Unturned runtime ABI, including `PlayerLook.aim`, configured movement bindings, the two crafted-output grant sites, and attachment searches through `PlayerInventory.SearchContents`.
-- Release solution build completed with zero warnings and zero errors; all 27 recursively discovered `*Smoke.csproj` projects were individually rebuilt and run with `--no-build`: 27/27 PASS.
-- The external API inventory generated twice with 1,601 rows and identical SHA-256 `87E0B7BB1D29356AF5A77F616F761D0A7803693E71422EA0A1C36313846A2797`.
-- The final `2.0.0.0` DLL is 1,150,464 bytes with SHA-256 `93FED6974CBF793B8619AE66D2846DFE60F1532AF5E030C2C7DA62EED059FECD`. The validated three-file Plugin-Only ZIP is 434,585 bytes with SHA-256 `338D3570FD6582C5F4CC638C2CA14B72BF4E9DC3108BFD88953417621CA70C85`.
+- Release solution build completed with zero warnings and zero errors; all 30 recursively discovered `*Smoke.csproj` projects were individually rebuilt and run with `--no-build`: 30/30 PASS.
+- The external API inventory generated twice with 1,680 rows and identical SHA-256 `0416CF68CDEC2A53A043DDA206A9E407D2C3DF660B829FE66EB7C562F7EBEEF9`.
+- The final `2.0.0.0` DLL is 1,187,328 bytes with SHA-256 `79AC75876C0B3B829188BB02EEB2DF5C32F04BF1AC7C025D695B44389B33F192`. The validated three-file Plugin-Only ZIP is 448,465 bytes with SHA-256 `92CFA47EB93A68A98EC122EEDB67EDC6D59F7E0A290E0207F72500009D7049D9`.
 - The final 2.0 DLL/package was not deployed or restarted in the real game during release preparation. Earlier diagnostic/deployment evidence does not constitute final-package gameplay acceptance.
 
 ## [1.995.0] - 2026-09-04 (source checkpoint; unreleased)

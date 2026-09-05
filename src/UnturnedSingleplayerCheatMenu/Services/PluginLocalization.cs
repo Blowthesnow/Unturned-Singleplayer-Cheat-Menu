@@ -214,6 +214,13 @@ internal static class PluginLocalization
 	static PluginLocalization()
 	{
 		Dictionary<string, string> dictionary = new Dictionary<string, string>(StringComparer.Ordinal);
+		dictionary["接口与密钥"] = "Connection and keys";
+		dictionary["高级与缓存维护"] = "Advanced and cache maintenance";
+		dictionary["译文显示"] = "Translation display";
+		dictionary["展开或收起此设置分组；已输入的内容会保留。"] = "Expand or collapse this section without discarding your input.";
+		dictionary["状态：{0}  ·  {1}  ·  {2}"] = "Status: {0}  ·  {1}  ·  {2}";
+		dictionary["小地图已开启"] = "Minimap enabled";
+		dictionary["小地图已关闭"] = "Minimap disabled";
 		dictionary["全部"] = "All";
 		dictionary["无"] = "None";
 		dictionary["武器"] = "Weapons";

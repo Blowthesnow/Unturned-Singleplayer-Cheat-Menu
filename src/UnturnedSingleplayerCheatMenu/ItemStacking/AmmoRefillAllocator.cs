@@ -55,6 +55,15 @@ internal sealed class AmmoRefillAssetRules
 	internal bool IsDirectSource { get; }
 	internal IReadOnlyList<string> DirectSourceAssetGuids { get; }
 	internal bool IsDirectTarget => DirectSourceAssetGuids.Count > 0;
+
+	internal bool CanDonateWithoutIndirectConversionTo(AmmoRefillAssetRules target)
+	{
+		if (target == null || !target.DirectSourceAssetGuids.Contains(AssetGuid, StringComparer.Ordinal)) return false;
+		// Refillable boxes are valid donors when the receiver directly accepts every
+		// upstream ammo type. Do not infer missing A -> C edges through A -> B -> C.
+		return DirectSourceAssetGuids.All(source => string.Equals(source, AssetGuid, StringComparison.Ordinal) ||
+			target.DirectSourceAssetGuids.Contains(source, StringComparer.Ordinal));
+	}
 }
 
 internal sealed class AmmoRefillLot
@@ -295,15 +304,6 @@ internal static class AmmoRefillAllocator
 			.ThenByDescending(value => value.Amount)
 			.ThenBy(value => value.LotKey, StringComparer.Ordinal)
 			.ToList();
-		HashSet<string> assetsWithCurrentCrossAssetTargets = new HashSet<string>(targets
-			.SelectMany(target => target.Rules.DirectSourceAssetGuids
-				.Where(sourceAsset => !string.Equals(sourceAsset, target.Rules.AssetGuid, StringComparison.Ordinal))),
-			StringComparer.Ordinal);
-		HashSet<string> unsafeBridgeLots = new HashSet<string>(lots
-			.Where(lot => lot.IsTargetContainer && assetsWithCurrentCrossAssetTargets.Contains(lot.Rules.AssetGuid) &&
-				lot.Rules.DirectSourceAssetGuids.Any(sourceAsset =>
-					!string.Equals(sourceAsset, lot.Rules.AssetGuid, StringComparison.Ordinal)))
-			.Select(lot => lot.LotKey), StringComparer.Ordinal);
 		List<AmmoRefillLotAllocation> allocations = new List<AmmoRefillLotAllocation>(targets.Count);
 		List<AmmoRefillTransfer> transfers = new List<AmmoRefillTransfer>();
 		long changedContainerCount = 0;
@@ -323,7 +323,7 @@ internal static class AmmoRefillAllocator
 					assignedRounds = checked(assignedRounds + TakeFromBudgets(
 						budgets.Where(value => !string.Equals(value.Lot.ContainerIdentity, target.ContainerIdentity, StringComparison.Ordinal) &&
 							directSources.Contains(value.Lot.Rules.AssetGuid) &&
-							!unsafeBridgeLots.Contains(value.Lot.LotKey)),
+							(!value.Lot.IsTargetContainer || value.Lot.Rules.CanDonateWithoutIndirectConversionTo(target.Rules))),
 						target, targetCapacity - assignedRounds, transfers));
 				}
 

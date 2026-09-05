@@ -12,6 +12,10 @@ namespace UnturnedSingleplayerCheatMenu.UI;
 internal sealed class UiToastService : IDisposable
 {
 	private const int MaximumVisible = 3;
+	private const float ToastWidth = 420f;
+	private const float ToastHeight = 46f;
+	private const float ToastSpacing = 8f;
+	private const float EdgeInset = 24f;
 	private readonly RectTransform _layer;
 	private readonly ManualLogSource _log;
 	private readonly UiMotionDriver _motion;
@@ -24,7 +28,9 @@ internal sealed class UiToastService : IDisposable
 		internal LegacyFluentSurface Surface;
 		internal RectTransform VisualRect;
 		internal CanvasGroup VisualGroup;
-		internal LayoutElement Layout;
+		internal RectTransform SlotRect;
+		internal Vector2 TargetPosition;
+		internal UiMotionHandle Reflow;
 		internal bool Exiting;
 	}
 
@@ -33,14 +39,6 @@ internal sealed class UiToastService : IDisposable
 		_layer = layer;
 		_log = log;
 		_motion = motion;
-		VerticalLayoutGroup layout = layer.gameObject.AddComponent<VerticalLayoutGroup>();
-		layout.padding = new RectOffset(0, 24, 24, 0);
-		layout.spacing = 8f;
-		layout.childAlignment = TextAnchor.UpperRight;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = false;
-		layout.childForceExpandHeight = false;
 	}
 
 	internal void Show(string message, float seconds, Color accent)
@@ -54,11 +52,13 @@ internal sealed class UiToastService : IDisposable
 			ToastEntry oldest = FindOldestVisible();
 			if (oldest != null) BeginExit(oldest);
 		}
-		GameObject root = new GameObject("ToastSlot", typeof(RectTransform), typeof(LayoutElement));
+		GameObject root = new GameObject("ToastSlot", typeof(RectTransform));
 		root.transform.SetParent(_layer, false);
-		LayoutElement size = root.GetComponent<LayoutElement>();
-		size.preferredWidth = 420f;
-		size.preferredHeight = 46f;
+		RectTransform slotRect = root.GetComponent<RectTransform>();
+		slotRect.anchorMin = slotRect.anchorMax = Vector2.one;
+		slotRect.pivot = Vector2.one;
+		slotRect.sizeDelta = new Vector2(ToastWidth, ToastHeight);
+		slotRect.anchoredPosition = GetSlotPosition(CountVisible());
 
 		GameObject visual = new GameObject("Toast", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
 		visual.transform.SetParent(root.transform, false);
@@ -108,7 +108,8 @@ internal sealed class UiToastService : IDisposable
 			Surface = surface,
 			VisualRect = visualRect,
 			VisualGroup = canvasGroup,
-			Layout = size
+			SlotRect = slotRect,
+			TargetPosition = slotRect.anchoredPosition
 		};
 		_entries.Add(entry);
 		BeginEnter(entry);
@@ -116,18 +117,21 @@ internal sealed class UiToastService : IDisposable
 
 	internal void Pump()
 	{
+		bool removed = false;
 		for (int i = _entries.Count - 1; i >= 0; i--)
 		{
 			ToastEntry entry = _entries[i];
 			if (entry.Root == null)
 			{
 				DestroyEntry(entry);
+				removed = true;
 			}
 			else if (!entry.Exiting && Time.unscaledTime >= entry.ExpiresAt)
 			{
 				BeginExit(entry);
 			}
 		}
+		if (removed) ReflowVisible();
 	}
 
 	private void BeginEnter(ToastEntry entry)
@@ -159,23 +163,54 @@ internal sealed class UiToastService : IDisposable
 			return;
 		}
 		entry.Exiting = true;
-		if (entry.Root == null || entry.VisualGroup == null || entry.VisualRect == null || entry.Layout == null || _motion == null)
+		// Freeze the departing slot where it is; only surviving slots change row.
+		entry.Reflow?.Cancel();
+		if (entry.Root == null || entry.VisualGroup == null || entry.VisualRect == null || _motion == null)
 		{
 			DestroyEntry(entry);
+			ReflowVisible();
 			return;
 		}
+		ReflowVisible();
 
 		float startAlpha = entry.VisualGroup.alpha;
 		Vector2 startPosition = entry.VisualRect.anchoredPosition;
 		Vector2 targetPosition = startPosition + new Vector2(UiMotionTokens.ToastExitOffset, 0f);
-		float startHeight = entry.Layout.preferredHeight;
 		_motion.Animate(entry.Root, UiMotionChannel.ToastAlpha, UiMotionTokens.ToastOut, UiMotionEasingKind.EaseOutCubic,
 			progress => entry.VisualGroup.alpha = Mathf.LerpUnclamped(startAlpha, 0f, progress));
 		_motion.Animate(entry.Root, UiMotionChannel.ToastPosition, UiMotionTokens.ToastOut, UiMotionEasingKind.EaseOutCubic,
-			progress => entry.VisualRect.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, progress));
-		_motion.Animate(entry.Root, UiMotionChannel.ToastHeight, UiMotionTokens.ToastOut, UiMotionEasingKind.EaseInOutCubic,
-			progress => entry.Layout.preferredHeight = Mathf.LerpUnclamped(startHeight, 0f, progress),
+			progress => entry.VisualRect.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, progress),
 			() => DestroyEntry(entry));
+	}
+
+	private static Vector2 GetSlotPosition(int index)
+	{
+		return new Vector2(-EdgeInset, -EdgeInset - index * (ToastHeight + ToastSpacing));
+	}
+
+	private void ReflowVisible()
+	{
+		int slot = 0;
+		for (int index = 0; index < _entries.Count; index++)
+		{
+			ToastEntry entry = _entries[index];
+			if (entry.Exiting || entry.Root == null || entry.SlotRect == null) continue;
+			Vector2 target = GetSlotPosition(slot++);
+			if (Mathf.Approximately(entry.TargetPosition.y, target.y)) continue;
+			entry.TargetPosition = target;
+			Vector2 start = entry.SlotRect.anchoredPosition;
+			if (_motion == null || !entry.Root.activeInHierarchy)
+			{
+				entry.Reflow?.Cancel();
+				entry.SlotRect.anchoredPosition = target;
+				continue;
+			}
+			// Include the complete row stride (height + spacing), without shrinking text
+			// or dirtying LayoutElement every frame. Retarget from the displayed position.
+			entry.Reflow = _motion.Animate(entry.Root, UiMotionChannel.ToastReflow, UiMotionTokens.ToastOut,
+				UiMotionEasingKind.EaseInOutCubic,
+				progress => entry.SlotRect.anchoredPosition = Vector2.LerpUnclamped(start, target, progress));
+		}
 	}
 
 	private int CountVisible()

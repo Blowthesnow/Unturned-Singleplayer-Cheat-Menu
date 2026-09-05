@@ -121,7 +121,7 @@ Check(defaults.Anchor == MinimapAnchor.TopLeft && defaults.OffsetX == 20f && def
       defaults.FloorExclusionMaxThickness == 1.25f && defaults.ShowCompass && defaults.ShowCoordinates &&
       defaults.ShowNativeMapMarkers && defaults.ShowTeleportMarkers && defaults.ShowZombies &&
       defaults.ShowAnimals && defaults.ShowPlayers && defaults.ItemMergePixels == 8f &&
-      defaults.UndergroundSliceAbove == 4f && defaults.UndergroundSliceBelow == 6f &&
+      defaults.UndergroundSliceAbove == 4f && defaults.UndergroundSliceBelow == 2048f &&
       defaults.SameFloorTolerance == 6f && defaults.ShowOtherFloors && !defaults.LayoutEditMode,
     "Every first-launch minimap setting must match the documented configuration table.");
 Check(MinimapZoomPolicy.Apply(100f, MinimapZoomDirection.In, 1f) == 90f &&
@@ -161,6 +161,25 @@ Check(clamped.SameFloorTolerance == MinimapSettings.MinSameFloorTolerance,
 Check(clamped.UndergroundSliceAbove == MinimapSettings.DefaultUndergroundSliceAbove &&
       clamped.UndergroundSliceBelow == MinimapSettings.MinUndergroundSlice,
     "Underground slice bounds must sanitize non-finite and negative values.");
+Check(MinimapSettings.MaxUndergroundSliceAbove == 50f &&
+      MinimapSettings.MaxUndergroundSliceBelow == 2048f,
+    "Height-slice upward clipping must stay bounded while downward rendering can cover the complete Landscape vertical span.");
+MinimapCameraDepthProfile terrainDepth = MinimapRenderPolicy.ResolveCameraDepth(
+    MinimapSceneCameraPass.Terrain, MinimapBackgroundState.RealtimeHeightSlice,
+    playerY: 36f, sliceAbove: 4f, sliceBelow: 2048f);
+MinimapCameraDepthProfile surfaceObjectsDepth = MinimapRenderPolicy.ResolveCameraDepth(
+    MinimapSceneCameraPass.Objects, MinimapBackgroundState.RealtimeSurface,
+    playerY: 36f, sliceAbove: 4f, sliceBelow: 2048f);
+MinimapCameraDepthProfile slicedObjectsDepth = MinimapRenderPolicy.ResolveCameraDepth(
+    MinimapSceneCameraPass.Objects, MinimapBackgroundState.RealtimeHeightSlice,
+    playerY: 36f, sliceAbove: 4f, sliceBelow: 2048f);
+Check(terrainDepth.PositionY == 2000f && terrainDepth.NearClip == 0.1f &&
+      terrainDepth.FarClip == 2200f &&
+      surfaceObjectsDepth.PositionY == 836f && surfaceObjectsDepth.NearClip == 0.1f &&
+      surfaceObjectsDepth.FarClip == 1000f &&
+      slicedObjectsDepth.PositionY == 40f && slicedObjectsDepth.NearClip == 0.05f &&
+      slicedObjectsDepth.FarClip == 2052f,
+    "Terrain must use the proven high-altitude full-depth camera while only loaded objects retain the optional underground height slice.");
 Check(clamped.OffsetX == 0f && clamped.OffsetY == 0f,
     "Persisted layout offsets must sanitize non-finite values.");
 MinimapSettings negativeOffsets = new MinimapSettings { OffsetX = -10f, OffsetY = -20f }.Normalize();
@@ -259,6 +278,43 @@ Check(!MinimapRenderPolicy.ShowsLoadedObjects(MinimapBackgroundState.NativeMapCr
       MinimapRenderPolicy.ShowsLoadedObjects(MinimapBackgroundState.RealtimeHeightSlice, enabled: true) &&
       !MinimapRenderPolicy.ShowsLoadedObjects(MinimapBackgroundState.RealtimeSurface, enabled: false),
     "The loaded-object camera layer must be restricted to enabled realtime backgrounds.");
+Check(MinimapRenderPolicy.ShowsNativeUnderlay(MinimapBackgroundState.RealtimeSurface, nativeAvailable: true) &&
+      MinimapRenderPolicy.ShowsNativeUnderlay(MinimapBackgroundState.RealtimeHeightSlice, nativeAvailable: true) &&
+      !MinimapRenderPolicy.ShowsNativeUnderlay(MinimapBackgroundState.NativeMapCrop, nativeAvailable: true) &&
+      !MinimapRenderPolicy.ShowsNativeUnderlay(MinimapBackgroundState.RealtimeHeightSlice, nativeAvailable: false) &&
+      MinimapRenderPolicy.UsesTransparentTerrainClear(MinimapBackgroundState.RealtimeSurface) &&
+      MinimapRenderPolicy.UsesTransparentTerrainClear(MinimapBackgroundState.RealtimeHeightSlice) &&
+      !MinimapRenderPolicy.UsesTransparentTerrainClear(MinimapBackgroundState.NativeMapCrop),
+    "Realtime terrain gaps must reveal the native-map/grid underlay instead of an opaque dark clear color.");
+Check(MinimapRenderPolicy.CanUseNativeMap(textureAvailable: true, coversVisibleRadius: false) &&
+      !MinimapRenderPolicy.CanUseNativeMap(textureAvailable: false, coversVisibleRadius: true),
+    "A valid Map.png must remain the automatic background at map edges even when the crop extends outside its UV bounds.");
+MinimapNativeCropWindow fullNativeCrop = MinimapRenderPolicy.ResolveNativeCrop(
+    centerX: 0.5f, centerY: 0.5f, halfWidth: 0.1f, halfHeight: 0.1f);
+Check(fullNativeCrop.CoversVisibleRadius && fullNativeCrop.HasVisibleTexture &&
+      Math.Abs(fullNativeCrop.UvX - 0.4f) < 0.0001f &&
+      Math.Abs(fullNativeCrop.UvWidth - 0.2f) < 0.0001f &&
+      Math.Abs(fullNativeCrop.ViewportX) < 0.0001f &&
+      Math.Abs(fullNativeCrop.ViewportWidth - 1f) < 0.0001f,
+    "A centered native crop must fill the viewport without padding.");
+MinimapNativeCropWindow rightEdgeCrop = MinimapRenderPolicy.ResolveNativeCrop(
+    centerX: 0.95f, centerY: 0.5f, halfWidth: 0.1f, halfHeight: 0.1f);
+Check(!rightEdgeCrop.CoversVisibleRadius && rightEdgeCrop.HasVisibleTexture &&
+      Math.Abs(rightEdgeCrop.UvX - 0.85f) < 0.0001f &&
+      Math.Abs(rightEdgeCrop.UvWidth - 0.15f) < 0.0001f &&
+      Math.Abs(rightEdgeCrop.ViewportX) < 0.0001f &&
+      Math.Abs(rightEdgeCrop.ViewportWidth - 0.75f) < 0.0001f,
+    "A right-edge crop must preserve player-centered alignment and leave only the out-of-map quarter for grid padding.");
+MinimapNativeCropWindow leftEdgeCrop = MinimapRenderPolicy.ResolveNativeCrop(
+    centerX: 0.05f, centerY: 0.5f, halfWidth: 0.1f, halfHeight: 0.1f);
+Check(!leftEdgeCrop.CoversVisibleRadius && leftEdgeCrop.HasVisibleTexture &&
+      Math.Abs(leftEdgeCrop.ViewportX - 0.25f) < 0.0001f &&
+      Math.Abs(leftEdgeCrop.ViewportWidth - 0.75f) < 0.0001f,
+    "A left-edge crop must place grid padding on the left without shifting the player off center.");
+MinimapNativeCropWindow outsideNativeCrop = MinimapRenderPolicy.ResolveNativeCrop(
+    centerX: 1.2f, centerY: 0.5f, halfWidth: 0.1f, halfHeight: 0.1f);
+Check(!outsideNativeCrop.CoversVisibleRadius && !outsideNativeCrop.HasVisibleTexture,
+    "A crop fully outside Map.png must show only controlled padding rather than stretching the edge texel.");
 MinimapRenderCenter snappedA = MinimapRenderPolicy.SnapCenter(10.01f, -2.01f, 0f, 100f, 512);
 MinimapRenderCenter snappedB = MinimapRenderPolicy.SnapCenter(10.02f, -2.02f, 0f, 100f, 512);
 Check(Math.Abs(snappedA.X - snappedB.X) < 0.0001f && Math.Abs(snappedA.Z - snappedB.Z) < 0.0001f,
@@ -410,4 +466,59 @@ Check(background.Update(5f, MinimapBackgroundMode.NativeMapOnly, false, true, cl
       background.Update(7f, MinimapBackgroundMode.Disabled, true, true, clear, 0.75f, 1.5f) == MinimapBackgroundState.Disabled,
     "Every manual background mode must preserve its documented fallback/override semantics.");
 
+string minimapFeatureSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Minimap", "MinimapFeature.cs"));
+string sceneRendererSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Minimap", "MinimapSceneRenderer.cs"));
+string minimapHudSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "UI", "MinimapHud.cs"));
+Check(minimapFeatureSource.Contains("MinimapRenderPolicy.CanUseNativeMap", StringComparison.Ordinal) &&
+      sceneRendererSource.Contains("camera.CopyFrom(playerCamera)", StringComparison.Ordinal) &&
+      !sceneRendererSource.Contains("Shader.Find(\"Unlit/Texture\")", StringComparison.Ordinal) &&
+      !sceneRendererSource.Contains("SetReplacementShader(", StringComparison.Ordinal) &&
+      sceneRendererSource.Contains("camera.ResetReplacementShader()", StringComparison.Ordinal) &&
+      sceneRendererSource.Contains("_terrainCamera.ResetReplacementShader()", StringComparison.Ordinal) &&
+      sceneRendererSource.Contains("_objectCamera.ResetReplacementShader()", StringComparison.Ordinal) &&
+      minimapHudSource.Contains("BackgroundUnderlay", StringComparison.Ordinal) &&
+      minimapHudSource.Contains("NativeMapUnderlay", StringComparison.Ordinal) &&
+      minimapHudSource.Contains("ApplyBackgroundViewport", StringComparison.Ordinal),
+    "Live minimap wiring must retain edge crops and native materials without modifying the player camera.");
+Check(!minimapHudSource.Contains("new Rect(0f, 1f, 1f, -1f)", StringComparison.Ordinal) &&
+      minimapHudSource.Contains("SetRawImage(view.ObjectOverlay, showObjects ? objects : null, new Rect(0f, 0f, 1f, 1f)", StringComparison.Ordinal) &&
+      minimapHudSource.Contains("SetRawImage(view.Background, terrain, new Rect(0f, 0f, 1f, 1f)", StringComparison.Ordinal),
+    "Realtime terrain and loaded-object RenderTextures must preserve camera-local up as map north instead of applying a second vertical flip.");
+
 Console.WriteLine("Minimap settings, projection, aggregation, and background-state smoke checks passed.");
+BackgroundStateMachine outside = new();
+Check(outside.Update(0f, MinimapBackgroundMode.AutoNativeFirst, false, true, majority, 0.75f, 0.25f) == MinimapBackgroundState.RealtimeSurface &&
+      outside.Update(0.75f, MinimapBackgroundMode.AutoNativeFirst, false, true, majority, 0.75f, 0.25f) == MinimapBackgroundState.RealtimeHeightSlice,
+    "Out-of-map interiors must still use sustained overhead detection to select a height slice.");
+Check(outside.Update(1f, MinimapBackgroundMode.AutoNativeFirst, false, true, clear, 0.75f, 0.25f) == MinimapBackgroundState.RealtimeHeightSlice &&
+      outside.Update(1.25f, MinimapBackgroundMode.AutoNativeFirst, false, true, clear, 0.75f, 0.25f) == MinimapBackgroundState.RealtimeSurface,
+    "Leaving an out-of-map interior must return to realtime surface, not an unavailable native map.");
+MinimapTeleportRecovery recovery = new();
+recovery.ObserveDestination(false, false, false);
+Check(!recovery.NeedsRealtimeDestination, "Walking beyond image bounds must preserve native-map edge behaviour.");
+Check(!recovery.ObservePosition(new MinimapWorldPoint(0, 0, 0)) &&
+      !recovery.ObservePosition(new MinimapWorldPoint(1, 0, 1)) &&
+      recovery.ObservePosition(new MinimapWorldPoint(64, 68, 3233)), "Large moves should invalidate position-based caches.");
+recovery.ObserveDestination(false, false, false);
+Check(!recovery.NeedsRealtimeDestination, "A position jump without a native teleport event must not switch map mode.");
+recovery.ObserveDestination(true, false, false);
+Check(recovery.NeedsRealtimeDestination, "Native teleport into an unmapped destination must recover with realtime rendering.");
+recovery.ObserveDestination(false, false, false);
+Check(recovery.NeedsRealtimeDestination, "Recovery must persist while the player remains at the unmapped destination.");
+recovery.ObserveDestination(false, true, false);
+Check(recovery.NeedsRealtimeDestination, "Zooming out until the crop touches the native image must not clear teleport recovery.");
+recovery.ObserveDestination(false, true, true);
+Check(!recovery.NeedsRealtimeDestination, "Returning to visible native coverage must restore ordinary native-first selection.");
+recovery.ObserveDestination(true, true, false);
+Check(!recovery.NeedsRealtimeDestination, "A teleport to a partially covered map edge must preserve native mode.");
+recovery.Reset();
+Check(!recovery.NeedsRealtimeDestination && !recovery.ObservePosition(new MinimapWorldPoint(1, 2, 3)), "Session reset must discard relocation history.");
+Check(minimapFeatureSource.Contains("onPlayerTeleported += HandlePlayerTeleported", StringComparison.Ordinal) &&
+      minimapFeatureSource.Contains("onPlayerTeleported -= HandlePlayerTeleported", StringComparison.Ordinal) &&
+      minimapFeatureSource.Contains("sharedItemSnapshot = null", StringComparison.Ordinal) &&
+      minimapFeatureSource.Contains("_settings.BackgroundMode == MinimapBackgroundMode.AutoNativeFirst", StringComparison.Ordinal),
+    "Native teleport subscription must be reversible, refresh departure snapshots and leave explicit background modes alone.");
+Console.WriteLine("Teleport recovery, unmapped interior and native-edge regression checks passed.");

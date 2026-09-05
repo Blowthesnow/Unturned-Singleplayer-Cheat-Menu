@@ -145,7 +145,7 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			bool persisted = _shellPresenter.ToggleLanguage();
 			RebuildForLanguageChange(persisted);
-		}, "切换界面语言并立即重建当前菜单。", 58f, 40f, CheatMenuStyle.Accent);
+		}, "切换界面语言并立即重建当前菜单。", 58f, 40f, CheatMenuStyle.Surface);
 		CreateButton(gameObject.transform, "字体", ShowFontPicker, "选择此菜单使用的界面字体。", 58f, 40f, CheatMenuStyle.Surface);
 		CreateAccentPickerButton(gameObject.transform);
 		_mapAndShortcutText = CreateText(gameObject.transform, string.Empty, 13, CheatMenuStyle.Muted, TextAnchor.MiddleRight);
@@ -158,12 +158,12 @@ internal sealed partial class CheatMenuOverlayUi
 
 	private Button CreateWindowCloseButton(Transform parent, System.Action action, string tooltip)
 	{
-		Button button = CreateButton(parent, "×", action, tooltip, 44f, 36f, CheatMenuStyle.Danger, 23);
+		Button button = CreateButton(parent, "×", action, tooltip, 44f, 36f, CheatMenuStyle.Surface, 23);
 		OverlaySelectableVisual component = button.GetComponent<OverlaySelectableVisual>();
 		component?.SetOutlineVisible(visible: false);
 		if ((object)component != null)
 		{
-			component.SetFocusIndicatorVisible(visible: false);
+			component.SetFocusIndicatorVisible(visible: true);
 			return button;
 		}
 		return button;

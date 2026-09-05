@@ -12,5 +12,5 @@ internal enum UiMotionChannel
 	TransientPosition,
 	ToastAlpha,
 	ToastPosition,
-	ToastHeight
+	ToastReflow
 }

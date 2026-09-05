@@ -20,6 +20,25 @@ namespace UnturnedSingleplayerCheatMenu.UI;
 
 internal sealed partial class CheatMenuOverlayUi
 {
+	private bool? _workshopApiExpanded;
+	private bool _workshopAdvancedExpanded;
+	private Button _workshopStartButton;
+	private Button _workshopStopButton;
+
+	private void BuildWorkshopLocalizationHeader(Transform panel)
+	{
+		_workshopLocalizationStateText = CreateFlowLabel(panel, string.Empty, CheatMenuStyle.Text);
+		_workshopLocalizationSummaryText = CreateFlowLabel(panel, string.Empty, CheatMenuStyle.Muted);
+		GameObject actions = CreateRow(panel, 40f, CheatMenuStyle.Theme.Space2);
+		_workshopStartButton = CreateButton(actions.transform, "开始翻译（未缓存）", StartWorkshopTranslationFromUi,
+			"扫描当前已加载资产后，翻译缓存中没有的文本；填写配置后点击这里开始。", 190f, 40f, CheatMenuStyle.Accent, 14);
+		_workshopStopButton = CreateButton(actions.transform, "停止翻译", StopWorkshopTranslationFromUi,
+			"停止当前翻译任务；已经写入缓存的译文会保留。", 120f, 40f, CheatMenuStyle.Surface, 14);
+		_workshopStartButton.interactable = false;
+		_workshopStopButton.interactable = false;
+		RefreshWorkshopLocalizationPageValues();
+	}
+
 	private void BuildWorkshopLocalizationPanel(Transform panel)
 	{
 		TranslationToolsSnapshot workshopLocalization = _translationPresenter.CaptureSnapshot();
@@ -28,14 +47,11 @@ internal sealed partial class CheatMenuOverlayUi
 			CreateEmptyState(panel, "翻译服务不可用", "插件尚未完成 Workshop 翻译服务初始化。");
 			return;
 		}
-		_ = workshopLocalization.Progress;
-		CreateLabel(panel, "原版与 Workshop 资产翻译", 17, CheatMenuStyle.Text);
-		CreateLabel(panel, "只读取当前已加载的原版与 Workshop 资产；不会修改原始文件、.dat 或 AssetBundle。已有其他汉化时会优先保留原生汉化。", 12, CheatMenuStyle.Muted);
-		_workshopLocalizationStateText = CreateLabel(panel, string.Empty, 13, CheatMenuStyle.Text);
-		_workshopLocalizationSummaryText = CreateLabel(panel, string.Empty, 13, CheatMenuStyle.Muted);
-		_workshopLocalizationApiText = CreateLabel(panel, string.Empty, 12, CheatMenuStyle.Muted);
-		RefreshWorkshopLocalizationPageValues();
-		GameObject gameObject = CreateRow(panel, 40f, 7f);
+		CreateFlowLabel(panel, "只读取当前已加载的原版与 Workshop 资产；不会修改原始文件、.dat 或 AssetBundle。已有其他汉化时会优先保留原生汉化。", CheatMenuStyle.Muted);
+		GameObject apiSection = CreateWorkshopDisclosure(panel, "WorkshopApiSection", "接口与密钥",
+			_workshopApiExpanded ?? !workshopLocalization.ApiConfigured, value => _workshopApiExpanded = value);
+		_workshopLocalizationApiText = CreateFlowLabel(apiSection.transform, string.Empty, CheatMenuStyle.Muted);
+		GameObject gameObject = CreateRow(apiSection.transform, 40f, 7f);
 		CreateLabel(gameObject.transform, "API 设置", 13, CheatMenuStyle.Text, 75f);
 		Button apiButton = null;
 		apiButton = CreateButton(gameObject.transform, MachineTranslationSettings.GetDisplayName(workshopLocalization.Settings.ApiProtocol) + " ▼", delegate
@@ -44,13 +60,12 @@ internal sealed partial class CheatMenuOverlayUi
 		}, "打开翻译 API 协议列表；选择后可配置对应的 Endpoint、API Key 和 Model。", 0f, 34f, CheatMenuStyle.Surface, 12);
 		_workshopLocalizationProtocolButtonText = apiButton.GetComponentInChildren<Text>(true);
 		SetLayout(apiButton.gameObject, -1f, -1f, 1f);
-		CreateButton(gameObject.transform, "开始翻译（未缓存）", StartWorkshopTranslationFromUi, "扫描当前已加载资产后，翻译缓存中没有的文本；填写配置后点击这里开始。", 170f, 34f, CheatMenuStyle.Accent, 12);
-		CreateButton(gameObject.transform, "停止翻译", StopWorkshopTranslationFromUi, "停止当前翻译任务；已经写入缓存的译文会保留。", 105f, 34f, CheatMenuStyle.Danger, 12);
-		_workshopLocalizationSettingsHost = CreateObject("WorkshopLocalizationSettingsHost", panel);
+		_workshopLocalizationSettingsHost = CreateObject("WorkshopLocalizationSettingsHost", apiSection.transform);
 		AddVerticalLayout(_workshopLocalizationSettingsHost, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0)).childForceExpandHeight = false;
 		SetLayout(_workshopLocalizationSettingsHost, -1f, -1f, 1f);
 		ResetWorkshopApiKeyDrafts(workshopLocalization.Settings.ApiKeys);
 		BuildWorkshopLocalizationSettingsRegion();
+		CreateSection(panel, "译文显示");
 		GameObject gameObject2 = CreateRow(panel, 40f, 7f);
 		CreateToggleAction(gameObject2.transform, "启用缓存译文", workshopLocalization.Enabled, delegate(bool value)
 		{
@@ -60,7 +75,9 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			_translationPresenter.SetApplyToNativeUi(value);
 		}, "覆盖 ItemAsset、VehicleAsset 和 Workshop Action 的显示 Getter。");
-		GameObject gameObject3 = CreateRow(panel, 40f, 7f);
+		GameObject advancedSection = CreateWorkshopDisclosure(panel, "WorkshopAdvancedSection", "高级与缓存维护",
+			_workshopAdvancedExpanded, value => _workshopAdvancedExpanded = value);
+		GameObject gameObject3 = CreateRow(advancedSection.transform, 40f, 7f);
 		CreateToggleAction(gameObject3.transform, "资产刷新后自动扫描", workshopLocalization.AutoScanOnAssetsRefreshed, delegate(bool value)
 		{
 			_translationPresenter.SetAutoScan(value);
@@ -69,18 +86,18 @@ internal sealed partial class CheatMenuOverlayUi
 		{
 			_translationPresenter.SetAutoTranslate(value);
 		}, "需要已配置 API；默认关闭以避免意外费用。");
-		GameObject gameObject4 = CreateRow(panel, 40f, 7f);
+		GameObject gameObject4 = CreateRow(advancedSection.transform, 40f, 7f);
 		CreateButton(gameObject4.transform, "扫描并应用缓存", delegate
 		{
 			_translationPresenter.Scan();
 			RefreshWorkshopLocalizationPage();
-		}, "重新扫描已加载资产，并立即把已有缓存译文应用到显示 Getter。", 0f, 38f, CheatMenuStyle.Accent);
+		}, "重新扫描已加载资产，并立即把已有缓存译文应用到显示 Getter。", 0f, 38f, CheatMenuStyle.Surface);
 		CreateButton(gameObject4.transform, "重新加载缓存", delegate
 		{
 			_translationPresenter.ReloadCache();
 			RefreshWorkshopLocalizationPage();
 		}, "从磁盘重新读取翻译缓存，替换当前内存中的缓存内容。", 0f, 38f, CheatMenuStyle.Surface);
-		GameObject gameObject5 = CreateRow(panel, 40f, 7f);
+		GameObject gameObject5 = CreateRow(advancedSection.transform, 40f, 7f);
 		CreateButton(gameObject5.transform, "翻译未缓存文本", delegate
 		{
 			bool flag4 = _translationPresenter.Translate(force: false);
@@ -98,7 +115,32 @@ internal sealed partial class CheatMenuOverlayUi
 			_translationPresenter.Cancel();
 			RefreshWorkshopLocalizationPage();
 		}, "取消当前正在运行的扫描或翻译任务；已写入缓存的结果会保留。", 0f, 38f, CheatMenuStyle.Danger);
-		CreateLabel(panel, "缓存文件：" + workshopLocalization.CachePath, 11, CheatMenuStyle.Muted);
+		CreateFlowLabel(advancedSection.transform, "缓存文件：" + workshopLocalization.CachePath, CheatMenuStyle.Muted);
+		RefreshWorkshopLocalizationPageValues();
+	}
+
+	private GameObject CreateWorkshopDisclosure(Transform parent, string name, string title, bool expanded, Action<bool> changed)
+	{
+		GameObject section = CreateObject(name, parent);
+		AddVerticalLayout(section, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
+		SetLayout(section, -1f, -1f, 1f, 0f);
+		string label = PluginLocalization.Translate(title);
+		GameObject content = null;
+		Button toggle = null;
+		toggle = CreateButton(section.transform, label + (expanded ? "  −" : "  +"), delegate
+		{
+			expanded = !expanded;
+			changed(expanded);
+			RunWithoutTransientMotion(HideWorkshopProtocolDrawer);
+			content.SetActive(expanded);
+			toggle.GetComponentInChildren<Text>(true).text = label + (expanded ? "  −" : "  +");
+			RebuildWorkshopLocalizationScrollLayout();
+		}, "展开或收起此设置分组；已输入的内容会保留。", 0f, 40f, CheatMenuStyle.Surface, 14);
+		content = CreateObject(name + "Content", section.transform);
+		AddVerticalLayout(content, CheatMenuStyle.Theme.Space2, new RectOffset(0, 0, 0, 0));
+		SetLayout(content, -1f, -1f, 1f, 0f);
+		content.SetActive(expanded);
+		return content;
 	}
 
 	private void BuildWorkshopLocalizationSettingsRegion()
@@ -435,6 +477,14 @@ internal sealed partial class CheatMenuOverlayUi
 			return;
 		}
 		WorkshopLocalizationProgress progress = workshopLocalization.Progress;
+		if (_workshopStartButton != null)
+		{
+			_workshopStartButton.interactable = !workshopLocalization.IsTranslationRunning && progress.State != WorkshopLocalizationState.Scanning;
+		}
+		if (_workshopStopButton != null)
+		{
+			_workshopStopButton.interactable = workshopLocalization.IsTranslationRunning;
+		}
 		string arg = PluginLocalization.Translate(progress.State switch
 		{
 			WorkshopLocalizationState.Scanning => "扫描中",
@@ -476,7 +526,12 @@ internal sealed partial class CheatMenuOverlayUi
 			string model = string.IsNullOrWhiteSpace(workshopLocalization.Settings.Model)
 				? PluginLocalization.Translate("未填写")
 				: workshopLocalization.Settings.Model;
-			_workshopLocalizationApiText.text = PluginLocalization.Translate("翻译接口：" + text + "；供应商：" + MachineTranslationSettings.GetDisplayName(workshopLocalization.Settings.ApiProtocol) + "；密钥：" + workshopLocalization.Settings.ApiKeyCount + "/" + MachineTranslationSettings.MaxApiKeyCount + "；并行：" + workshopLocalization.Settings.ParallelWorkerCount + " 路；目标语言：" + workshopLocalization.Settings.TargetLanguage + "；模型：" + model);
+			string apiDescription = PluginLocalization.Translate("翻译接口：" + text + "；供应商：" + MachineTranslationSettings.GetDisplayName(workshopLocalization.Settings.ApiProtocol) + "；密钥：" + workshopLocalization.Settings.ApiKeyCount + "/" + MachineTranslationSettings.MaxApiKeyCount + "；并行：" + workshopLocalization.Settings.ParallelWorkerCount + " 路；目标语言：" + workshopLocalization.Settings.TargetLanguage + "；模型：" + model);
+			if (_workshopLocalizationApiText.text != apiDescription)
+			{
+				_workshopLocalizationApiText.text = apiDescription;
+				RebuildWorkshopLocalizationScrollLayout();
+			}
 		}
 		if (_workshopLocalizationProtocolButtonText != null)
 		{

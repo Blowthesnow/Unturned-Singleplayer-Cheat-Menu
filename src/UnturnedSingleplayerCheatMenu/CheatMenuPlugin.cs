@@ -32,7 +32,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
 	public const string PluginVersion = "2.0.0";
-	private const int CurrentMinimapSchemaVersion = 3;
+	private const int CurrentMinimapSchemaVersion = 5;
 
 	private ConfigEntry<string> _language;
 
@@ -1091,8 +1091,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		_minimapShowItems = base.Config.Bind("Minimap", "ShowItems", defaultValue: false, "Show raw nearby ground items independently of automatic pickup.");
 		_minimapItemRarityMask = base.Config.Bind("Minimap", "ItemRarityMask", "All", "Enabled item rarities: Common, Uncommon, Rare, Epic, Legendary, Mythical, or All.");
 		_minimapItemMergePixels = base.Config.Bind("Minimap", "ItemMergePixels", 8f, "Pixel distance used to merge overlapping item stars.");
-		_minimapUndergroundSliceAbove = base.Config.Bind("Minimap", "UndergroundSliceAbove", 4f, "Height rendered above the player in height-slice mode.");
-		_minimapUndergroundSliceBelow = base.Config.Bind("Minimap", "UndergroundSliceBelow", 6f, "Depth rendered below the player in height-slice mode.");
+		_minimapUndergroundSliceAbove = base.Config.Bind("Minimap", "UndergroundSliceAbove", MinimapSettings.DefaultUndergroundSliceAbove, "Height rendered above the player in height-slice mode.");
+		_minimapUndergroundSliceBelow = base.Config.Bind("Minimap", "UndergroundSliceBelow", MinimapSettings.DefaultUndergroundSliceBelow, "Depth rendered below the player in height-slice mode.");
 		_minimapSameFloorTolerance = base.Config.Bind("Minimap", "SameFloorTolerance", 6f, "Vertical distance treated as the current floor.");
 		_minimapShowOtherFloors = base.Config.Bind("Minimap", "ShowOtherFloors", defaultValue: true, "Show dimmed graphical height indicators for other floors.");
 		_minimapLayoutEditMode = base.Config.Bind("Minimap", "LayoutEditMode", defaultValue: false, "Allow dragging and resizing the minimap HUD.");
@@ -1105,6 +1105,16 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		{
 			if (_minimapOcclusionProbeHz.Value == 2f) _minimapOcclusionProbeHz.Value = 5f;
 			if (_minimapOcclusionExitDelay.Value == 1.5f) _minimapOcclusionExitDelay.Value = 0.25f;
+		}
+		if (minimapSchemaVersion < 4)
+		{
+			if (_minimapUndergroundSliceBelow.Value == 6f)
+				_minimapUndergroundSliceBelow.Value = 48f;
+		}
+		if (minimapSchemaVersion < 5)
+		{
+			if (_minimapUndergroundSliceBelow.Value == 48f)
+				_minimapUndergroundSliceBelow.Value = MinimapSettings.DefaultUndergroundSliceBelow;
 		}
 		if (minimapSchemaVersion < CurrentMinimapSchemaVersion)
 		{
@@ -1747,8 +1757,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			ShowItems = _minimapShowItems?.Value ?? false,
 			ItemRarityMask = rarityMask,
 			ItemMergePixels = _minimapItemMergePixels?.Value ?? 8f,
-			UndergroundSliceAbove = _minimapUndergroundSliceAbove?.Value ?? 4f,
-			UndergroundSliceBelow = _minimapUndergroundSliceBelow?.Value ?? 6f,
+			UndergroundSliceAbove = _minimapUndergroundSliceAbove?.Value ?? MinimapSettings.DefaultUndergroundSliceAbove,
+			UndergroundSliceBelow = _minimapUndergroundSliceBelow?.Value ?? MinimapSettings.DefaultUndergroundSliceBelow,
 			SameFloorTolerance = _minimapSameFloorTolerance?.Value ?? 6f,
 			ShowOtherFloors = _minimapShowOtherFloors?.Value ?? true,
 			LayoutEditMode = _minimapLayoutEditMode?.Value ?? false

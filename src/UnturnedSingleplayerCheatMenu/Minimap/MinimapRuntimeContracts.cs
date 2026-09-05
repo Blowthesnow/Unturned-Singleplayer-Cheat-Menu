@@ -63,16 +63,18 @@ internal readonly struct NativeMapCropSnapshot
 {
 	public Texture2D Texture { get; }
 	public Rect UvRect { get; }
+	public Rect ViewportRect { get; }
 	public float MapYawDegrees { get; }
 	public bool IsAvailable { get; }
 	public bool CoversVisibleRadius { get; }
 	public string Status { get; }
 
-	public NativeMapCropSnapshot(Texture2D texture, Rect uvRect, float mapYawDegrees,
+	public NativeMapCropSnapshot(Texture2D texture, Rect uvRect, Rect viewportRect, float mapYawDegrees,
 		bool isAvailable, bool coversVisibleRadius, string status)
 	{
 		Texture = texture;
 		UvRect = uvRect;
+		ViewportRect = viewportRect;
 		MapYawDegrees = mapYawDegrees;
 		IsAvailable = isAvailable;
 		CoversVisibleRadius = coversVisibleRadius;
@@ -81,7 +83,8 @@ internal readonly struct NativeMapCropSnapshot
 
 	public static NativeMapCropSnapshot Unavailable(string status)
 	{
-		return new NativeMapCropSnapshot(null, new Rect(0f, 0f, 1f, 1f), 0f, false, false, status);
+		return new NativeMapCropSnapshot(null, new Rect(0f, 0f, 1f, 1f),
+			new Rect(0f, 0f, 1f, 1f), 0f, false, false, status);
 	}
 }
 

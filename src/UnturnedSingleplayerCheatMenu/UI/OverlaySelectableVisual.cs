@@ -62,7 +62,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 
 	private bool _hoverExplanationShown;
 
-	private Action<string, RectTransform, Vector2> _showHoverExplanation;
+	private Action<string, RectTransform, Vector2, bool> _showHoverExplanation;
 
 	private Action _hideHoverExplanation;
 
@@ -105,7 +105,7 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 		Refresh(animate: false);
 	}
 
-	public void SetHoverExplanation(string message, Action<string, RectTransform, Vector2> show, Action hide, bool delay = false)
+	public void SetHoverExplanation(string message, Action<string, RectTransform, Vector2, bool> show, Action hide, bool delay = false)
 	{
 		_hoverExplanation = message;
 		_showHoverExplanation = show;
@@ -236,10 +236,11 @@ internal sealed class OverlaySelectableVisual : MonoBehaviour, IPointerEnterHand
 
 	private void ShowHoverExplanationNow(Vector2 screenPosition)
 	{
+		bool warm = Time.unscaledTime < _tooltipWarmUntil;
 		_hoverExplanationShown = true;
 		_tooltipOwner = this;
 		_tooltipWarmUntil = Time.unscaledTime + TooltipWarmWindowSeconds;
-		_showHoverExplanation?.Invoke(_hoverExplanation, (_background != null) ? _background.rectTransform : null, screenPosition);
+		_showHoverExplanation?.Invoke(_hoverExplanation, (_background != null) ? _background.rectTransform : null, screenPosition, warm);
 	}
 
 	private void CancelHoverExplanation()
