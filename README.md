@@ -33,9 +33,15 @@
 - 不修改原始 `.dat` 或 AssetBundle；进入多人、关闭菜单或切换连接不会自动取消已经开始的翻译批次。
 
 <details>
-<summary><strong>查看截图：资产扫描与翻译设置</strong></summary>
+<summary><strong>查看截图：资产扫描与翻译设置（2 张）</strong></summary>
+
+**翻译状态与缓存**
 
 ![原版与 Workshop 资产翻译：扫描、缓存、双 Key 并行和进度](docs/images/v2/workshop-localization.png)
+
+**接口与密钥**
+
+![翻译供应商、接口、双 Key 和批量设置](docs/images/v2/workshop-localization-api.png)
 
 </details>
 

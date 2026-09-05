@@ -33,9 +33,15 @@ Beyond asset discovery, version 2.0 combines runtime localization, player contro
 - Never modifies original `.dat` or AssetBundle files. Entering multiplayer, closing the menu, or changing connections does not automatically cancel an active translation batch.
 
 <details>
-<summary><strong>View screenshot: asset scanning and localization settings</strong></summary>
+<summary><strong>View screenshots: asset scanning and localization settings (2)</strong></summary>
+
+**Translation status and cache**
 
 ![Runtime vanilla and Workshop asset localization with cache, parallel keys, and progress](docs/images/v2/workshop-localization.png)
+
+**Provider and keys**
+
+![Translation provider, endpoint, parallel keys, and batch settings](docs/images/v2/workshop-localization-api.png)
 
 </details>
 
