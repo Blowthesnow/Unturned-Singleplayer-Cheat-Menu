@@ -450,6 +450,86 @@ Check(background.Update(0.75f, MinimapBackgroundMode.AutoNativeFirst, true, true
 OcclusionSummary clear = OverheadOcclusionModel.Combine(
     [separatedSummary, separatedSummary, separatedSummary, separatedSummary, separatedSummary],
     requiredProbeCount: 3, enterThickness: 2.5f, exitThickness: 1.5f);
+OcclusionSummary terrainCoveredRoom = OverheadOcclusionModel.ApplyUndergroundEvidence(
+    clear, undergroundAllowlisted: false, terrainCoverDepth: 16f,
+    enterThickness: 2.5f, exitThickness: 1.5f);
+Check(terrainCoveredRoom.MeetsEnterThreshold && !terrainCoveredRoom.MeetsExitThreshold &&
+      terrainCoveredRoom.MaximumEffectiveThickness == 16f,
+    "A player substantially below the landscape must enter height-slice mode even under a thin prefab roof.");
+OcclusionSummary authoredUndergroundRoom = OverheadOcclusionModel.ApplyUndergroundEvidence(
+    clear, undergroundAllowlisted: true, terrainCoverDepth: 0f,
+    enterThickness: 2.5f, exitThickness: 1.5f);
+Check(authoredUndergroundRoom.MeetsEnterThreshold && !authoredUndergroundRoom.MeetsExitThreshold,
+    "An authored UndergroundWhitelist volume must participate in automatic height-slice selection.");
+OcclusionSummary ordinarySurfaceRoom = OverheadOcclusionModel.ApplyUndergroundEvidence(
+    clear, undergroundAllowlisted: false, terrainCoverDepth: 0.5f,
+    enterThickness: 2.5f, exitThickness: 1.5f);
+Check(!ordinarySurfaceRoom.MeetsEnterThreshold && ordinarySurfaceRoom.MeetsExitThreshold,
+    "A shallow terrain delta must not turn every ordinary above-ground house into a cutaway.");
+OcclusionSummary unmappedThinRoofRoom = OverheadOcclusionModel.ApplyUnmappedInteriorEvidence(
+    clear, nativeCropVisible: false, overheadSurfaceProbeCount: 3, requiredProbeCount: 3);
+Check(unmappedThinRoofRoom.MeetsEnterThreshold && !unmappedThinRoofRoom.MeetsExitThreshold,
+    "A stable thin roof outside all native-map pixels must recover a save-loaded interior without a teleport event.");
+OcclusionSummary mappedThinRoofRoom = OverheadOcclusionModel.ApplyUnmappedInteriorEvidence(
+    clear, nativeCropVisible: true, overheadSurfaceProbeCount: 5, requiredProbeCount: 3);
+Check(!mappedThinRoofRoom.MeetsEnterThreshold && mappedThinRoofRoom.MeetsExitThreshold,
+    "Thin roofs inside a visible native-map crop must keep the ordinary-building exclusion.");
+OcclusionSummary unmappedOutdoor = OverheadOcclusionModel.ApplyUnmappedInteriorEvidence(
+    clear, nativeCropVisible: false, overheadSurfaceProbeCount: 0, requiredProbeCount: 3);
+Check(!unmappedOutdoor.MeetsEnterThreshold && unmappedOutdoor.MeetsExitThreshold,
+    "Walking outdoors beyond native-map pixels must not enable realtime mode without overhead evidence.");
+Check(Math.Abs(MinimapRenderPolicy.ResolveCutawaySliceAbove(
+          configuredAbove: 4f, playerY: 146f, headY: 147.6f) - 2.1f) < 0.001f &&
+      MinimapRenderPolicy.ResolveCutawaySliceAbove(
+          configuredAbove: 0.75f, playerY: 146f, headY: 147.6f) == 0.75f,
+    "The underground cut plane must stay just above the player's head while respecting a lower explicit setting.");
+float detectedCeilingY = OverheadOcclusionModel.ResolveCutawayCeilingY(
+    [150.3f, 150.2f, 151f, 150.4f, 999f]);
+Check(Math.Abs(detectedCeilingY - 150.4f) < 0.001f,
+    "Cutaway ceiling selection must use the stable median instead of one low prop or high outlier.");
+Check(Math.Abs(MinimapRenderPolicy.ResolveCutawaySliceAbove(
+          configuredAbove: 4f, playerY: 148.3f, headY: 150.05f,
+          detectedCeilingY: 150.3f) - 1.9f) < 0.001f,
+    "The cut plane must move below the measured roof rather than remaining above it at the head-clearance estimate.");
+float stableRoomSliceA = MinimapRenderPolicy.ResolveCutawaySliceAbove(
+    configuredAbove: 4f, playerY: 148.3f, headY: 150.05f, detectedCeilingY: 153f);
+float stableRoomSliceB = MinimapRenderPolicy.ResolveCutawaySliceAbove(
+    configuredAbove: 4f, playerY: 149f, headY: 150.75f, detectedCeilingY: 153f);
+Check(Math.Abs((148.3f + stableRoomSliceA) - 152.9f) < 0.001f &&
+      Math.Abs((149f + stableRoomSliceB) - 152.9f) < 0.001f,
+    "Jumping, crouching or flying inside one room must not move its measured absolute cut plane.");
+
+MinimapInstanceCutaway instanceCutaway = new();
+Check(instanceCutaway.Update(nativeCropVisible: false, realtimeDestinationLocked: true,
+          overheadSurfaceProbeCount: 0, requiredProbeCount: 3,
+          fallbackCutPlaneY: 149.65f, detectedCeilingY: float.NaN) &&
+      instanceCutaway.Active && Math.Abs(instanceCutaway.CeilingY - 149.75f) < 0.001f,
+    "An off-map teleport must lock a cutaway plane at the highest entry before the player reaches a roof.");
+Check(instanceCutaway.Update(false, true, 0, 3, fallbackCutPlaneY: 143f,
+          detectedCeilingY: float.NaN) && Math.Abs(instanceCutaway.CeilingY - 149.75f) < 0.001f,
+    "Walking down a ramp must not lower the instance cutaway plane with player height.");
+Check(instanceCutaway.Update(false, true, 5, 3, fallbackCutPlaneY: 143f,
+          detectedCeilingY: 150.84f) && Math.Abs(instanceCutaway.CeilingY - 150.84f) < 0.001f,
+    "The first measured prefab ceiling must replace the entry fallback plane.");
+Check(instanceCutaway.Update(false, true, 5, 3, fallbackCutPlaneY: 138f,
+          detectedCeilingY: 146f) && Math.Abs(instanceCutaway.CeilingY - 146f) < 0.001f,
+    "A lower measured ceiling must push the instance plane down so no higher roof can reappear.");
+Check(instanceCutaway.Update(false, true, 5, 3, fallbackCutPlaneY: 138f,
+          detectedCeilingY: 160f) && Math.Abs(instanceCutaway.CeilingY - 146f) < 0.001f,
+    "Higher roofs encountered later must never raise an established x-ray cut plane.");
+OcclusionSummary directInstanceEvidence = OverheadOcclusionModel.ApplyUnmappedInteriorEvidence(
+    clear, nativeCropVisible: false,
+    overheadSurfaceProbeCount: instanceCutaway.Active ? 3 : 0, requiredProbeCount: 3);
+BackgroundStateMachine directInstanceBackground = new();
+Check(directInstanceBackground.Update(0f, MinimapBackgroundMode.AutoNativeFirst,
+          nativeMapAvailable: false, realtimeAvailable: true, directInstanceEvidence,
+          enterDelaySeconds: 0f, exitDelaySeconds: 0.25f) == MinimapBackgroundState.RealtimeHeightSlice,
+    "A native teleport outside Map.png must switch directly to the existing height-slice renderer.");
+Check(!instanceCutaway.Update(nativeCropVisible: true, realtimeDestinationLocked: false,
+          overheadSurfaceProbeCount: 0, requiredProbeCount: 3,
+          fallbackCutPlaneY: 0f, detectedCeilingY: float.NaN) && !instanceCutaway.Active,
+    "Returning to visible native-map coverage must release the off-map instance cutaway lock.");
+
 Check(background.Update(1f, MinimapBackgroundMode.AutoNativeFirst, true, true, clear, 0.75f, 0.25f) == MinimapBackgroundState.RealtimeHeightSlice,
     "A transient clear sample must not immediately exit the height slice.");
 Check(background.Update(1.24f, MinimapBackgroundMode.AutoNativeFirst, true, true, clear, 0.75f, 0.25f) == MinimapBackgroundState.RealtimeHeightSlice,
@@ -468,6 +548,8 @@ Check(background.Update(5f, MinimapBackgroundMode.NativeMapOnly, false, true, cl
 
 string minimapFeatureSource = File.ReadAllText(FindRepositoryFile(
     "src", "UnturnedSingleplayerCheatMenu", "Minimap", "MinimapFeature.cs"));
+string overheadDetectorSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Minimap", "OverheadOcclusionDetector.cs"));
 string sceneRendererSource = File.ReadAllText(FindRepositoryFile(
     "src", "UnturnedSingleplayerCheatMenu", "Minimap", "MinimapSceneRenderer.cs"));
 string minimapHudSource = File.ReadAllText(FindRepositoryFile(
@@ -487,6 +569,14 @@ Check(!minimapHudSource.Contains("new Rect(0f, 1f, 1f, -1f)", StringComparison.O
       minimapHudSource.Contains("SetRawImage(view.ObjectOverlay, showObjects ? objects : null, new Rect(0f, 0f, 1f, 1f)", StringComparison.Ordinal) &&
       minimapHudSource.Contains("SetRawImage(view.Background, terrain, new Rect(0f, 0f, 1f, 1f)", StringComparison.Ordinal),
     "Realtime terrain and loaded-object RenderTextures must preserve camera-local up as map north instead of applying a second vertical flip.");
+Check(overheadDetectorSource.Contains("Landscape.getWorldHeight(head, out float terrainHeight)", StringComparison.Ordinal) &&
+      overheadDetectorSource.Contains("ApplyUndergroundEvidence", StringComparison.Ordinal) &&
+      overheadDetectorSource.Contains("overheadSurfaceProbeCount", StringComparison.Ordinal) &&
+      overheadDetectorSource.Contains("cutawayCeilingCandidates", StringComparison.Ordinal) &&
+      minimapFeatureSource.Contains("ApplyUnmappedInteriorEvidence", StringComparison.Ordinal) &&
+      minimapFeatureSource.Contains("_occlusionDiagnostics.CutawayCeilingY", StringComparison.Ordinal) &&
+      minimapFeatureSource.Contains("ResolveCutawaySliceAbove", StringComparison.Ordinal),
+    "Runtime underground selection must combine landscape depth/author volume evidence and apply a player-head cut plane.");
 
 Console.WriteLine("Minimap settings, projection, aggregation, and background-state smoke checks passed.");
 BackgroundStateMachine outside = new();
@@ -521,4 +611,19 @@ Check(minimapFeatureSource.Contains("onPlayerTeleported += HandlePlayerTeleporte
       minimapFeatureSource.Contains("sharedItemSnapshot = null", StringComparison.Ordinal) &&
       minimapFeatureSource.Contains("_settings.BackgroundMode == MinimapBackgroundMode.AutoNativeFirst", StringComparison.Ordinal),
     "Native teleport subscription must be reversible, refresh departure snapshots and leave explicit background modes alone.");
+string worldMaintenanceBridgePath = FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Services", "WorldMaintenanceNativeBridge.cs");
+string worldMaintenanceBridgeSource = File.ReadAllText(worldMaintenanceBridgePath);
+string worldMaintenanceServiceSource = File.ReadAllText(FindRepositoryFile(
+    "src", "UnturnedSingleplayerCheatMenu", "Services", "WorldMaintenanceService.cs"));
+Check(worldMaintenanceBridgeSource.Contains("ZombieManager.sendZombieDead", StringComparison.Ordinal) &&
+      !worldMaintenanceBridgeSource.Contains("Object.Destroy", StringComparison.Ordinal) &&
+      !worldMaintenanceBridgeSource.Contains("ZombieRegion.destroy", StringComparison.Ordinal) &&
+      !worldMaintenanceServiceSource.Contains("Object.Destroy", StringComparison.Ordinal) &&
+      !worldMaintenanceServiceSource.Contains("ZombieRegion.destroy", StringComparison.Ordinal),
+    "World maintenance must clear zombies only through the native death contract.");
+Check(nearbyWorldScannerSource.Contains("zombie == null || zombie.isDead", StringComparison.Ordinal),
+    "Dead zombies must remain excluded from minimap markers after maintenance.");
+Check(!worldMaintenanceServiceSource.Contains("ZombieRegionRetentionPatch", StringComparison.Ordinal),
+    "World maintenance must not mutate or suspend the retained-region policy.");
 Console.WriteLine("Teleport recovery, unmapped interior and native-edge regression checks passed.");

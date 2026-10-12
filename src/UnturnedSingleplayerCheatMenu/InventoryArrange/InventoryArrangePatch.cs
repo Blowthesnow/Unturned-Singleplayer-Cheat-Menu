@@ -35,12 +35,6 @@ internal static class InventoryArrangePatch
 		_log = log;
 		try
 		{
-			MethodInfo methodInfo = AccessTools.Method(typeof(PlayerDashboardInventoryUI), "onSelectedItem", new Type[3]
-			{
-				typeof(byte),
-				typeof(byte),
-				typeof(byte)
-			});
 			MethodInfo methodInfo2 = AccessTools.Method(typeof(PlayerDashboardInventoryUI), "onGrabbedItem", new Type[4]
 			{
 				typeof(byte),
@@ -57,11 +51,12 @@ internal static class InventoryArrangePatch
 			{
 				typeof(byte), typeof(byte), typeof(byte), typeof(byte), typeof(byte), typeof(byte), typeof(byte), typeof(byte)
 			});
-			if (methodInfo == null || methodInfo2 == null || methodInfo3 == null || dragMethod == null || swapMethod == null)
+			if (methodInfo2 == null || methodInfo3 == null || dragMethod == null || swapMethod == null)
 			{
 				throw new MissingMethodException("Inventory arrange native handlers are incomplete in the current game assembly.");
 			}
-			harmony.Patch(methodInfo, new HarmonyMethod(AccessTools.Method(typeof(InventoryArrangePatch), "SelectedPrefix")));
+			// Native onGrabbedItem is dispatched only by the item's left-click event.
+			// Keep the right-click onSelectedItem path under native inventory ownership.
 			harmony.Patch(methodInfo2, new HarmonyMethod(AccessTools.Method(typeof(InventoryArrangePatch), "GrabbedPrefix")));
 			harmony.Patch(methodInfo3, null, new HarmonyMethod(AccessTools.Method(typeof(InventoryArrangePatch), "PlayerInitializePostfix")));
 			harmony.Patch(dragMethod,
@@ -71,7 +66,7 @@ internal static class InventoryArrangePatch
 				new HarmonyMethod(AccessTools.Method(typeof(InventoryArrangePatch), nameof(SwapPrefix))),
 				new HarmonyMethod(AccessTools.Method(typeof(InventoryArrangePatch), nameof(SwapPostfix))));
 			log?.LogInfo("背包整理 Player.InitializePlayer 补丁已注册。");
-			log?.LogInfo("同物品跨箱集中已接入原生快速转移入口（Ctrl/Shift 修饰键）。");
+			log?.LogInfo("同物品跨箱集中已接入原生左键入口（仅 Ctrl + 鼠标左键）。");
 			log?.LogInfo("快捷栏绑定已接入原生 Drag/Swap 坐标迁移与数字刷新。");
 		}
 		catch (Exception ex)
@@ -222,11 +217,6 @@ internal static class InventoryArrangePatch
 		_log?.LogInfo("[InventoryArrangeHotkeys] Refreshed manual Drag/Swap shortcut display; relocated bindings=" + changed + ".");
 	}
 
-	private static bool SelectedPrefix(byte page, byte x, byte y)
-	{
-		return HandleQuickTransfer(page, x, y);
-	}
-
 	private static bool GrabbedPrefix(byte page, byte x, byte y)
 	{
 		return HandleQuickTransfer(page, x, y);
@@ -285,10 +275,8 @@ internal static class InventoryArrangePatch
 
 	private static bool IsTransferModifierHeld()
 	{
-		if (!InputEx.GetKey(ControlsSettings.other) && !InputEx.GetKey(KeyCode.LeftShift))
-		{
-			return InputEx.GetKey(KeyCode.RightShift);
-		}
-		return true;
+		return (InputEx.GetKey(KeyCode.LeftControl) || InputEx.GetKey(KeyCode.RightControl)) &&
+			!InputEx.GetKey(KeyCode.LeftShift) && !InputEx.GetKey(KeyCode.RightShift) &&
+			!InputEx.GetKey(KeyCode.LeftAlt) && !InputEx.GetKey(KeyCode.RightAlt);
 	}
 }

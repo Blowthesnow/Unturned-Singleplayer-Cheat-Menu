@@ -161,6 +161,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 	private readonly CatalogPagePresenter _catalogPresenter;
 	private readonly TeleportPagePresenter _teleportPresenter;
 	private readonly WorldPagePresenter _worldPresenter;
+	private readonly WorldMaintenancePresenter _worldMaintenancePresenter;
 	private readonly InfiniteStoragePagePresenter _infiniteStoragePresenter;
 	private readonly InteractionToolsPresenter _interactionPresenter;
 	private readonly InventoryToolsPresenter _inventoryPresenter;
@@ -564,6 +565,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		_catalogPresenter = new CatalogPagePresenter(features, _state);
 		_teleportPresenter = new TeleportPagePresenter(features);
 		_worldPresenter = new WorldPagePresenter(features);
+		_worldMaintenancePresenter = new WorldMaintenancePresenter(features);
 		_infiniteStoragePresenter = new InfiniteStoragePagePresenter(features);
 		_interactionPresenter = new InteractionToolsPresenter(features);
 		_inventoryPresenter = new InventoryToolsPresenter(features);
@@ -742,6 +744,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 		if (menuActive && _activeTab == MenuTab.Other)
 		{
 			RefreshOtherTime();
+			RefreshWorldMaintenanceView();
 		}
 		Canvas component = menuActive ? _uiRoot.Canvas : null;
 		if (component != null && component.sortingOrder != 29900)
@@ -1553,6 +1556,7 @@ internal sealed partial class CheatMenuOverlayUi : IDisposable
 			_timeRing.SetTime(WorldTimeClockMapping.GameNormalizedToClockHours(num2), notify: false);
 			UpdateTimePreview(num2, num);
 		}
+		RefreshWorldEnvironment(snapshot);
 	}
 
 	private void UpdateTimePreview(float normalized, uint cycle)

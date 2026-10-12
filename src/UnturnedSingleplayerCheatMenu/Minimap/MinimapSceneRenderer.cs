@@ -5,12 +5,48 @@ using BepInEx.Logging;
 using SDG.Unturned;
 using SDG.Framework.Water;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace UnturnedSingleplayerCheatMenu.Minimap;
 
 internal sealed class MinimapSceneRenderer : IDisposable
 {
+	private sealed class MinimapCaptureLightingBridge : MonoBehaviour
+	{
+		private MinimapUnshadowedCaptureScope _scope;
+		private bool _armed;
+
+		internal void Initialize(ManualLogSource log, MinimapUnshadowedCaptureScope scope)
+		{
+			_scope = scope;
+			_scope.Initialize(log);
+		}
+
+		internal void SetArmed(bool armed)
+		{
+			_armed = armed;
+			if (!armed) _scope?.Restore();
+		}
+
+		private void OnPreCull()
+		{
+			if (_armed) _scope?.Begin(Palette.AMBIENT);
+		}
+
+		private void OnPostRender() => _scope?.Restore();
+
+		private void OnDisable()
+		{
+			_armed = false;
+			_scope?.Restore();
+		}
+
+		private void OnDestroy()
+		{
+			_armed = false;
+			_scope?.Restore();
+		}
+	}
+
 	private sealed class MinimapMainCameraIdentityBridge : MonoBehaviour
 	{
 		private sealed class TerrainQualityState
@@ -39,11 +75,6 @@ internal sealed class MinimapSceneRenderer : IDisposable
 		private bool _hasSeaState;
 		private bool _reflectionSubscribed;
 		private string _previousTag = "Untagged";
-		private bool _fog;
-		private AmbientMode _ambientMode;
-		private Color _ambientSkyColor;
-		private Color _ambientEquatorColor;
-		private Color _ambientGroundColor;
 		private float _lodBias;
 		private float _seaShininess;
 		private Color _seaSpecularColor;
@@ -103,20 +134,10 @@ internal sealed class MinimapSceneRenderer : IDisposable
 			if (_terrainCaptureActive) return;
 			if (!_waterKeywords.Begin()) return;
 			if (!_waterOpacity.Begin(_waterMaterials)) { _waterKeywords.Restore(); return; }
-			_fog = RenderSettings.fog;
-			_ambientMode = RenderSettings.ambientMode;
-			_ambientSkyColor = RenderSettings.ambientSkyColor;
-			_ambientEquatorColor = RenderSettings.ambientEquatorColor;
-			_ambientGroundColor = RenderSettings.ambientGroundColor;
 			_lodBias = QualitySettings.lodBias;
 			_terrainCaptureActive = true;
 			try
 			{
-				RenderSettings.fog = false;
-				RenderSettings.ambientMode = AmbientMode.Trilight;
-				RenderSettings.ambientSkyColor = Palette.AMBIENT;
-				RenderSettings.ambientEquatorColor = Palette.AMBIENT;
-				RenderSettings.ambientGroundColor = Palette.AMBIENT;
 				QualitySettings.lodBias = float.MaxValue;
 				try
 				{
@@ -282,11 +303,6 @@ internal sealed class MinimapSceneRenderer : IDisposable
 			try
 			{
 				QualitySettings.lodBias = _lodBias;
-				RenderSettings.ambientGroundColor = _ambientGroundColor;
-				RenderSettings.ambientEquatorColor = _ambientEquatorColor;
-				RenderSettings.ambientSkyColor = _ambientSkyColor;
-				RenderSettings.ambientMode = _ambientMode;
-				RenderSettings.fog = _fog;
 			}
 			catch (Exception)
 			{
@@ -312,6 +328,10 @@ internal sealed class MinimapSceneRenderer : IDisposable
 	private Camera _terrainCamera;
 	private Camera _objectCamera;
 	private MinimapMainCameraIdentityBridge _terrainIdentityBridge;
+	private MinimapCaptureLightingBridge _terrainLightingBridge;
+	private MinimapCaptureLightingBridge _objectLightingBridge;
+	private readonly MinimapUnshadowedCaptureScope _captureLighting =
+		new MinimapUnshadowedCaptureScope();
 	private MinimapSceneryScope _terrainSceneryScope;
 	private MinimapSceneryScope _objectSceneryScope;
 	private MinimapRenderCaptureProbe _terrainCaptureProbe;
@@ -381,6 +401,8 @@ internal sealed class MinimapSceneRenderer : IDisposable
 			bool renderTerrain = MinimapRenderPolicy.UsesSceneCameras(state);
 			bool renderObjects = MinimapRenderPolicy.ShowsLoadedObjects(state, renderLoadedBuildings);
 			_terrainIdentityBridge.SetArmed(renderTerrain);
+			_terrainLightingBridge.SetArmed(renderTerrain);
+			_objectLightingBridge.SetArmed(renderObjects);
 			_terrainSceneryScope.Arm(_cliffRenderers, renderTerrain);
 			_objectSceneryScope.Arm(_cliffRenderers, renderObjects);
 			_terrainCaptureProbe.Arm(state, renderTerrain);
@@ -420,6 +442,8 @@ internal sealed class MinimapSceneRenderer : IDisposable
 			new Color(0.18f, 0.22f, 0.18f, 1f));
 		_terrainIdentityBridge = _terrainCamera.gameObject.AddComponent<MinimapMainCameraIdentityBridge>();
 		_terrainIdentityBridge.Initialize(_log);
+		_terrainLightingBridge = _terrainCamera.gameObject.AddComponent<MinimapCaptureLightingBridge>();
+		_terrainLightingBridge.Initialize(_log, _captureLighting);
 		_terrainSceneryScope = _terrainCamera.gameObject.AddComponent<MinimapSceneryScope>();
 		_terrainSceneryScope.Initialize(_log, true, LayerMasks.GROUND2);
 		_objectCamera = CreateCamera("ObjectCamera", _objectTexture,
@@ -428,6 +452,8 @@ internal sealed class MinimapSceneRenderer : IDisposable
 			RayMasks.ENVIRONMENT | RayMasks.BARRICADE | RayMasks.STRUCTURE, Color.clear);
 		_objectSceneryScope = _objectCamera.gameObject.AddComponent<MinimapSceneryScope>();
 		_objectSceneryScope.Initialize(_log, false, 0);
+		_objectLightingBridge = _objectCamera.gameObject.AddComponent<MinimapCaptureLightingBridge>();
+		_objectLightingBridge.Initialize(_log, _captureLighting);
 		string captureDirectory = System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath,
 			"diagnostics", "minimap-trees-v7-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
 		_terrainCaptureProbe = _terrainCamera.gameObject.AddComponent<MinimapRenderCaptureProbe>();
@@ -458,6 +484,8 @@ internal sealed class MinimapSceneRenderer : IDisposable
 
 	internal void BeginFrame()
 	{
+		_terrainLightingBridge?.SetArmed(false);
+		_objectLightingBridge?.SetArmed(false);
 		_terrainIdentityBridge?.SetArmed(false);
 		_terrainSceneryScope?.Arm(null, false);
 		_objectSceneryScope?.Arm(null, false);
@@ -551,6 +579,8 @@ internal sealed class MinimapSceneRenderer : IDisposable
 		_terrainCamera = null;
 		_objectCamera = null;
 		_terrainIdentityBridge = null;
+		_terrainLightingBridge = null;
+		_objectLightingBridge = null;
 		_terrainSceneryScope = null;
 		_objectSceneryScope = null;
 		_terrainCaptureProbe = null;

@@ -707,7 +707,7 @@ internal static class PluginLocalization
 		dictionary["点击后从列表直接选择一个整理预设，预设的具体规则可将鼠标移到选项上查看。"] = "Choose an arrange preset directly from the list. Hover an option to read what the preset does.";
 		dictionary["安全背包整理"] = "Safe Inventory Arrange";
 		dictionary["安全策略：预检无法完整安置时取消整次操作；不调用自动掉落。"] = "Safety: cancel the whole operation when preflight cannot place every item; automatic dropping is never used.";
-		dictionary["跨箱集中：打开储物箱时，按住 Ctrl 或 Shift 点击物品，会把同一资产的物品逐件转移到另一侧；目标空间不足时停止，不会丢弃物品。"] = "Cross-container concentration: while a storage box is open, hold Ctrl or Shift and click an item to transfer every instance of the same asset to the other side; it stops when space runs out and never drops items.";
+		dictionary["跨箱集中：打开储物箱时，按住 Ctrl，用鼠标左键点击物品，会把同一资产的物品逐件转移到另一侧；目标空间不足时停止，不会丢弃物品。"] = "Cross-container concentration: while a storage box is open, hold Ctrl and left-click an item to transfer every instance of the same asset to the other side; it stops when space runs out and never drops items.";
 		dictionary["保护装备"] = "Protect Equipped";
 		dictionary["固定热键物品"] = "Fix Hotkey Items";
 		dictionary["撤销上次整理"] = "Undo Last Arrange";
@@ -1298,13 +1298,124 @@ internal static class PluginLocalization
 		dictionary["切片上方"] = "Slice above";
 		dictionary["切片下方"] = "Slice below";
 		dictionary["安全关系必须满足：楼板排除 ≤ 退出厚度 < 进入厚度；无效组合会回退默认值。"] = "The safe relationship must be floor exclusion ≤ exit thickness < enter thickness; invalid combinations fall back to defaults.";
+		dictionary["检测到房间顶盖时断面固定在顶盖下方；“切片上方”仅在未检测到顶盖时作为回退。"] = "When a room ceiling is detected, the cutaway stays fixed below it; Slice above is only a fallback when no ceiling is detected.";
 		dictionary["两个联动均默认关闭，并且只允许小地图设置单向约束自动拾取。"] = "Both links are disabled by default and only allow minimap settings to constrain auto pickup one way.";
 		dictionary["拾取范围跟随小地图"] = "Use minimap pickup range";
 		dictionary["拾取稀有度跟随小地图"] = "Use minimap rarity filter";
 		dictionary["小地图物品层始终读取原始地面物品快照；自动拾取关闭、品质、名单和丢弃抑制都不会隐藏物品图形。"] = "The minimap item layer always reads raw ground-item snapshots; auto-pickup state, quality, lists, and drop suppression never hide item icons.";
 		dictionary["地下白名单辅助证据："] = "Underground allowlist auxiliary evidence: ";
+		dictionary["地形覆盖深度"] = "Terrain cover depth";
+		dictionary["头顶表面探针"] = "Overhead surface probes";
+		dictionary["断面顶盖高度"] = "Cutaway ceiling height";
 		dictionary["是"] = "Yes";
 		dictionary["否"] = "No";
+		dictionary["世界维护"] = "World maintenance";
+		dictionary["世界维护不可用"] = "World maintenance unavailable";
+		dictionary["运行时服务尚未完成初始化。"] = "The runtime service has not finished initializing.";
+		dictionary["附近范围"] = "Nearby range";
+		dictionary["自然资源刷新"] = "Natural resource restoration";
+		dictionary["刷新附近资源"] = "Restore nearby resources";
+		dictionary["立即恢复附近枯竭且未被玩家、敌人或建筑阻挡的树木与岩石。"] = "Immediately restore nearby depleted trees and rocks that are not obstructed by players, enemies, or structures.";
+		dictionary["刷新全图资源"] = "Restore all-map resources";
+		dictionary["预览并确认恢复全图可安全恢复的枯竭自然资源。"] = "Preview and confirm restoration of depleted natural resources that can safely respawn across the map.";
+		dictionary["丧尸清除"] = "Zombie cleanup";
+		dictionary["丧尸生成"] = "Zombie generation";
+		dictionary["生成附近丧尸"] = "Generate nearby zombies";
+		dictionary["预览并确认在附近可用的已加载丧尸槽位中生成普通丧尸。"] = "Preview and confirm generating normal zombies in available nearby loaded slots.";
+		dictionary["生成已加载丧尸"] = "Generate loaded zombies";
+		dictionary["预览并确认在当前已加载区域的死丧尸槽位中生成丧尸。"] = "Preview and confirm generating zombies in dead slots across loaded regions.";
+		dictionary["附近生成空缺：{0}    已加载生成空缺：{1}"] = "Nearby generation slots: {0}    loaded generation slots: {1}";
+		dictionary["清除附近丧尸"] = "Clear nearby zombies";
+		dictionary["预览并确认清除附近存活丧尸；默认保护 Boss、Mega 和信标事件丧尸。"] = "Preview and confirm clearing nearby living zombies; Boss, Mega, and beacon-event zombies are protected by default.";
+		dictionary["清除已加载丧尸"] = "Clear loaded zombies";
+		dictionary["预览并确认清除当前已经加载的存活丧尸，不宣称清除未加载区域。"] = "Preview and confirm clearing currently loaded living zombies; unloaded regions are not included.";
+		dictionary["地面掉落物清理"] = "Ground-item cleanup";
+		dictionary["物资点补货"] = "Item-spawn restock";
+		dictionary["附近可补货：{0}    全图可补货：{1}"] = "Nearby restockable: {0}    all-map restockable: {1}";
+		dictionary["补充附近物资"] = "Restock nearby items";
+		dictionary["预览并确认按当前范围补充缺失的自然物资点物品。"] = "Preview and confirm restocking missing natural item-spawn items in the current range.";
+		dictionary["预览并确认补充当前范围覆盖的物资区域，保留已有物品。"] = "Preview and confirm restocking item regions covered by the current range, preserving existing items.";
+		dictionary["补充全图物资"] = "Restock all-map items";
+		dictionary["预览并确认按区域分帧补充当前地图缺失的自然物资点物品。"] = "Preview and confirm frame-batched restocking of missing natural item-spawn items across the map.";
+		dictionary["按原生物资点、Spawn_Chance、安全区和 2m 占位检查补充地面物资。"] = "Restock ground items using native spawnpoints, Spawn_Chance, safe-zone, and 2m occupancy checks.";
+		dictionary["数量为预计可补充件数；附近按覆盖区域执行，保留原生密度、安全区和 2m 占位检查。"] = "Counts estimate how many items can be added. Nearby restock covers intersecting regions and preserves native density, safe zones, and 2m occupancy checks.";
+		dictionary["只处理 ItemManager 管理的地面掉落物，不触碰背包、衣物容器、储物箱或无限仓库。"] = "Only ground items managed by ItemManager are affected; backpack, clothing, storage, and infinite storage are untouched.";
+		dictionary["清理附近掉落物"] = "Clear nearby ground items";
+		dictionary["预览并确认清理选定半径内的地面掉落物。"] = "Preview and confirm clearing ground items within the selected radius.";
+		dictionary["清理全部掉落物"] = "Clear all ground items";
+		dictionary["预览并确认按区域分帧清理当前地图全部地面掉落物。"] = "Preview and confirm clearing all ground items on the current map in region-sized frame batches.";
+		dictionary["停止未处理项"] = "Stop unprocessed";
+		dictionary["维护任务已停止；已完成的世界修改不会回滚。"] = "Maintenance stopped; completed world changes are not rolled back.";
+		dictionary["停止尚未处理的候选；已经恢复或清除的对象不会回滚。"] = "Stop candidates not yet processed; objects already restored or cleared are not rolled back.";
+		dictionary["没有符合条件的目标。"] = "No matching targets.";
+		dictionary["确认执行世界维护？"] = "Confirm world maintenance?";
+		dictionary["包括特殊丧尸"] = "Include special zombies";
+		dictionary["显式纳入 Boss、Mega 和信标事件区域中的丧尸；默认关闭。"] = "Explicitly include Boss, Mega, and beacon-event zombies; disabled by default.";
+		dictionary["此操作会真实修改测试存档。停止任务或回滚 DLL 都不会撤销已经完成的恢复与清除。"] = "This operation changes the test save. Stopping the task or rolling back the DLL will not undo completed restoration or cleanup.";
+		dictionary["取消本次预览，不修改世界。"] = "Cancel this preview without changing the world.";
+		dictionary["确认执行"] = "Confirm";
+		dictionary["按当前预览开始分帧维护；已完成的修改不可撤销。"] = "Start frame-batched maintenance from this preview; completed changes cannot be undone.";
+		dictionary["世界维护任务已开始，将按帧处理候选。"] = "World maintenance started and will process candidates across frames.";
+		dictionary["状态：不可用"] = "State: unavailable";
+		dictionary["状态："] = "State: ";
+		dictionary["当前已加载对象"] = "Currently loaded objects";
+		dictionary["当前地图全部区域"] = "All regions on the current map";
+		dictionary["环境状态"] = "Environment status";
+		dictionary["当前天气："] = "Current weather: ";
+		dictionary["当前天气：{0}"] = "Current weather: {0}";
+		dictionary["无活动天气"] = "No active weather";
+		dictionary["时间：{0}    满月：{1}"] = "Time: {0}    full moon: {1}";
+		dictionary["已冻结"] = "Frozen";
+		dictionary["自然流动"] = "Natural";
+		dictionary["已开启"] = "On";
+		dictionary["未开启"] = "Off";
+		dictionary["情景预设"] = "Scenarios";
+		dictionary["情景预设仅在受支持的单人世界中可用。"] = "Scenarios are available only in a supported singleplayer world.";
+		dictionary["晴朗正午"] = "Clear noon";
+		dictionary["已应用晴朗正午预设。"] = "Applied the Clear Noon scenario.";
+		dictionary["设置白天、清除当前天气并关闭强制满月。"] = "Set daytime, clear active weather, and disable forced full moon.";
+		dictionary["满月之夜"] = "Full-moon night";
+		dictionary["已应用满月之夜预设。"] = "Applied the Full-moon Night scenario.";
+		dictionary["设置夜晚、开启满月并清除当前天气。"] = "Set night, enable full moon, and clear active weather.";
+		dictionary["暴雪夜晚"] = "Snowstorm night";
+		dictionary["已应用暴雪夜晚预设。"] = "Applied the Snowstorm Night scenario.";
+		dictionary["设置夜晚并使用当前地图的默认暴雪资产。"] = "Set night and activate the current map's default snow weather asset.";
+		dictionary["恢复自然"] = "Restore natural state";
+		dictionary["时间、满月和天气已恢复自然状态。"] = "Time, moon, and weather were restored to their natural state.";
+		dictionary["解除时间冻结、关闭强制满月并恢复自然天气调度。"] = "Unfreeze time, disable forced full moon, and restore natural weather scheduling.";
+		dictionary["资产概览"] = "Asset overview";
+		dictionary["全部物品"] = "All items";
+		dictionary["Workshop 物品"] = "Workshop items";
+		dictionary["全部载具"] = "All vehicles";
+		dictionary["Workshop 载具"] = "Workshop vehicles";
+		dictionary["动作：{0}\n范围：{1}\n可执行候选：{2}    特殊保护：{3}    碰撞阻挡：{4}"] = "Action: {0}\nScope: {1}\nExecutable: {2}    protected special: {3}    collision blocked: {4}";
+		dictionary["附近 {0}m"] = "Nearby {0}m";
+		dictionary["处理中 {0} / {1}。{2}"] = "Processing {0} / {1}. {2}";
+		dictionary["状态：{0}"] = "State: {0}";
+		dictionary["尚未运行维护任务。"] = "No maintenance task has run yet.";
+		dictionary["维护任务正在分帧执行。"] = "Maintenance is running in frame-sized batches.";
+		dictionary["维护任务异常失败，剩余候选未处理。"] = "Maintenance failed unexpectedly; remaining candidates were not processed.";
+		dictionary["世界维护扫描失败，操作已关闭。"] = "World-maintenance scanning failed; the operation is disabled.";
+		dictionary["维护任务已完成。"] = "Maintenance completed.";
+		dictionary["预览已生成，等待确认。"] = "Preview created; awaiting confirmation.";
+		dictionary["已有世界维护任务正在运行。"] = "A world-maintenance task is already running.";
+		dictionary["维护操作与作用域不匹配。"] = "The maintenance action does not support this scope.";
+		dictionary["世界状态已变化，预览已刷新，请再次确认。"] = "World state changed. The preview was refreshed; confirm again.";
+		dictionary["维护候选未能进入执行队列。"] = "Maintenance candidates could not enter the execution queue.";
+		dictionary["已离开受支持的单人游戏状态，未处理候选已停止。"] = "The supported singleplayer state ended; unprocessed candidates were stopped.";
+		dictionary["用户已停止任务；已完成的世界修改不会回滚。"] = "The task was stopped; completed world changes are not rolled back.";
+		dictionary["场景已切换，未处理候选已停止。已完成的世界修改不会回滚。"] = "The scene changed; unprocessed candidates were stopped. Completed world changes are not rolled back.";
+		dictionary["插件正在卸载，未处理候选已停止。已完成的世界修改不会回滚。"] = "The plugin is unloading; unprocessed candidates were stopped. Completed world changes are not rolled back.";
+		dictionary["场景已切换，维护统计需要刷新。"] = "The scene changed; maintenance statistics need refresh.";
+		dictionary["世界维护服务已释放。"] = "The world-maintenance service has been disposed.";
+		dictionary["世界维护仅在受支持的单人世界中可用。"] = "World maintenance is available only in a supported singleplayer world.";
+		dictionary["世界或场景版本已变化，未处理候选已停止。"] = "The world or scene version changed; unprocessed candidates were stopped.";
+		dictionary["原生能力在执行期间失效，剩余候选未处理。"] = "The native capability became unavailable during execution; remaining candidates were not processed.";
+		dictionary["安全资源刷新入口已就绪。"] = "Safe resource restoration is ready.";
+		dictionary["当前版本不支持安全资源刷新。"] = "This version does not support safe resource restoration.";
+		dictionary["资源管理器尚未就绪，安全资源刷新已禁用。"] = "The resource manager is not ready; safe resource restoration is disabled.";
+		dictionary["读取资源管理器失败，安全资源刷新已禁用。"] = "The resource manager could not be read; safe resource restoration is disabled.";
+		dictionary["资源碰撞检查失败，安全资源刷新已禁用。"] = "Resource collision validation failed; safe resource restoration is disabled.";
 		English = dictionary;
 		Chinese = new Dictionary<string, string>(StringComparer.Ordinal) { ["Workshop"] = "创意工坊" };
 		EnglishPatterns = new PatternTranslation[]
@@ -1321,6 +1432,9 @@ internal static class PluginLocalization
 			new PatternTranslation("^背景：(.+?)  ·  厚遮挡探针：(\\d+)/(\\d+)  ·  最大连续厚度：(.+?) 米$", "Background: $1  ·  thick probes: $2/$3  ·  max continuous thickness: $4 m"),
 			new PatternTranslation("^地下白名单辅助证据：是$", "Underground allowlist auxiliary evidence: yes"),
 			new PatternTranslation("^地下白名单辅助证据：否$", "Underground allowlist auxiliary evidence: no"),
+			new PatternTranslation("^地形覆盖深度：(.+?) 米$", "Terrain cover depth: $1 m"),
+			new PatternTranslation("^头顶表面探针：(\\d+)/5$", "Overhead surface probes: $1/5"),
+			new PatternTranslation("^断面顶盖高度：(.+)$", "Cutaway ceiling height: $1"),
 			new PatternTranslation("^背景：(.+)$", "Background: $1"),
 			new PatternTranslation("^已传送到地图坐标 X (.+?) · Z (.+?)。$", "Teleported to map coordinates X $1 · Z $2."),
 			new PatternTranslation("^预览：(\\d+)%$", "Preview: $1%"),
@@ -1457,7 +1571,24 @@ internal static class PluginLocalization
 			new PatternTranslation("^ID (\\d+)  ·  剩余弹药 ([\\d,]+)  ·  品质 (\\d+)  ·  无状态$", "ID $1  ·  Ammo left $2  ·  Quality $3  ·  No state"),
 			new PatternTranslation("^ID (\\d+)  ·  剩余弹药 ([\\d,]+)  ·  品质 (\\d+)  ·  状态 (\\d+)B$", "ID $1  ·  Ammo left $2  ·  Quality $3  ·  State $4B"),
 			new PatternTranslation("^已取出 ([\\d,]+) 个物品。$", "Withdrew $1 items."),
-			new PatternTranslation("^准星工具模式已切换为 (.+)。$", "Crosshair tool mode changed to $1.")
+			new PatternTranslation("^准星工具模式已切换为 (.+)。$", "Crosshair tool mode changed to $1."),
+			new PatternTranslation("^将附近维护操作的水平范围设置为 ([\\d,.]+) 米。$", "Set the horizontal range for nearby maintenance to $1 meters."),
+			new PatternTranslation("^附近：枯竭 ([\\d,]+) / 可恢复 ([\\d,]+) / 被阻挡 ([\\d,]+)$", "Nearby: depleted $1 / recoverable $2 / blocked $3"),
+			new PatternTranslation("^全图：枯竭 ([\\d,]+) / 可恢复 ([\\d,]+) / 被阻挡 ([\\d,]+)$", "All map: depleted $1 / recoverable $2 / blocked $3"),
+			new PatternTranslation("^附近普通存活：([\\d,]+)$", "Nearby normal living: $1"),
+			new PatternTranslation("^已加载普通存活：([\\d,]+)    特殊保护：([\\d,]+)$", "Loaded normal living: $1    protected special: $2"),
+			new PatternTranslation("^附近生成空缺：([\\d,]+)    已加载生成空缺：([\\d,]+)$", "Nearby generation slots: $1    loaded generation slots: $2"),
+			new PatternTranslation("^附近可补货：([\\d,]+)    全图可补货：([\\d,]+)$", "Nearby restockable: $1    all-map restockable: $2"),
+			new PatternTranslation("^附近掉落物：([\\d,]+)    全部掉落物：([\\d,]+)    当前范围：([\\d,.]+)m$", "Nearby ground items: $1    all ground items: $2    current range: $3m"),
+			new PatternTranslation("^处理中 ([\\d,]+) / ([\\d,]+)。([\\s\\S]+)$", "Processing $1 / $2. $3"),
+			new PatternTranslation("^动作：([\\s\\S]+)\\\\n$", "Action: $1\\n"),
+			new PatternTranslation("^范围：([\\s\\S]+)\\\\n$", "Scope: $1\\n"),
+			new PatternTranslation("^可执行候选：([\\d,]+)    特殊保护：([\\d,]+)    碰撞阻挡：([\\d,]+)$", "Executable: $1    protected special: $2    collision blocked: $3"),
+			new PatternTranslation("^附近 ([\\d,.]+)m$", "Nearby $1m"),
+			new PatternTranslation("^时间：(.+?)    满月：(.+)$", "Time: $1    full moon: $2"),
+			new PatternTranslation("^任务完成：成功 ([\\d,]+)，保护 ([\\d,]+)，阻挡 ([\\d,]+)，失效 ([\\d,]+)，失败 ([\\d,]+)，未处理 ([\\d,]+)。$", "Task completed: succeeded $1, protected $2, blocked $3, stale $4, failed $5, unprocessed $6."),
+			new PatternTranslation("^任务已停止：成功 ([\\d,]+)，保护 ([\\d,]+)，阻挡 ([\\d,]+)，失效 ([\\d,]+)，失败 ([\\d,]+)，未处理 ([\\d,]+)。$", "Task stopped: succeeded $1, protected $2, blocked $3, stale $4, failed $5, unprocessed $6."),
+			new PatternTranslation("^任务失败：成功 ([\\d,]+)，保护 ([\\d,]+)，阻挡 ([\\d,]+)，失效 ([\\d,]+)，失败 ([\\d,]+)，未处理 ([\\d,]+)。$", "Task failed: succeeded $1, protected $2, blocked $3, stale $4, failed $5, unprocessed $6.")
 		};
 		CurrentLanguage = PluginLanguage.Chinese;
 	}

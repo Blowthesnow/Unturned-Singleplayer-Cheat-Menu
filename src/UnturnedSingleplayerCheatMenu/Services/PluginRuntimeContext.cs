@@ -42,6 +42,7 @@ public sealed class PluginRuntimeContext : IDisposable
 	private NearbyItemIndex _nearbyItemIndex;
 	private AutoPickupFeature _autoPickup;
 	private MinimapFeature _minimap;
+	private WorldMaintenanceService _worldMaintenance;
 	private NearbyItemSnapshot _sharedItemSnapshot;
 	private float _nextSharedItemScanTime;
 	private int _sharedItemSnapshotVersion;
@@ -55,6 +56,7 @@ public sealed class PluginRuntimeContext : IDisposable
 	private bool _hasLoggedUpdateCallback;
 	private bool _hasLoggedWorkshopPumpFailure;
 	private bool _hasLoggedInfiniteStoragePumpFailure;
+	private bool _hasLoggedWorldMaintenancePumpFailure;
 	private int _lastRuntimeUpdateFrame = -1;
 	private int _lastRuntimeLateUpdateFrame = -1;
 	private int _lastWorkshopSnapshotVersion = -1;
@@ -94,6 +96,11 @@ public sealed class PluginRuntimeContext : IDisposable
 		_nearbyItemIndex = composition.NearbyItemIndex;
 		_autoPickup = composition.AutoPickup;
 		_minimap = composition.Minimap;
+		_worldMaintenance = composition.WorldMaintenance;
+		if (_worldMaintenance != null)
+		{
+			_worldMaintenance.GroundItemsChanged += InvalidateSharedItemSnapshot;
+		}
 		_infiniteStorage = composition.InfiniteStorage;
 		_creatureHealthBars = composition.CreatureHealthBars;
 		_workshopLocalization = composition.WorkshopLocalization;
@@ -204,6 +211,27 @@ public sealed class PluginRuntimeContext : IDisposable
 			{
 				_lastWorkshopPresentationVersion = presentationVersion;
 				_ui?.OnWorkshopLocalizationPresentationChanged();
+			}
+		}
+		try
+		{
+			_worldMaintenance?.Pump();
+			_hasLoggedWorldMaintenancePumpFailure = false;
+		}
+		catch (Exception exception)
+		{
+			try
+			{
+				_worldMaintenance?.Fail(exception);
+			}
+			catch
+			{
+				// The containment path must never block the pre-existing runtime graph.
+			}
+			if (!_hasLoggedWorldMaintenancePumpFailure)
+			{
+				_hasLoggedWorldMaintenancePumpFailure = true;
+				_log?.LogError("[Runtime] WorldMaintenance Pump failed closed; input, minimap, storage, and auto-pickup will continue.\n" + exception);
 			}
 		}
 		bool pluginWindowOpen = _plugin.IsMenuOpen || _plugin.IsInfiniteStorageOpen || _plugin.IsMinimapLayoutEditActive;
@@ -335,6 +363,13 @@ public sealed class PluginRuntimeContext : IDisposable
 		return _sharedItemSnapshot;
 	}
 
+	private void InvalidateSharedItemSnapshot()
+	{
+		_sharedItemSnapshot = null;
+		_nextSharedItemScanTime = 0f;
+		++_sharedItemSnapshotVersion;
+	}
+
 	internal void ScheduleInfiniteStorageRefresh(bool catalogIsDirty)
 	{
 		_infiniteStorageRefreshFrame = catalogIsDirty ? Time.frameCount + 1 : -1;
@@ -391,6 +426,7 @@ public sealed class PluginRuntimeContext : IDisposable
 		{
 			return;
 		}
+		_worldMaintenance?.HandleSceneChanged();
 		_uiRoot?.HandleSceneChanged();
 		_ui?.HandleSceneChanged();
 		ZombieRegionRetentionPatch.ResetForSceneTransition();
@@ -417,6 +453,13 @@ public sealed class PluginRuntimeContext : IDisposable
 		RunTeardownStep("minimap layout input", MinimapLayoutInputPatch.Reset);
 		RunTeardownStep("input capture", _inputCapture.Release);
 		RunTeardownStep("movement restore", () => _movement?.Restore());
+		RunTeardownStep("world maintenance", delegate
+		{
+			if (_worldMaintenance == null) return;
+			_worldMaintenance.GroundItemsChanged -= InvalidateSharedItemSnapshot;
+			_worldMaintenance.Dispose();
+			_worldMaintenance = null;
+		});
 		RunTeardownStep("zombie retention cleanup", ZombieRegionRetentionPatch.ReleaseAll);
 		RunTeardownStep("ui", () => _ui?.Dispose());
 		_ui = null;

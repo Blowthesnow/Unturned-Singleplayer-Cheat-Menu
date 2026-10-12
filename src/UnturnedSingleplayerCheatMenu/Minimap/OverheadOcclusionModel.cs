@@ -50,6 +50,54 @@ internal readonly struct OcclusionSummary
 
 internal static class OverheadOcclusionModel
 {
+	public static OcclusionSummary ApplyUndergroundEvidence(OcclusionSummary geometric,
+		bool undergroundAllowlisted, float terrainCoverDepth, float enterThickness,
+		float exitThickness)
+	{
+		float coverDepth = IsFinite(terrainCoverDepth) ? Math.Max(0f, terrainCoverDepth) : 0f;
+		float enter = IsFinite(enterThickness) ? Math.Max(0f, enterThickness) : 0f;
+		float exit = IsFinite(exitThickness) ? Math.Max(0f, exitThickness) : 0f;
+		bool terrainMeetsEnter = coverDepth >= enter;
+		bool terrainMeetsExit = coverDepth <= exit;
+		return new OcclusionSummary(
+			geometric.ProbeCount,
+			geometric.EnterProbeCount,
+			geometric.ExitProbeCount,
+			Math.Max(geometric.MaximumEffectiveThickness, coverDepth),
+			geometric.MeetsEnterThreshold || undergroundAllowlisted || terrainMeetsEnter,
+			geometric.MeetsExitThreshold && !undergroundAllowlisted && terrainMeetsExit);
+	}
+
+	public static OcclusionSummary ApplyUnmappedInteriorEvidence(OcclusionSummary evidence,
+		bool nativeCropVisible, int overheadSurfaceProbeCount, int requiredProbeCount)
+	{
+		int required = Math.Max(1, requiredProbeCount);
+		bool unmappedInterior = !nativeCropVisible && overheadSurfaceProbeCount >= required;
+		return new OcclusionSummary(
+			evidence.ProbeCount,
+			evidence.EnterProbeCount,
+			evidence.ExitProbeCount,
+			evidence.MaximumEffectiveThickness,
+			evidence.MeetsEnterThreshold || unmappedInterior,
+			evidence.MeetsExitThreshold && !unmappedInterior);
+	}
+
+	public static float ResolveCutawayCeilingY(IReadOnlyList<float> candidates)
+	{
+		int sourceCount = candidates?.Count ?? 0;
+		if (sourceCount == 0) return float.NaN;
+		float[] sorted = new float[sourceCount];
+		int count = 0;
+		for (int index = 0; index < sourceCount; index++)
+		{
+			float value = candidates[index];
+			if (IsFinite(value)) sorted[count++] = value;
+		}
+		if (count == 0) return float.NaN;
+		Array.Sort(sorted, 0, count);
+		return sorted[count / 2];
+	}
+
 	public static OcclusionProbeSummary EvaluateProbe(IReadOnlyList<VerticalOcclusionInterval> intervals,
 		float mergeGap, float floorExclusionMaxThickness)
 	{

@@ -2,11 +2,11 @@
 
 [English](README.en.md) · [Releases](https://github.com/Blowthesnow/Unturned-Singleplayer-Cheat-Menu/releases) · [更新日志](CHANGELOG.md) · [安全说明](SECURITY.md) · [赞助](https://afdian.com/a/Blowthesnow)
 
-![Version](https://img.shields.io/badge/version-2.0.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-30%2F30%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-33%2F33%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **面向 Unturned 单人世界的 BepInEx 5 中英双语工具箱。** 它不依赖写死的物品或载具表，而是读取当前游戏进程已经加载的资产；原版内容、当前地图附带内容和 Workshop 模组会按实际加载结果进入物品与载具目录。
 
-除资产目录外，2.0 还整合了运行时翻译、角色状态、收藏、背包整理、自动拾取、Snapshot 无限储存、准星交互、生物血条、飞行与穿墙、地图传送、小地图以及时间与天气控制。
+除资产目录外，2.1 还整合了运行时翻译、角色状态、收藏、背包整理、自动拾取、Snapshot 无限储存、准星交互、生物血条、飞行与穿墙、地图传送、小地图、时间与天气控制，以及资源刷新、物资补货、丧尸维护和地面清理。
 
 **默认快捷键：本地玩家生成后按 `End` 打开或关闭菜单。**
 
@@ -47,7 +47,9 @@
 
 > 检索边界：上述“未发现第二个插件”基于截至 2026-09-05 对 GitHub、Thunderstore、Nexus、Steam Workshop 和公开 Unturned 插件市场的检索，不包含私有或未索引实现。
 
-## v2.0.0 完整功能
+## v2.1.0 完整功能
+
+2.1 的新增与修复见 [本次更新日志](docs/RELEASE_NOTES_v2.1.0.md)。下方功能截图来自 2.0，世界维护与环境预设以当前文字说明为准。
 
 ### 角色状态
 
@@ -119,7 +121,7 @@
 
 - 支持预览、当前容器或全部随身页整理，以及紧凑等排序预设。
 - 支持自动旋转、跨页、保护装备、保护快捷栏绑定、只压缩、只归并和撤销上次整理。
-- 打开储物箱时可按住 Ctrl/Shift 点击物品做同资产跨箱集中。
+- 打开储物箱时仅用 **Ctrl＋鼠标左键** 做同资产跨箱集中；左右 Ctrl 均支持，同时按下 Shift 或 Alt 时不触发，右键和中键保留原生操作。
 - 预检不能完整安置时取消操作；应用、原生拖放或异常失败时保留回滚边界。
 
 <details>
@@ -172,6 +174,7 @@
 
 - 飞行与穿墙沿用 Unturned 原生移动模拟路径，支持独立水平/垂直速度倍率。
 - 视角方向飞行读取用户配置的方向键；W/S 跟随镜头 pitch/yaw，Space/Ctrl 固定世界纵轴优先。
+- 穿墙同样遵循所选飞行模式和原生方向键绑定；视角指向模式跟随镜头俯仰，世界轴模式保持水平移动。
 - 斜向移动归一化，零向量或非有限镜头方向自动回退。
 - 关闭穿墙后搜索安全位置；退出授权、死亡或进入载具时恢复原生移动状态。
 
@@ -208,6 +211,8 @@
 - 支持北向固定或随视角旋转，显示指南针和世界坐标。
 - 可显示玩家、组员原生标记、传送点、僵尸、动物、其他玩家和地面物品；物品支持六档稀有度和跨楼层处理。
 - 背景可使用原生地图裁剪、实时地表、实时高度切片或回退网格；建筑/洞穴探测按配置选择背景。
+- 地下与无原生地图的室内区域结合地形覆盖、地下区域信息和头顶探针识别；检测到顶盖后将断面固定在顶盖下方，避免沿坡道移动时切片随玩家高度漂移。
+- 实时捕获统一处理环境光、阴影与雾，并在每个捕获通道结束后恢复游戏渲染状态。
 - 有界僵尸区域保留避免扫描边界反复丢失标记，同时限制内存增长。
 
 <details>
@@ -232,6 +237,7 @@
 - 中英双语 12 小时时间环，支持拖动、滚轮、键盘调整以及白天/夜晚快捷设置。
 - 冻结时间、强制满月、请求空投。
 - 下雨、暴雪、清除当前天气和关闭天气调度。
+- 显示当前天气、时间冻结和满月状态；提供晴朗正午、满月之夜、暴雪夜晚和恢复自然预设。恢复自然会解除时间冻结、关闭强制满月并恢复自然天气调度。
 - 手动重新扫描当前已经加载的资产。
 
 <details>
@@ -240,6 +246,15 @@
 ![12 小时时间环、天气、满月与世界事件](docs/images/v2/world-controls.png)
 
 </details>
+
+### 世界维护
+
+- 自然资源刷新：恢复附近或全图可安全恢复的枯竭树木与岩石，显示枯竭、可恢复和被阻挡数量。
+- 丧尸维护：清除附近或已加载区域的丧尸，在可用槽位中生成丧尸；默认保护 Boss、Mega 和信标事件丧尸。
+- 地面掉落物清理：支持附近与全图范围，只处理原生地面掉落物。
+- 物资点补货：保留原生物资表、区域密度、安全区和 2m 占位检查；预览显示预计件数，结果统计实际新增件数。附近补货按范围覆盖的原生区域执行，单次随机生成不承诺填满所有空出生点。
+- 附近范围可选 `100m / 250m / 500m`；批量操作提供预览、确认、分帧执行、进度、停止和结果统计。
+- 两列独立堆叠卡片，左列为自然资源与补货，右列为丧尸与地面清理；世界维护仅在单人世界执行。
 
 ### 界面、快捷键与持久化
 
@@ -310,21 +325,21 @@ Workshop 翻译扫描、缓存、请求、批次完成和本地文本应用不�
 
 ## 兼容环境
 
-当前 `2.0.0` 源码已针对以下环境构建；版本归属、构建记录与验证边界见 [更新日志](CHANGELOG.md)：
+当前 `2.1.0` 使用以下已核对的安装环境；构建记录与验证边界见 [更新日志](CHANGELOG.md)：
 
 | 项目 | 版本 |
 | --- | --- |
-| Unturned | `3.26.3.8` |
+| Unturned | `3.26.3.13` |
 | Unity | `2022.3.62f3` |
 | 架构/运行时 | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| 插件 | `2.0.0` |
+| 插件 | `2.1.0` |
 
 游戏更新可能改变内部 API。若新版 Unturned 启动后插件不加载，请先查看 `BepInEx/LogOutput.log`，再提交 Issue。
 
 ## 安装
 
-GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v2.0.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
+GitHub Release 中的 `Unturned-Singleplayer-Cheat-Menu-v2.1.0-Plugin-Only.zip` **只包含插件，不包含 BepInEx**。
 
 1. 完全退出 Unturned。
 2. 安装 BepInEx `5.4.23.5` x64 到 Unturned 游戏根目录。
@@ -408,16 +423,22 @@ Get-ChildItem .\tests -Recurse -Filter '*Smoke.csproj' | Sort-Object FullName | 
 
 ## 验证
 
-`v2.0.0` 是自 `v1.7.0` 以来首个正式版本；中间源码检查点与本版累计变更、构建和 Smoke 记录见 [主更新日志](CHANGELOG.md)，v1.8 的逆向恢复边界单独记录在 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md)。2.0 Release 构建为 0 警告、0 错误，递归发现的 30 个 Smoke 项目全部逐项重建并运行通过；源码/API、发布包与真实游戏验收边界仍分别记录。
+`v2.1.0` 在 `v2.0.0` 基础上新增世界维护与环境预设，并修复补货、小地图、穿墙和跨箱快捷键。增量说明见 [2.1 更新日志](docs/RELEASE_NOTES_v2.1.0.md)，全部版本历史见 [主更新日志](CHANGELOG.md)；`v2.0.0` 作为自 `v1.7.0` 以来首个正式版本的历史记录，以及 [v1.8 恢复日志](docs/V1.8_RECOVERY_CHANGELOG.md) 的边界继续保留。
 
-v2.0.0 发布产物：
+本轮 Release 构建：0 warnings / 0 errors。递归发现的 Smoke 项目逐项重建与运行结果：33/33 PASS (each project built and run)。原生边界回归链接真实生产代码并在游戏、Unity、输入和 Harmony 边界使用测试替身；源码/API、构建、测试替身、发布包、部署与真实游戏验收分别记录。
+
+重新生成的外部 API 清单：1,731 行，SHA-256 `035C80F1D997EFF5BFDE0D37763EF13CF6C4EACE1C6A521F1BC46379740E6BE6`。
+
+v2.1.0 发布产物：
 
 ```text
-DLL SHA-256: 79AC75876C0B3B829188BB02EEB2DF5C32F04BF1AC7C025D695B44389B33F192
-Plugin-Only ZIP SHA-256: 92CFA47EB93A68A98EC122EEDB67EDC6D59F7E0A290E0207F72500009D7049D9
+DLL bytes: 1,269,248
+DLL SHA-256: 1D04866C99E9AF152DEC6184AEAAD6CC70266F456E07F15D948B298CF9329AE1
+Plugin-Only ZIP bytes: 478,363
+Plugin-Only ZIP SHA-256: 4658EF096B2C5D70EA234E23242B66C98D4FACCB551837C41900E6BBA1DC6435
 ```
 
-最终 2.0 DLL/发布包在本次发布准备中未部署、未重启游戏验收；自动化通过不能替代真实单人玩法确认。
+最终发布包部署：最终 2.1 发布包本轮未部署；此前 2.0 构建的部署另有记录。重启后的视觉与交互验收：本轮未运行，游戏内视觉与交互仍待验收。构建、Smoke 和发布包哈希不等于真实游戏验收。
 
 ## 免责声明
 

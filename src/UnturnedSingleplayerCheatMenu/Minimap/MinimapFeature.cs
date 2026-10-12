@@ -44,6 +44,8 @@ internal sealed class MinimapFeature : IDisposable
 	private Player _observedPlayer;
 	private bool _teleportPending;
 	private readonly MinimapTeleportRecovery _teleportRecovery = new MinimapTeleportRecovery();
+	private readonly MinimapInstanceCutaway _instanceCutaway = new MinimapInstanceCutaway();
+	private float _lastLoggedInstanceCeilingY = float.NaN;
 
 	internal MinimapSettings Settings => _settings.Clone();
 	internal MinimapBackgroundState BackgroundState => _state;
@@ -84,6 +86,7 @@ internal sealed class MinimapFeature : IDisposable
 		if (!_settings.Enabled)
 		{
 			_backgroundState.Reset();
+			_instanceCutaway.Reset();
 			_hud.SetMarkers(Array.Empty<MinimapHudMarker>());
 			_hud.SetBackground(MinimapBackgroundState.Disabled, _crop, null, null);
 		}
@@ -107,6 +110,11 @@ internal sealed class MinimapFeature : IDisposable
 		bool positionJump = _teleportRecovery.ObservePosition(new MinimapWorldPoint(center.x, center.y, center.z));
 		if (nativeTeleport || positionJump)
 		{
+			if (nativeTeleport)
+			{
+				_instanceCutaway.Reset();
+				_lastLoggedInstanceCeilingY = float.NaN;
+			}
 			_backgroundState.Reset();
 			_nextWorldScanTime = _nextMarkerProjectionTime = _nextProbeTime = _nextRenderTime = 0f;
 			_sceneRenderer.InvalidateCachedScenery();
@@ -134,15 +142,50 @@ internal sealed class MinimapFeature : IDisposable
 		_teleportRecovery.ObserveDestination(nativeTeleport, hasVisibleNativeCrop, _nativeMap.IsPlayerInsideNativeBounds);
 		if (_settings.BackgroundMode == MinimapBackgroundMode.AutoNativeFirst && _teleportRecovery.NeedsRealtimeDestination)
 			nativeAvailable = false;
+		float headY = player.look?.aim != null ? player.look.aim.position.y : center.y + 1.6f;
+		bool autoBackground = _settings.BackgroundMode == MinimapBackgroundMode.AutoNativeFirst;
+		if (!autoBackground) _instanceCutaway.Reset();
+		bool instanceCutawayActive = autoBackground && _instanceCutaway.Update(
+			hasVisibleNativeCrop, _teleportRecovery.NeedsRealtimeDestination,
+			_occlusionDiagnostics.OverheadSurfaceProbeCount, 3,
+			headY + 0.5f, _occlusionDiagnostics.CutawayCeilingY);
+		int effectiveOverheadProbeCount = instanceCutawayActive
+			? Math.Max(3, _occlusionDiagnostics.OverheadSurfaceProbeCount)
+			: _occlusionDiagnostics.OverheadSurfaceProbeCount;
+		OcclusionSummary stateOcclusion = OverheadOcclusionModel.ApplyUnmappedInteriorEvidence(
+			_occlusionDiagnostics.Summary, hasVisibleNativeCrop,
+			effectiveOverheadProbeCount, 3);
 		MinimapBackgroundState previousState = _state;
 		_state = _backgroundState.Update(now, _settings.BackgroundMode, nativeAvailable,
-			_sceneRenderer.IsAvailable, _occlusionDiagnostics.Summary,
+			_sceneRenderer.IsAvailable, stateOcclusion,
 			nativeTeleport ? 0f : _settings.OcclusionEnterDelaySeconds, _settings.OcclusionExitDelaySeconds);
 		bool stateChanged = previousState != _state;
+		float activeCeilingY = instanceCutawayActive
+			? _instanceCutaway.CeilingY
+			: _occlusionDiagnostics.CutawayCeilingY;
+		float cutawaySliceAbove = MinimapRenderPolicy.ResolveCutawaySliceAbove(
+			_settings.UndergroundSliceAbove, center.y, headY,
+			activeCeilingY);
+		if (instanceCutawayActive && (float.IsNaN(_lastLoggedInstanceCeilingY) ||
+			Mathf.Abs(activeCeilingY - _lastLoggedInstanceCeilingY) >= 0.05f))
+		{
+			_lastLoggedInstanceCeilingY = activeCeilingY;
+			_log?.LogInfo($"[Minimap] instance-cutaway-lock-v1: ceilingY={activeCeilingY:F2}, " +
+				$"planeY={center.y + cutawaySliceAbove:F2}, measured={_instanceCutaway.HasMeasuredCeiling}, " +
+				$"destinationLock={_teleportRecovery.NeedsRealtimeDestination}.");
+		}
 		if (stateChanged)
 		{
 			_log?.LogInfo($"[Minimap] background {previousState} -> {_state}; requested={_settings.BackgroundMode}, " +
-				$"native={nativeAvailable}, realtime={_sceneRenderer.IsAvailable}.");
+				$"native={nativeAvailable}, realtime={_sceneRenderer.IsAvailable}, " +
+				$"thickProbes={_occlusionDiagnostics.Summary.EnterProbeCount}/{_occlusionDiagnostics.Summary.ProbeCount}, " +
+				$"maxCover={stateOcclusion.MaximumEffectiveThickness:F2}, " +
+				$"terrainCover={_occlusionDiagnostics.TerrainCoverDepth:F2}, " +
+				$"overheadSurfaces={_occlusionDiagnostics.OverheadSurfaceProbeCount}/5, " +
+				$"ceilingY={activeCeilingY:F2}, instanceCutaway={instanceCutawayActive}, " +
+				$"nativeCropVisible={hasVisibleNativeCrop}, " +
+				$"allowlisted={_occlusionDiagnostics.UndergroundAllowlistContainsPlayer}, " +
+				$"sliceAbove={cutawaySliceAbove:F2}.");
 		}
 
 		bool needsCamera = MinimapRenderPolicy.UsesSceneCameras(_state);
@@ -150,7 +193,7 @@ internal sealed class MinimapFeature : IDisposable
 		{
 			_nextRenderTime = now + 1f / Mathf.Max(MinimapSettings.MinRenderHz, _settings.BackgroundRenderHz);
 			if (!_sceneRenderer.Render(center, contentRadius, _mapYaw, _state,
-				_settings.ShowLoadedBuildings, _settings.UndergroundSliceAbove, _settings.UndergroundSliceBelow))
+				_settings.ShowLoadedBuildings, cutawaySliceAbove, _settings.UndergroundSliceBelow))
 			{
 				_state = nativeAvailable ? MinimapBackgroundState.NativeMapCrop : MinimapBackgroundState.FallbackGrid;
 			}
@@ -328,6 +371,8 @@ internal sealed class MinimapFeature : IDisposable
 		BindTeleportNotifications(null);
 		_nativeMap.HandleSceneChanged();
 		_backgroundState.Reset();
+		_instanceCutaway.Reset();
+		_lastLoggedInstanceCeilingY = float.NaN;
 		_crop = NativeMapCropSnapshot.Unavailable("地图场景已切换");
 		_nextWorldScanTime = _nextMarkerProjectionTime = _nextProbeTime = _nextRenderTime = 0f;
 		_cachedNativeMarkers = Array.Empty<MinimapWorldMarker>();
@@ -357,6 +402,8 @@ internal sealed class MinimapFeature : IDisposable
 		_teleportPending = false;
 		_teleportRecovery.Reset();
 		_backgroundState.Reset();
+		_instanceCutaway.Reset();
+		_lastLoggedInstanceCeilingY = float.NaN;
 		_nextWorldScanTime = _nextMarkerProjectionTime = _nextProbeTime = _nextRenderTime = 0f;
 		if (!ReferenceEquals(player, null)) player.onPlayerTeleported += HandlePlayerTeleported;
 	}

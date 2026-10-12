@@ -77,6 +77,7 @@ internal interface IWorldUiFeature
 	uint Time { get; }
 	bool FreezeTimeEnabled { get; }
 	bool FullMoonEnabled { get; }
+	string ActiveWeatherName { get; }
 	int ItemCount { get; }
 	int WorkshopItemCount { get; }
 	int VehicleCount { get; }
@@ -92,6 +93,18 @@ internal interface IWorldUiFeature
 	void ClearWeather();
 	void DisableWeather();
 	void RefreshCatalog();
+	bool ApplyScenario(WorldScenarioKind scenario);
+}
+
+internal interface IWorldMaintenanceUiFeature
+{
+	int SnapshotVersion { get; }
+	WorldMaintenanceDashboardSnapshot CaptureDashboard(float radius);
+	WorldMaintenanceProgress CaptureProgress();
+	bool TryCreatePreview(WorldMaintenanceActionKind action, WorldMaintenanceScopeKind scope,
+		float radius, bool includeSpecialZombies, out WorldMaintenancePreview preview, out string message);
+	bool TryStart(WorldMaintenancePreview preview, out WorldMaintenancePreview currentPreview, out string message);
+	void Stop();
 }
 
 internal interface IInfiniteStorageUiFeature
@@ -255,6 +268,7 @@ internal sealed class PluginUiFeatureAdapter :
 	ICatalogUiFeature,
 	ITeleportUiFeature,
 	IWorldUiFeature,
+	IWorldMaintenanceUiFeature,
 	IInfiniteStorageUiFeature,
 	ITranslationUiFeature,
 	IInventoryUiFeature,
@@ -340,6 +354,7 @@ internal sealed class PluginUiFeatureAdapter :
 	uint IWorldUiFeature.Time => LightingManager.time;
 	bool IWorldUiFeature.FreezeTimeEnabled => _plugin.Actions.FreezeTimeEnabled;
 	bool IWorldUiFeature.FullMoonEnabled => LightingManager.isFullMoon;
+	string IWorldUiFeature.ActiveWeatherName => LevelLighting.GetActiveWeatherAsset()?.FriendlyName ?? "无活动天气";
 	int IWorldUiFeature.ItemCount => _plugin.Catalog?.Items.Count ?? 0;
 	int IWorldUiFeature.WorkshopItemCount => _plugin.Catalog?.WorkshopItemCount ?? 0;
 	int IWorldUiFeature.VehicleCount => _plugin.Catalog?.Vehicles.Count ?? 0;
@@ -358,6 +373,56 @@ internal sealed class PluginUiFeatureAdapter :
 	void IWorldUiFeature.ClearWeather() { if (EnsureGameplayAccess(GlobalShortcutActions.ClearWeather)) _plugin.Actions.ClearWeather(); }
 	void IWorldUiFeature.DisableWeather() { if (EnsureGameplayAccess(GlobalShortcutActions.DisableWeather)) _plugin.Actions.DisableWeather(); }
 	void IWorldUiFeature.RefreshCatalog() => _plugin.RefreshCatalog();
+	bool IWorldUiFeature.ApplyScenario(WorldScenarioKind scenario)
+	{
+		if (!_plugin.CurrentSessionState.IsSupportedGameplay) return false;
+		switch (scenario)
+		{
+			case WorldScenarioKind.ClearNoon:
+				_plugin.Actions.SetDay();
+				_plugin.Actions.ClearWeather();
+				_plugin.Actions.SetFullMoon(false);
+				return true;
+			case WorldScenarioKind.FullMoonNight:
+				_plugin.Actions.SetNight();
+				_plugin.Actions.SetFullMoon(true);
+				_plugin.Actions.ClearWeather();
+				return true;
+			case WorldScenarioKind.SnowstormNight:
+				_plugin.Actions.SetNight();
+				return _plugin.Actions.StartSnow();
+			case WorldScenarioKind.RestoreNatural:
+				_plugin.Actions.SetFreezeTime(false);
+				_plugin.Actions.SetFullMoon(false);
+				_plugin.Actions.RestoreNaturalWeather();
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	WorldMaintenanceDashboardSnapshot IWorldMaintenanceUiFeature.CaptureDashboard(float radius) =>
+		_plugin.WorldMaintenance?.CaptureDashboard(radius);
+	int IWorldMaintenanceUiFeature.SnapshotVersion => _plugin.WorldMaintenance?.SnapshotVersion ?? 0;
+	WorldMaintenanceProgress IWorldMaintenanceUiFeature.CaptureProgress() =>
+		_plugin.WorldMaintenance?.CaptureProgress();
+	bool IWorldMaintenanceUiFeature.TryCreatePreview(WorldMaintenanceActionKind action,
+		WorldMaintenanceScopeKind scope, float radius, bool includeSpecialZombies,
+		out WorldMaintenancePreview preview, out string message)
+	{
+		preview = null;
+		message = "世界维护服务不可用。";
+		return _plugin.WorldMaintenance?.TryCreatePreview(action, scope, radius, includeSpecialZombies,
+			out preview, out message) == true;
+	}
+	bool IWorldMaintenanceUiFeature.TryStart(WorldMaintenancePreview preview,
+		out WorldMaintenancePreview currentPreview, out string message)
+	{
+		currentPreview = null;
+		message = "世界维护服务不可用。";
+		return _plugin.WorldMaintenance?.TryStart(preview, out currentPreview, out message) == true;
+	}
+	void IWorldMaintenanceUiFeature.Stop() => _plugin.WorldMaintenance?.Stop("用户已停止任务；已完成的世界修改不会回滚。");
 
 	bool IInfiniteStorageUiFeature.IsAvailable => _plugin.InfiniteStorage != null && _plugin.CanUseSnapshotStorage;
 	bool IInfiniteStorageUiFeature.Enabled => _plugin.InfiniteStorage?.Enabled ?? false;

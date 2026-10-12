@@ -4,6 +4,14 @@ using UnturnedSingleplayerCheatMenu.Services;
 
 namespace UnturnedSingleplayerCheatMenu.UI;
 
+internal enum WorldScenarioKind
+{
+	ClearNoon,
+	FullMoonNight,
+	SnowstormNight,
+	RestoreNatural
+}
+
 internal sealed class CharacterPageSnapshot
 {
 	internal bool IsReady { get; }
@@ -95,19 +103,21 @@ internal sealed class WorldPageSnapshot
 	internal uint Time { get; }
 	internal bool FreezeTimeEnabled { get; }
 	internal bool FullMoonEnabled { get; }
+	internal string ActiveWeatherName { get; }
 	internal int ItemCount { get; }
 	internal int WorkshopItemCount { get; }
 	internal int VehicleCount { get; }
 	internal int WorkshopVehicleCount { get; }
 	internal float NormalizedTime => (float)Time / Math.Max(1u, Cycle);
 
-	internal WorldPageSnapshot(uint cycle, uint time, bool freezeTimeEnabled, bool fullMoonEnabled,
+	internal WorldPageSnapshot(uint cycle, uint time, bool freezeTimeEnabled, bool fullMoonEnabled, string activeWeatherName,
 		int itemCount, int workshopItemCount, int vehicleCount, int workshopVehicleCount)
 	{
 		Cycle = cycle;
 		Time = time;
 		FreezeTimeEnabled = freezeTimeEnabled;
 		FullMoonEnabled = fullMoonEnabled;
+		ActiveWeatherName = activeWeatherName ?? string.Empty;
 		ItemCount = itemCount;
 		WorkshopItemCount = workshopItemCount;
 		VehicleCount = vehicleCount;
@@ -131,6 +141,7 @@ internal sealed class WorldPagePresenter
 			_feature.Time,
 			_feature.FreezeTimeEnabled,
 			_feature.FullMoonEnabled,
+			_feature.ActiveWeatherName,
 			_feature.ItemCount,
 			_feature.WorkshopItemCount,
 			_feature.VehicleCount,
@@ -148,4 +159,5 @@ internal sealed class WorldPagePresenter
 	internal void ClearWeather() => _feature.ClearWeather();
 	internal void DisableWeather() => _feature.DisableWeather();
 	internal void RefreshCatalog() => _feature.RefreshCatalog();
+	internal bool ApplyScenario(WorldScenarioKind scenario) => _feature.ApplyScenario(scenario);
 }

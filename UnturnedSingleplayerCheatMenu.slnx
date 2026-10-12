@@ -18,6 +18,7 @@
   <Project Path="tests/ItemFilteringSmoke/ItemFilteringSmoke.csproj" />
   <Project Path="tests/ItemVehicleHoverTooltipSmoke/ItemVehicleHoverTooltipSmoke.csproj" />
   <Project Path="tests/InventoryArrangePlannerSmoke/InventoryArrangePlannerSmoke.csproj" />
+  <Project Path="tests/InventoryQuickTransferNativeSmoke/InventoryQuickTransferNativeSmoke.csproj" />
   <Project Path="tests/LocalizationSmoke/LocalizationSmoke.csproj" />
   <Project Path="tests/MovementSpeedSmoke/MovementSpeedSmoke.csproj" />
   <Project Path="tests/FlightModeSmoke/FlightModeSmoke.csproj" />
@@ -30,4 +31,6 @@
   <Project Path="tests/UiMotionSmoke/UiMotionSmoke.csproj" />
   <Project Path="tests/VehicleThumbnailSettingsSmoke/VehicleThumbnailSettingsSmoke.csproj" />
   <Project Path="tests/WorkshopLocalizationSmoke/WorkshopLocalizationSmoke.csproj" />
+  <Project Path="tests/WorldMaintenanceSmoke/WorldMaintenanceSmoke.csproj" />
+  <Project Path="tests/WorldMaintenanceNativeSmoke/WorldMaintenanceNativeSmoke.csproj" />
 </Solution>

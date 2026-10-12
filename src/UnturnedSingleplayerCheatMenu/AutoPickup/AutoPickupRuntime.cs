@@ -425,9 +425,7 @@ internal sealed class NativePickupExecutor
 			storeSnapshot: () => _storeCandidate != null && _storeCandidate(candidate),
 			removeWorldDrop: delegate
 			{
-				if (!AutoPickupCandidateAdapter.IsCurrent(candidate)) return true;
-				ItemManager.ReceiveDestroyItem(candidate.RegionX, candidate.RegionY, candidate.InstanceId, true);
-				return !AutoPickupCandidateAdapter.IsCurrent(candidate);
+				return RemovePersistedWorldDrop(candidate);
 			},
 			rollbackSnapshot: () => _rollbackStoredCandidate != null && _rollbackStoredCandidate(candidate),
 			quarantineWorldDrop: () => _quarantineWorldDrop != null && _quarantineWorldDrop(candidate),
@@ -443,10 +441,7 @@ internal sealed class NativePickupExecutor
 			storeSnapshot: () => true,
 			removeWorldDrop: delegate
 			{
-				if (!AutoPickupCandidateAdapter.IsCurrent(candidate)) return false;
-				ItemManager.ReceiveDestroyItem(candidate.RegionX, candidate.RegionY,
-					candidate.InstanceId, true);
-				return !AutoPickupCandidateAdapter.IsCurrent(candidate);
+				return RemovePersistedWorldDrop(candidate);
 			},
 			rollbackSnapshot: () => _rollbackStoredCandidate != null &&
 				_rollbackStoredCandidate(candidate),
@@ -455,6 +450,11 @@ internal sealed class NativePickupExecutor
 			lockStorage: () => _lockStorage?.Invoke(candidate) == true);
 		return TryBuildStorageAttempt(result, inventoryEvidence, out attempt);
 	}
+
+	private static bool RemovePersistedWorldDrop(AutoPickupCandidate candidate) =>
+		candidate?.Asset != null && AutoPickupWorldDropAdapter.RemovePersistedDrop(
+			candidate.RegionX, candidate.RegionY, candidate.InstanceId, candidate.Drop,
+			candidate.Asset.id, candidate.Amount, candidate.Quality, candidate.State);
 
 	internal NativePickupAttempt BuildUncertainBackgroundStoreAttempt(
 		AutoPickupCandidate candidate, AutoPickupInventoryEvidence inventoryEvidence,

@@ -1,6 +1,49 @@
 // State-only doubles: these tests do not simulate Unity rendering or static batching.
 namespace UnityEngine
 {
+    public enum ShadowQuality { Disable, HardOnly, All }
+    public static class QualitySettings
+    {
+        private static ShadowQuality currentShadows;
+        private static float currentShadowDistance;
+        public static int FailShadowRestoreCount;
+        public static ShadowQuality shadows
+        {
+            get => currentShadows;
+            set
+            {
+                if (value != ShadowQuality.Disable && FailShadowRestoreCount > 0)
+                {
+                    FailShadowRestoreCount--;
+                    throw new InvalidOperationException("Injected shadow restore failure");
+                }
+                currentShadows = value;
+            }
+        }
+        public static float shadowDistance
+        {
+            get => currentShadowDistance;
+            set => currentShadowDistance = value;
+        }
+    }
+    public struct Color
+    {
+        public float r, g, b, a;
+        public Color(float r, float g, float b, float a = 1f)
+        {
+            this.r = r; this.g = g; this.b = b; this.a = a;
+        }
+    }
+    public static class RenderSettings
+    {
+        public static bool fog;
+        public static UnityEngine.Rendering.AmbientMode ambientMode;
+        public static Color ambientSkyColor;
+        public static Color ambientEquatorColor;
+        public static Color ambientGroundColor;
+        public static float ambientIntensity;
+        public static Color subtractiveShadowColor;
+    }
     public class MonoBehaviour { }
     public class GameObject
     {
@@ -97,6 +140,10 @@ namespace UnityEngine
             Value=value; SetCount++;
         }
     }
+}
+namespace UnityEngine.Rendering
+{
+    public enum AmbientMode { Skybox, Trilight, Flat, Custom }
 }
 namespace BepInEx.Logging
 {

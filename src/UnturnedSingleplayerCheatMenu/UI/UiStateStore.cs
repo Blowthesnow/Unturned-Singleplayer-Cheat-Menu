@@ -59,6 +59,7 @@ internal sealed class UiStateStore
 	internal float VehicleThumbnailDraftFraming;
 	internal float ShortcutScrollPosition = 1f;
 	internal float StatusUntil;
+	internal float WorldMaintenanceRadius = WorldMaintenancePolicy.DefaultRadius;
 
 	internal bool TeleportMarkerDrawerOpen;
 	internal bool PointToolModeDrawerOpen;
@@ -68,6 +69,7 @@ internal sealed class UiStateStore
 	internal bool ShortcutCaptureActive;
 	internal bool ItemFilterForFavorites;
 	internal bool ItemFilterForInfiniteStorage;
+	internal bool WorldMaintenanceIncludeSpecialZombies;
 	internal ItemFilterState ItemFilterDraft;
 	internal ItemFilterRuleAction AutoPickupPickerAction = ItemFilterRuleAction.Deny;
 }

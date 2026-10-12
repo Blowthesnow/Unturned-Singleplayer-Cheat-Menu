@@ -2,11 +2,11 @@
 
 [中文说明](README.md) · [Releases](https://github.com/Blowthesnow/Unturned-Singleplayer-Cheat-Menu/releases) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Sponsor](https://afdian.com/a/Blowthesnow)
 
-![Version](https://img.shields.io/badge/version-2.0.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-30%2F30%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-0078D4) ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.23.5-2E8B57) ![Smoke](https://img.shields.io/badge/Smoke-33%2F33%20PASS-2E8B57) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **A bilingual BepInEx 5 toolkit built for Unturned singleplayer worlds.** Instead of relying on a hard-coded item or vehicle catalog, it reads the assets already loaded by the running game. Vanilla content, map-provided assets, and Workshop mods appear according to the current installation and world.
 
-Beyond asset discovery, version 2.0 combines runtime localization, player controls, favorites, inventory arrangement, automatic pickup, Snapshot Infinite Storage, crosshair interaction, creature health bars, flight and noclip, map teleportation, a configurable minimap, and time/weather controls.
+Beyond asset discovery, version 2.1 combines runtime localization, player controls, favorites, inventory arrangement, automatic pickup, Snapshot Infinite Storage, crosshair interaction, creature health bars, flight and noclip, map teleportation, a configurable minimap, time/weather controls, and world maintenance for resources, item restocking, zombies, and ground cleanup.
 
 **Default shortcut: press `End` after the local player has spawned.**
 
@@ -47,7 +47,9 @@ Beyond asset discovery, version 2.0 combines runtime localization, player contro
 
 > Search boundary: the “no second plugin found” statement is based on public GitHub, Thunderstore, Nexus, Steam Workshop, and Unturned plugin-market searches through 2026-09-05. Private or unindexed implementations are outside that claim.
 
-## Complete v2.0.0 feature set
+## Complete v2.1.0 feature set
+
+See the [2.1 release notes](docs/RELEASE_NOTES_v2.1.0.md) for this release's additions and fixes. The screenshots below were captured for 2.0; the current descriptions cover the new maintenance and environment presets.
 
 ### Player controls
 
@@ -119,7 +121,7 @@ Beyond asset discovery, version 2.0 combines runtime localization, player contro
 
 - Previews and arranges the current container or all carried pages with presets such as Compact.
 - Supports rotation, cross-page placement, equipment/hotkey protection, compression-only, merge-only, and undo.
-- Ctrl/Shift click can consolidate same-asset items across an open storage container.
+- Same-asset consolidation across an open storage container requires **Ctrl + left-click**. Either Ctrl key works; adding Shift or Alt suppresses consolidation, and right/middle-click retain native behavior.
 - Cancels when preflight cannot place everything and preserves rollback boundaries for apply, native drag, and failure paths.
 
 <details>
@@ -172,6 +174,7 @@ Beyond asset discovery, version 2.0 combines runtime localization, player contro
 
 - Flight and noclip stay inside Unturned's native movement simulation with separate horizontal/vertical multipliers.
 - View-direction flight reads configured movement bindings; W/S follows camera pitch/yaw, while Space/Ctrl keeps fixed world-Y priority.
+- Noclip follows the selected flight mode and native movement bindings: View Direction follows camera pitch, while World Axis keeps horizontal movement.
 - Diagonal movement is normalized and zero/non-finite camera directions fall back safely.
 - Disabling noclip searches for a safe position; leaving authorization, dying, or entering a vehicle restores native movement state.
 
@@ -208,6 +211,8 @@ Beyond asset discovery, version 2.0 combines runtime localization, player contro
 - North-up or view-relative rotation with compass and world coordinates.
 - Player, group-native, waypoint, zombie, animal, other-player, and ground-item markers with six rarity levels and floor handling.
 - Native-map crop, realtime surface, realtime height slice, and fallback grid backgrounds with configured building/cave detection.
+- Underground and unmapped-interior detection combines landscape cover, native underground-volume information, and overhead probes. A detected ceiling fixes the cutaway below the room roof instead of moving the slice down a ramp with the player.
+- Realtime captures use uniform ambient lighting without fog or shadows and restore game render settings after each capture pass.
 - Bounded zombie-region retention prevents marker loss at scan boundaries without unbounded memory growth.
 
 <details>
@@ -232,6 +237,7 @@ Beyond asset discovery, version 2.0 combines runtime localization, player contro
 - Bilingual 12-hour time ring with drag, wheel, keyboard, day, and night controls.
 - Time freeze, forced full moon, and airdrop requests.
 - Rain, blizzard, current-weather clearing, and weather-scheduler shutdown.
+- Live weather, time-freeze, and full-moon status plus Clear Noon, Full Moon Night, Snowstorm Night, and Restore Natural presets. Restore Natural releases the time freeze, disables forced full moon, and resumes scheduled natural weather.
 - Manual rescan of currently loaded assets.
 
 <details>
@@ -240,6 +246,15 @@ Beyond asset discovery, version 2.0 combines runtime localization, player contro
 ![12-hour time ring, weather, full moon, and world events](docs/images/v2/world-controls.png)
 
 </details>
+
+### World maintenance
+
+- Natural-resource recovery for nearby or whole-map depleted trees and rocks, with depleted, recoverable, and blocked counts.
+- Nearby/loaded-region zombie clearing and generation in available slots, protecting Boss, Mega, and beacon-event zombies by default.
+- Nearby/whole-map ground-item cleanup through native world-drop management.
+- Item restocking keeps native spawn tables, region density, safety zones, and two-meter occupancy checks. Previews estimate item deficits; results count actual newly created items. Nearby restocking operates on native regions intersecting the selected range, and one random spawn pass does not promise to fill every empty point.
+- Selectable `100m / 250m / 500m` nearby ranges with preview, confirmation, frame-budgeted batches, progress, stop, and result accounting.
+- Independent card columns place resources/restocking on the left and zombies/ground cleanup on the right. Maintenance executes only in singleplayer worlds.
 
 ### Interface, shortcuts, and persistence
 
@@ -310,19 +325,19 @@ The last main tab and teleport subview are persisted and restored the next time 
 
 The map setup checkbox named **singleplayer cheats** is not required. It controls Unturned's built-in command system; this plugin does not depend on `Provider.hasCheats`.
 
-## Tested environment
+## Build environment
 
 | Component | Version |
 | --- | --- |
-| Unturned | `3.26.3.8` |
+| Unturned | `3.26.3.13` |
 | Unity | `2022.3.62f3` |
 | Runtime | Windows x64 / Unity Mono |
 | BepInEx | `5.4.23.5` x64 |
-| Plugin | `2.0.0` |
+| Plugin | `2.1.0` |
 
 ## Installation
 
-The `Unturned-Singleplayer-Cheat-Menu-v2.0.0-Plugin-Only.zip` release asset contains the plugin only.
+The `Unturned-Singleplayer-Cheat-Menu-v2.1.0-Plugin-Only.zip` release asset contains the plugin only.
 
 1. Exit Unturned.
 2. Install BepInEx `5.4.23.5` x64 into the Unturned game root.
@@ -381,16 +396,22 @@ The helper copies required references into the git-ignored `lib/` directory. The
 
 ## Verification
 
-`v2.0.0` is the first formal release since `v1.7.0`. Intermediate source checkpoints and the cumulative 2.0 changes, build, and Smoke evidence are recorded in the [main changelog](CHANGELOG.md); the v1.8 reverse-recovery boundary remains separate in the [v1.8 recovery log](docs/V1.8_RECOVERY_CHANGELOG.md). The 2.0 Release build completed with zero warnings and zero errors, and all 30 recursively discovered Smoke projects were individually rebuilt and run successfully. Source/API, package, deployment, and real-game evidence remain separate layers.
+`v2.1.0` adds world maintenance and environment presets on top of `v2.0.0`, with item-restocking, minimap, noclip, and cross-storage shortcut fixes. See the [2.1 release notes](docs/RELEASE_NOTES_v2.1.0.md) and [main changelog](CHANGELOG.md). The historical v2.0 first formal release since v1.7 and the separate [v1.8 recovery boundary](docs/V1.8_RECOVERY_CHANGELOG.md) remain documented.
 
-v2.0.0 release artifacts:
+Release build: 0 warnings / 0 errors. Recursively discovered Smoke projects, individually built and run: 33/33 PASS (each project built and run). Native-boundary harnesses link production code and use test doubles at game, Unity, input, and Harmony boundaries. Source/API, build, harness, package, deployment, and real-game evidence remain separate layers.
+
+Regenerated external API inventory: 1,731 rows, SHA-256 `035C80F1D997EFF5BFDE0D37763EF13CF6C4EACE1C6A521F1BC46379740E6BE6`.
+
+v2.1.0 release artifacts:
 
 ```text
-DLL SHA-256: 79AC75876C0B3B829188BB02EEB2DF5C32F04BF1AC7C025D695B44389B33F192
-Plugin-Only ZIP SHA-256: 92CFA47EB93A68A98EC122EEDB67EDC6D59F7E0A290E0207F72500009D7049D9
+DLL bytes: 1,269,248
+DLL SHA-256: 1D04866C99E9AF152DEC6184AEAAD6CC70266F456E07F15D948B298CF9329AE1
+Plugin-Only ZIP bytes: 478,363
+Plugin-Only ZIP SHA-256: 4658EF096B2C5D70EA234E23242B66C98D4FACCB551837C41900E6BBA1DC6435
 ```
 
-The final 2.0 DLL/package was not deployed or tested in a restarted game during release preparation; automated gates do not substitute for real singleplayer acceptance.
+Final-package deployment: Not run for the final 2.1 package; earlier 2.0 build deployments are recorded separately. Restarted-game visual and interaction acceptance: Not run; in-game visual and interaction acceptance remains pending. Build, Smoke, and package hashes do not constitute real-game acceptance.
 
 ## Disclaimer and license
 

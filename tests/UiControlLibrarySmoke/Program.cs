@@ -72,7 +72,8 @@ string[] requiredTypes =
     "UnturnedSingleplayerCheatMenu.UI.LegacyFluentUiContext",
     "UnturnedSingleplayerCheatMenu.UI.LegacyFluentHandleRegistry",
     "UnturnedSingleplayerCheatMenu.UI.LegacyFluentTooltipBridge",
-    "UnturnedSingleplayerCheatMenu.UI.LegacyFluentControlAdapter"
+    "UnturnedSingleplayerCheatMenu.UI.LegacyFluentControlAdapter",
+    "UnturnedSingleplayerCheatMenu.UI.WorldMaintenancePresenter"
 };
 foreach (string type in requiredTypes)
 {
@@ -145,5 +146,15 @@ Require(registrySource.Contains("Scope scope = FindExact(controlRoot)", StringCo
         registrySource.Contains("candidateTransform.IsChildOf(rootTransform)", StringComparison.Ordinal),
     "Handle registry must attach lifetimes to exact control roots so nested page refreshes retire them immediately.");
 Require(File.Exists(Path.Combine(controlRoot, "UPSTREAM-MANIFEST.md")), "Upstream manifest is missing.");
+
+string maintenanceViewPath = Path.Combine(root, "src", "UnturnedSingleplayerCheatMenu", "UI", "CheatMenuOverlayUi.WorldMaintenanceView.cs");
+Require(File.Exists(maintenanceViewPath), "World-maintenance Legacy uGUI view is missing.");
+string maintenanceView = File.ReadAllText(maintenanceViewPath);
+Require(maintenanceView.Contains("CreateButton(", StringComparison.Ordinal) &&
+        maintenanceView.Contains("CreateToggleAction(", StringComparison.Ordinal) &&
+        maintenanceView.Contains("_fluentControls.StyleSurface", StringComparison.Ordinal),
+    "World-maintenance buttons, radius selection, and progress surface must reuse the existing Legacy Fluent control boundary.");
+Require(!Regex.IsMatch(maintenanceView, @"\bTMPro\b|\bTMP_|new\s+EventSystem|\.svg\b|\.png\b", RegexOptions.IgnoreCase),
+    "World-maintenance UI introduced TMP, icons, images, or a second EventSystem.");
 
 Console.WriteLine($"UI control-library smoke checks passed: types={requiredTypes.Length}, sourceFiles={sourceFiles.Length}, refs={references.Count}.");

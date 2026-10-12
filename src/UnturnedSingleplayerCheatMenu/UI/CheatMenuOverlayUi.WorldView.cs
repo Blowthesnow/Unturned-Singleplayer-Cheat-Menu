@@ -20,6 +20,9 @@ namespace UnturnedSingleplayerCheatMenu.UI;
 
 internal sealed partial class CheatMenuOverlayUi
 {
+	private Text _worldEnvironmentWeatherText;
+	private Text _worldEnvironmentStateText;
+
 	private void BuildOtherTab()
 	{
 		RectTransform worldScrollContent = CreateShortcutScroll(_contentHost.transform, styleSurface: false);
@@ -79,6 +82,16 @@ internal sealed partial class CheatMenuOverlayUi
 		AddVerticalLayout(detailsColumn, CheatMenuStyle.Theme.Space3, new RectOffset(0, 0, 0, 0));
 		SetLayout(detailsColumn, 360f, -1f, 1f, 0f);
 		detailsColumn.GetComponent<LayoutElement>().minWidth = 360f;
+		GameObject environmentCard = CreateWorldCard(detailsColumn.transform, "EnvironmentStatusCard", -1f);
+		CreateLabel(environmentCard.transform, "环境状态", 17, CheatMenuStyle.Text);
+		string weatherName = PluginLocalization.Translate(snapshot.ActiveWeatherName);
+		_worldEnvironmentWeatherText = CreateFlowLabel(environmentCard.transform,
+			string.Format(PluginLocalization.Translate("当前天气：{0}"), weatherName),
+			CheatMenuStyle.Text);
+		string timeState = PluginLocalization.Translate(snapshot.FreezeTimeEnabled ? "已冻结" : "自然流动");
+		string moonState = PluginLocalization.Translate(snapshot.FullMoonEnabled ? "已开启" : "未开启");
+		_worldEnvironmentStateText = CreateFlowLabel(environmentCard.transform, string.Format(
+			PluginLocalization.Translate("时间：{0}    满月：{1}"), timeState, moonState), CheatMenuStyle.Muted);
 		GameObject eventCard = CreateWorldCard(detailsColumn.transform, "WorldEventsCard", -1f);
 		CreateLabel(eventCard.transform, "世界事件", 17, CheatMenuStyle.Text);
 		GameObject eventRow1 = CreateRow(eventCard.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
@@ -109,9 +122,44 @@ internal sealed partial class CheatMenuOverlayUi
 			SetStatus("当前天气和自然天气调度已关闭。", 3f, StatusKind.Warning);
 		}, "结束当前天气并关闭后续自然天气调度。");
 
-		GameObject scanCard = CreateWorldCard(detailsColumn.transform, "ScanInfoCard", -1f);
-		CreateLabel(scanCard.transform, "扫描信息", 17, CheatMenuStyle.Text);
-		CreateFlowLabel(scanCard.transform, $"物品：{snapshot.ItemCount}（模组 {snapshot.WorkshopItemCount}）    车辆：{snapshot.VehicleCount}（模组 {snapshot.WorkshopVehicleCount}）", CheatMenuStyle.Text);
+		GameObject scenarioCard = CreateWorldCard(detailsColumn.transform, "WorldScenarioCard", -1f);
+		CreateLabel(scenarioCard.transform, "情景预设", 17, CheatMenuStyle.Text);
+		GameObject scenarioRow1 = CreateRow(scenarioCard.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
+		CreateAction(scenarioRow1.transform, "晴朗正午", delegate
+		{
+			bool applied = _worldPresenter.ApplyScenario(WorldScenarioKind.ClearNoon);
+			SetStatus(applied ? "已应用晴朗正午预设。" : "情景预设仅在受支持的单人世界中可用。",
+				4f, applied ? StatusKind.Success : StatusKind.Warning);
+		}, "设置白天、清除当前天气并关闭强制满月。");
+		CreateAction(scenarioRow1.transform, "满月之夜", delegate
+		{
+			bool applied = _worldPresenter.ApplyScenario(WorldScenarioKind.FullMoonNight);
+			SetStatus(applied ? "已应用满月之夜预设。" : "情景预设仅在受支持的单人世界中可用。",
+				4f, applied ? StatusKind.Success : StatusKind.Warning);
+		}, "设置夜晚、开启满月并清除当前天气。");
+		GameObject scenarioRow2 = CreateRow(scenarioCard.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
+		CreateAction(scenarioRow2.transform, "暴雪夜晚", delegate
+		{
+			bool started = _worldPresenter.ApplyScenario(WorldScenarioKind.SnowstormNight);
+			string failure = _shellPresenter.SessionKind == RuntimeSessionKind.Singleplayer
+				? "当前地图没有默认雪天资产。" : "情景预设仅在受支持的单人世界中可用。";
+			SetStatus(started ? "已应用暴雪夜晚预设。" : failure, 4f,
+				started ? StatusKind.Success : StatusKind.Warning);
+		}, "设置夜晚并使用当前地图的默认暴雪资产。");
+		CreateAction(scenarioRow2.transform, "恢复自然", delegate
+		{
+			bool applied = _worldPresenter.ApplyScenario(WorldScenarioKind.RestoreNatural);
+			SetStatus(applied ? "时间、满月和天气已恢复自然状态。" : "情景预设仅在受支持的单人世界中可用。",
+				4f, applied ? StatusKind.Success : StatusKind.Warning);
+		}, "解除时间冻结、关闭强制满月并恢复自然天气调度。");
+
+		GameObject scanCard = CreateWorldCard(transform, "AssetOverviewCard", -1f);
+		CreateLabel(scanCard.transform, "资产概览", 17, CheatMenuStyle.Text);
+		GameObject metricRow = CreateRow(scanCard.transform, 56f, CheatMenuStyle.Theme.Space2);
+		CreateWorldMetric(metricRow.transform, "全部物品", snapshot.ItemCount);
+		CreateWorldMetric(metricRow.transform, "Workshop 物品", snapshot.WorkshopItemCount);
+		CreateWorldMetric(metricRow.transform, "全部载具", snapshot.VehicleCount);
+		CreateWorldMetric(metricRow.transform, "Workshop 载具", snapshot.WorkshopVehicleCount);
 		CreateFlowLabel(scanCard.transform, "只显示 Unturned 当前已成功加载的原版、地图随附和 Workshop 资产。", CheatMenuStyle.Muted);
 		GameObject scanActions = CreateRow(scanCard.transform, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.Theme.Space2);
 		CreateButton(scanActions.transform, "重新扫描模组资产", delegate
@@ -119,6 +167,39 @@ internal sealed partial class CheatMenuOverlayUi
 			_worldPresenter.RefreshCatalog();
 			SetStatus("资产目录已重新扫描。", 4f, StatusKind.Info);
 		}, "重新读取当前已加载的原版、地图和 Workshop 物品与载具资产。", 180f, CheatMenuStyle.Theme.ControlDefault, CheatMenuStyle.SurfaceRaised);
+
+		BuildWorldMaintenanceView(transform);
+	}
+
+	private void RefreshWorldEnvironment(WorldPageSnapshot snapshot)
+	{
+		if (snapshot == null) return;
+		if (_worldEnvironmentWeatherText != null)
+		{
+			string weatherName = PluginLocalization.Translate(snapshot.ActiveWeatherName);
+			_worldEnvironmentWeatherText.text = string.Format(
+				PluginLocalization.Translate("当前天气：{0}"), weatherName);
+		}
+		if (_worldEnvironmentStateText != null)
+		{
+			string timeState = PluginLocalization.Translate(snapshot.FreezeTimeEnabled ? "已冻结" : "自然流动");
+			string moonState = PluginLocalization.Translate(snapshot.FullMoonEnabled ? "已开启" : "未开启");
+			_worldEnvironmentStateText.text = string.Format(
+				PluginLocalization.Translate("时间：{0}    满月：{1}"), timeState, moonState);
+		}
+	}
+
+	private void CreateWorldMetric(Transform parent, string label, int value)
+	{
+		GameObject metric = CreateObject("AssetMetric", parent, typeof(Image));
+		Image image = metric.GetComponent<Image>();
+		image.color = CheatMenuStyle.SurfaceInset;
+		_fluentControls.StyleSurface(metric, image, ControlLibrary.Core.FluentSurfaceRole.Navigation,
+			CheatMenuStyle.Theme.RadiusField);
+		AddVerticalLayout(metric, 0f, new RectOffset(8, 8, 4, 4)).childAlignment = TextAnchor.MiddleCenter;
+		SetLayout(metric, -1f, 56f, 1f);
+		CreateLabel(metric.transform, value.ToString("N0"), 17, CheatMenuStyle.Text, alignment: TextAnchor.MiddleCenter, localize: false);
+		CreateLabel(metric.transform, label, 11, CheatMenuStyle.Muted, alignment: TextAnchor.MiddleCenter);
 	}
 
 	private GameObject CreateWorldCard(Transform parent, string name, float height)

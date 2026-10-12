@@ -241,6 +241,7 @@ internal sealed partial class CheatMenuOverlayUi
 		HideInventoryScopeDrawer();
 		HideWorkshopProtocolDrawer();
 		HideConfirmDialog();
+		HideWorldMaintenanceConfirmation();
 		HideMultiplayerRiskConfirmation();
 	}
 
@@ -271,6 +272,7 @@ internal sealed partial class CheatMenuOverlayUi
 		_sessionBadgeText = null;
 		_statusText = null;
 		_statusAccent = null;
+		ResetWorldMaintenanceVisualReferences();
 		_aboutRoot = null;
 		_fontPickerRoot = null;
 		_shortcutRoot = null;

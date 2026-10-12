@@ -66,6 +66,29 @@ internal readonly struct MinimapCameraDepthProfile
 
 internal static class MinimapRenderPolicy
 {
+	private const float CutawayClearanceAboveHead = 0.5f;
+	private const float CutawayClearanceBelowCeiling = 0.1f;
+
+	internal static float ResolveCutawaySliceAbove(float configuredAbove, float playerY, float headY,
+		float detectedCeilingY = float.NaN)
+	{
+		float configured = IsFinite(configuredAbove)
+			? Math.Max(MinimapSettings.MinUndergroundSlice, configuredAbove)
+			: MinimapSettings.DefaultUndergroundSliceAbove;
+		if (IsFinite(playerY) && IsFinite(detectedCeilingY) &&
+			detectedCeilingY > playerY + CutawayClearanceBelowCeiling)
+		{
+			// Convert the room's absolute roof plane to this frame's camera offset.
+			// The final camera Y remains ceilingY - clearance as the player moves vertically.
+			return Math.Max(0.05f,
+				detectedCeilingY - playerY - CutawayClearanceBelowCeiling);
+		}
+		if (!IsFinite(playerY) || !IsFinite(headY) || headY <= playerY) return configured;
+		float headCutaway = Math.Max(MinimapSettings.MinUndergroundSlice,
+			headY - playerY + CutawayClearanceAboveHead);
+		return Math.Min(configured, headCutaway);
+	}
+
 	internal static MinimapCameraDepthProfile ResolveCameraDepth(
 		MinimapSceneCameraPass pass, MinimapBackgroundState state, float playerY,
 		float sliceAbove, float sliceBelow)

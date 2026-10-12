@@ -46,6 +46,25 @@ internal sealed class ShellPresenter
 	internal bool SetShortcut(string actionId, KeyboardShortcut shortcut) => _feature.SetShortcut(actionId, shortcut);
 }
 
+internal sealed class WorldMaintenancePresenter
+{
+	private readonly IWorldMaintenanceUiFeature _feature;
+
+	internal WorldMaintenancePresenter(IWorldMaintenanceUiFeature feature) =>
+		_feature = feature ?? throw new ArgumentNullException(nameof(feature));
+
+	internal WorldMaintenanceDashboardSnapshot CaptureDashboard(float radius) => _feature.CaptureDashboard(radius);
+	internal int SnapshotVersion => _feature.SnapshotVersion;
+	internal WorldMaintenanceProgress CaptureProgress() => _feature.CaptureProgress();
+	internal bool TryCreatePreview(WorldMaintenanceActionKind action, WorldMaintenanceScopeKind scope,
+		float radius, bool includeSpecialZombies, out WorldMaintenancePreview preview, out string message) =>
+		_feature.TryCreatePreview(action, scope, radius, includeSpecialZombies, out preview, out message);
+	internal bool TryStart(WorldMaintenancePreview preview,
+		out WorldMaintenancePreview currentPreview, out string message) =>
+		_feature.TryStart(preview, out currentPreview, out message);
+	internal void Stop() => _feature.Stop();
+}
+
 internal sealed class CatalogPagePresenter
 {
 	private readonly ICatalogUiFeature _feature;

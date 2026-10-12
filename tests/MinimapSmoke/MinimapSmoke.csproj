@@ -20,5 +20,6 @@
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapMarkerPolicies.cs" Link="MinimapMarkerPolicies.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\BackgroundStateMachine.cs" Link="BackgroundStateMachine.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapTeleportRecovery.cs" Link="MinimapTeleportRecovery.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Minimap\MinimapInstanceCutaway.cs" Link="MinimapInstanceCutaway.cs" />
   </ItemGroup>
 </Project>

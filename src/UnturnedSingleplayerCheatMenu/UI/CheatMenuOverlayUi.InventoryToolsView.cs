@@ -75,7 +75,7 @@ internal sealed partial class CheatMenuOverlayUi
 			SetStatus(value ? "热键绑定物品将保持在原坐标。" : "热键绑定物品会随整理移动并更新坐标。", 4f, StatusKind.Info);
 		}, "开启时固定绑定热键的物品；关闭时整理会同步快捷键到新坐标。");
 		CreateLabel(panel, "安全策略：预检无法完整安置时取消整次操作；不调用自动掉落。", 12, CheatMenuStyle.Warning);
-		CreateLabel(panel, "跨箱集中：打开储物箱时，按住 Ctrl 或 Shift 点击物品，会把同一资产的物品逐件转移到另一侧；目标空间不足时停止，不会丢弃物品。", 12, CheatMenuStyle.Muted);
+		CreateLabel(panel, "跨箱集中：打开储物箱时，按住 Ctrl，用鼠标左键点击物品，会把同一资产的物品逐件转移到另一侧；目标空间不足时停止，不会丢弃物品。", 12, CheatMenuStyle.Muted);
 		GameObject gameObject4 = CreateRow(panel, 40f, 7f);
 		CreateButton(gameObject4.transform, "预览当前", delegate
 		{

@@ -23,7 +23,7 @@ using UnturnedSingleplayerCheatMenu.UI;
 
 namespace UnturnedSingleplayerCheatMenu;
 
-[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "2.0.0")]
+[BepInPlugin("com.codex.unturned.singleplayer-cheat-menu", "Unturned Singleplayer Cheat Menu", "2.1.0")]
 [BepInProcess("Unturned.exe")]
 public sealed class CheatMenuPlugin : BaseUnityPlugin
 {
@@ -31,7 +31,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 
 	public const string PluginName = "Unturned Singleplayer Cheat Menu";
 
-	public const string PluginVersion = "2.0.0";
+	public const string PluginVersion = "2.1.0";
 	private const int CurrentMinimapSchemaVersion = 5;
 
 	private ConfigEntry<string> _language;
@@ -323,6 +323,8 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 	internal TeleportMapService TeleportMaps { get; private set; }
 
 	internal CheatActions Actions { get; private set; }
+
+	internal WorldMaintenanceService WorldMaintenance { get; private set; }
 
 	internal MovementCheatService Movement { get; private set; }
 
@@ -1179,6 +1181,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 		Teleports = new TeleportStore(base.Logger);
 		TeleportMaps = new TeleportMapService(base.Logger);
 		Actions = new CheatActions(base.Logger, () => CanExecuteGameplay);
+		WorldMaintenance = new WorldMaintenanceService(base.Logger, () => CurrentSessionState.IsSupportedGameplay);
 		Movement = new MovementCheatService(base.Logger, () => CanExecuteGameplay)
 		{
 			FlightSpeed = Mathf.Clamp(_flightSpeed.Value, 1f, 10f),
@@ -1267,6 +1270,7 @@ public sealed class CheatMenuPlugin : BaseUnityPlugin
 			_nearbyItemIndex,
 			AutoPickup,
 			Minimap,
+			WorldMaintenance,
 			InfiniteStorage,
 			CreatureHealthBars,
 			WorkshopLocalization));

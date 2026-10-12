@@ -4,6 +4,52 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-12
+
+### Added
+
+- Added a singleplayer world-maintenance dashboard for nearby/whole-map natural-resource recovery, nearby/loaded-region zombie clearing and generation, ground-item cleanup, and native item-spawn-region restocking.
+- Added selectable 100/250/500-meter nearby ranges, operation previews and confirmations, bounded per-frame execution, progress/stop controls, candidate revalidation, and separate protected, blocked, invalid, failed, and committed-result accounting.
+- Added live environment status, Clear Noon / Full Moon Night / Snowstorm Night / Restore Natural presets, and an asset overview with separate total and Workshop item/vehicle counts.
+- Added `WorldMaintenanceSmoke`, `WorldMaintenanceNativeSmoke`, and `InventoryQuickTransferNativeSmoke`, and expanded the existing AutoPickup, minimap, flight, localization, and UI regression coverage.
+
+### Changed
+
+- Arranged maintenance cards as two independent vertical columns: resources and item restocking on the left, zombies and ground-item cleanup on the right. Each card follows the preceding card in its own column instead of leaving empty space beneath a shorter paired card.
+- Restricted same-asset cross-storage consolidation to Ctrl + left-click through the native `onGrabbedItem` entry. Either Ctrl key is accepted; Shift/Alt combinations, right-click, and middle-click retain native behavior.
+- Made noclip use the selected flight mode and configured native movement bindings, with camera-relative pitch/yaw in View Direction mode and horizontal direction in World Axis mode.
+- Extended automatic minimap background selection with native underground-volume, landscape-cover, and overhead-surface evidence. Unmapped interiors keep an absolute cutaway ceiling so vertical movement does not drag the room slice down a ramp.
+- Applied uniform ambient lighting without fog or shadows to both realtime minimap capture passes, restoring the original game render settings after each pass.
+
+### Fixed
+
+- Fixed Snapshot-priority AutoPickup deleting only the visible ground drop while leaving authoritative `ItemData` behind, which could continue occupying item-density quota and the native two-meter spawn exclusion. Exact data/drop identity is checked before removal, and failed finalization remains inside the existing storage rollback boundary.
+- Fixed restocking and zombie generation reporting a successful region operation when the native routine created no items or zombies. Result accounting now uses the actual committed count, including partial commits followed by exceptions.
+- Removed manual `spawnItem` invocation from restocking so the native `SendItem` / `ReceiveItem` instantiation queue produces one drop instead of duplicate instances.
+- Revalidated restock regions, spawnpoint lists, current item counts, density quota, and valid spawn space before execution; previews show estimated item deficits and full-quota regions are excluded.
+- Preserved native spawn tables, safety-zone checks, occupancy rules, density quotas, and random selection; restored native region cursors and refresh clocks on zero-commit failure paths.
+- Fixed Restore Natural leaving scheduled weather disabled after Disable Weather; the preset now restores natural weather scheduling as well as time and moon state.
+- Fixed underground/unmapped-interior minimap background selection and ceiling slicing, while resetting instance cutaway state on native teleport, player replacement, and scene changes.
+- Synchronized Chinese/English shortcut prompts, startup messages, maintenance results, environment presets, and minimap diagnostics with the new behavior.
+
+### Documentation
+
+- Updated the bilingual README, current game/runtime metadata, Plugin-Only installation instructions, and the 2.1 incremental release notes while preserving the historical v1.7-to-v2.0 feature attribution.
+- Added focused restocking and maintenance-layout/shortcut records with native API evidence, deployment hashes, and explicit gameplay-acceptance boundaries.
+
+### Verification
+
+- Current installed runtime: Unturned `3.26.3.13`, Unity `2022.3.62f3`, Windows x64 / Unity Mono, and BepInEx `5.4.23.5` x64.
+- Release build: 0 warnings / 0 errors.
+- Recursively discovered Smoke projects, individually built and run: 33/33 PASS (each project built and run).
+- Native-boundary regression harnesses link the production maintenance/quick-transfer code and use test doubles at Unity, native-game, input, and Harmony boundaries; they do not represent real-game interaction acceptance.
+- Regenerated external API inventory: 1,731 rows, SHA-256 `035C80F1D997EFF5BFDE0D37763EF13CF6C4EACE1C6A521F1BC46379740E6BE6`.
+- Re-audited the Snapshot native ABI against the current installed `Assembly-CSharp.dll`, including Farm timestamps, crafted-output grant sites, and attachment searches; retained the explicit assembly-hash drift gate.
+- Final `2.1.0.0` DLL: 1,269,248 bytes, SHA-256 `1D04866C99E9AF152DEC6184AEAAD6CC70266F456E07F15D948B298CF9329AE1`.
+- Plugin-Only ZIP: 478,363 bytes, SHA-256 `4658EF096B2C5D70EA234E23242B66C98D4FACCB551837C41900E6BBA1DC6435`.
+- Final-package deployment: Not run for the final 2.1 package; earlier 2.0 build deployments are recorded separately.
+- Restarted-game visual and interaction acceptance: Not run; in-game visual and interaction acceptance remains pending.
+
 ## [2.0.0] - 2026-09-05
 
 ### Added

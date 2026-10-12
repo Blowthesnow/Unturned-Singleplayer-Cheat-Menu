@@ -128,6 +128,7 @@ internal sealed partial class CheatMenuOverlayUi
 			MinimapSettings.MinUndergroundSlice, MinimapSettings.MaxUndergroundSliceAbove, 0.5f, " 米", value => s => s.UndergroundSliceAbove = value);
 		CreateMinimapSlider(panel, "切片下方", settings.UndergroundSliceBelow,
 			MinimapSettings.MinUndergroundSlice, MinimapSettings.MaxUndergroundSliceBelow, 16f, " 米", value => s => s.UndergroundSliceBelow = value);
+		CreateLabel(panel, "检测到房间顶盖时断面固定在顶盖下方；“切片上方”仅在未检测到顶盖时作为回退。", 12, CheatMenuStyle.Muted);
 		CreateLabel(panel, "安全关系必须满足：楼板排除 ≤ 退出厚度 < 进入厚度；无效组合会回退默认值。", 12, CheatMenuStyle.Warning);
 	}
 
@@ -148,6 +149,9 @@ internal sealed partial class CheatMenuOverlayUi
 		CreateLabel(panel, diagnosticsSummary, 12, CheatMenuStyle.Muted, localize: false);
 		string allowlistValue = PluginLocalization.Translate(diagnostics.UndergroundAllowlistContainsPlayer ? "是" : "否");
 		CreateLabel(panel, PluginLocalization.Translate("地下白名单辅助证据：") + allowlistValue, 12, CheatMenuStyle.Muted, localize: false);
+		CreateLabel(panel, PluginLocalization.Translate($"地形覆盖深度：{diagnostics.TerrainCoverDepth:0.00} 米"), 12, CheatMenuStyle.Muted, localize: false);
+		CreateLabel(panel, PluginLocalization.Translate($"头顶表面探针：{diagnostics.OverheadSurfaceProbeCount}/5"), 12, CheatMenuStyle.Muted, localize: false);
+		CreateLabel(panel, PluginLocalization.Translate($"断面顶盖高度：{diagnostics.CutawayCeilingY:0.00}"), 12, CheatMenuStyle.Muted, localize: false);
 	}
 
 	private void CreateRarityToggle(Transform parent, string label, ItemRarityMask bit, MinimapSettings settings)

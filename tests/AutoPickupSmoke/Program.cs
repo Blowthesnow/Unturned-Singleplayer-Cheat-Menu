@@ -1108,5 +1108,128 @@ Assert(addRuleUi.Contains("RefreshAutoPickupPanel", StringComparison.Ordinal),
 Assert(autoPickupUi.Contains("启用白名单", StringComparison.Ordinal) && autoPickupUi.Contains("白名单物品", StringComparison.Ordinal)
     && autoPickupUi.Contains("BuildAutoPickupRulePage", StringComparison.Ordinal),
     "Whitelist settings and the shared card-management page must remain present.");
+string worldMaintenanceServicePath = Path.Combine(repositoryRoot, "src", "UnturnedSingleplayerCheatMenu", "Services", "WorldMaintenanceService.cs");
+Assert(File.Exists(worldMaintenanceServicePath), "World maintenance service is missing.");
+string worldMaintenanceServiceSource = File.ReadAllText(worldMaintenanceServicePath);
+int maintenancePumpIndex = runtimeContextSource.IndexOf("_worldMaintenance?.Pump()", StringComparison.Ordinal);
+int sharedSnapshotRefreshIndex = runtimeContextSource.IndexOf("RefreshSharedItemSnapshot(", StringComparison.Ordinal);
+Assert(runtimeContextSource.Contains("private void InvalidateSharedItemSnapshot()", StringComparison.Ordinal) &&
+       runtimeContextSource.Contains("_sharedItemSnapshot = null;", StringComparison.Ordinal) &&
+       runtimeContextSource.Contains("_nextSharedItemScanTime = 0f;", StringComparison.Ordinal) &&
+       runtimeContextSource.Contains("++_sharedItemSnapshotVersion", StringComparison.Ordinal) &&
+       maintenancePumpIndex >= 0 && sharedSnapshotRefreshIndex >= 0 && maintenancePumpIndex < sharedSnapshotRefreshIndex,
+    "Ground-item maintenance must invalidate and version the shared snapshot before the next minimap/auto-pickup scan.");
+Assert(worldMaintenanceServiceSource.Contains("GroundItemsChanged", StringComparison.Ordinal) &&
+       !worldMaintenanceServiceSource.Contains("player.inventory", StringComparison.Ordinal) &&
+       !worldMaintenanceServiceSource.Contains("InfiniteStorage", StringComparison.Ordinal),
+    "Ground-item cleanup must notify snapshot invalidation without touching carried or Snapshot storage.");
+Assert(runtimeSource.Contains("AutoPickupCandidateAdapter.IsCurrent(candidate)", StringComparison.Ordinal),
+    "Auto-pickup must continue rejecting stale world-drop candidates after maintenance.");
+
+// Execute the real native adapter: deleting only a model must not leave authoritative
+// ItemData counting against native respawn capacity or occupying the original point.
+static SDG.Unturned.Item GroundItem(byte[] state = null) => new SDG.Unturned.Item
+{
+    id = 123, amount = 2, quality = 75, state = state ?? new byte[] { 4, 8 }
+};
+static (SDG.Unturned.ItemRegion Region, SDG.Unturned.ItemDrop Drop, SDG.Unturned.ItemData Data) GroundPair()
+{
+    SDG.Unturned.Provider.isServer = true;
+    SDG.Unturned.ItemRegion region = new SDG.Unturned.ItemRegion();
+    SDG.Unturned.ItemDrop drop = new SDG.Unturned.ItemDrop
+    {
+        instanceID = 900,
+        interactableItem = new SDG.Unturned.InteractableItem { item = GroundItem() }
+    };
+    SDG.Unturned.ItemData data = new SDG.Unturned.ItemData { instanceID = 900, item = GroundItem() };
+    region.items.Add(new SDG.Unturned.ItemData { instanceID = 899, item = GroundItem() });
+    region.items.Add(data);
+    region.items.Add(new SDG.Unturned.ItemData { instanceID = 901, item = GroundItem() });
+    region.drops.Add(drop);
+    SDG.Unturned.ItemManager.regions = new SDG.Unturned.ItemRegion[2, 2];
+    SDG.Unturned.ItemManager.regions[0, 0] = region;
+    return (region, drop, data);
+}
+static bool RemoveGround(SDG.Unturned.ItemDrop drop) =>
+    AutoPickupWorldDropAdapter.RemovePersistedDrop(0, 0, 900, drop, 123, 2, 75, new byte[] { 4, 8 });
+
+var ground = GroundPair();
+SDG.Unturned.ItemManager.Destroy = (x, y, id, effect) =>
+{
+    Assert(!ground.Region.items.Any(data => data.instanceID == id) &&
+           ground.Region.drops.Contains(ground.Drop),
+        "Authoritative ItemData must be removed before the native model destroy callback.");
+    ground.Region.drops.Remove(ground.Drop);
+};
+Assert(RemoveGround(ground.Drop) && ground.Region.items.Count == 2 &&
+       ground.Region.items[0].instanceID == 899 && ground.Region.items[1].instanceID == 901 &&
+       ground.Region.drops.Count == 0 && !ReferenceEquals(ground.Data.item, ground.Drop.interactableItem.item),
+    "A persisted pickup must release only its authoritative record and client drop, including separately created native Item copies.");
+
+ground = GroundPair();
+int nativeDestroyCalls = 0;
+SDG.Unturned.ItemManager.Destroy = (x, y, id, effect) => nativeDestroyCalls++;
+ground.Data.item.state[1] = 9;
+Assert(!RemoveGround(ground.Drop) && nativeDestroyCalls == 0 && ground.Region.items.Count == 3,
+    "A changed authoritative payload must reject removal before touching server data or client models.");
+ground = GroundPair();
+ground.Drop.interactableItem.item.quality = 76;
+Assert(!RemoveGround(ground.Drop) && nativeDestroyCalls == 0 && ground.Region.items.Contains(ground.Data),
+    "A changed client payload must reject persisted-snapshot removal even when the server payload matches.");
+ground = GroundPair();
+ground.Region.items.Remove(ground.Data);
+Assert(!RemoveGround(ground.Drop) && nativeDestroyCalls == 0 && ground.Region.drops.Contains(ground.Drop),
+    "A model with no matching authoritative ItemData must never be reported as a collected world item.");
+ground = GroundPair();
+SDG.Unturned.ItemDrop replacement = new SDG.Unturned.ItemDrop
+{
+    instanceID = 900, interactableItem = new SDG.Unturned.InteractableItem { item = GroundItem() }
+};
+Assert(!RemoveGround(replacement) && nativeDestroyCalls == 0 && ground.Region.items.Contains(ground.Data),
+    "A stale drop reference sharing the same instance ID must not remove the current native item.");
+ground = GroundPair();
+ground.Region.items.Add(new SDG.Unturned.ItemData { instanceID = 900, item = GroundItem() });
+Assert(!RemoveGround(ground.Drop) && nativeDestroyCalls == 0 && ground.Region.items.Count == 4,
+    "Duplicate authoritative instance IDs must reject ambiguous world removal.");
+ground = GroundPair();
+ground.Region.drops.Add(replacement);
+Assert(!RemoveGround(ground.Drop) && nativeDestroyCalls == 0 && ground.Region.items.Count == 3,
+    "Duplicate client instance IDs must reject removal instead of destroying an arbitrary model.");
+ground = GroundPair();
+SDG.Unturned.Provider.isServer = false;
+Assert(!RemoveGround(ground.Drop) && nativeDestroyCalls == 0 && ground.Region.items.Count == 3,
+    "Client-only execution must not modify authoritative server world data.");
+
+ground = GroundPair();
+SDG.Unturned.ItemManager.Destroy = (x, y, id, effect) => throw new InvalidOperationException("native pre-destroy event failed");
+bool snapshotRollback = false;
+AutoPickupStorageCommitResult failedGroundCommit = AutoPickupStorageCommitCoordinator.Execute(
+    () => true, () => RemoveGround(ground.Drop),
+    () =>
+    {
+        Assert(ground.Region.items.Count == 3 && ReferenceEquals(ground.Region.items[1], ground.Data) &&
+               ground.Region.drops.Contains(ground.Drop),
+            "A failed native destroy must restore the original authoritative ItemData and ordering before snapshot rollback.");
+        snapshotRollback = true;
+        return true;
+    }, () => false, () => false);
+Assert(!failedGroundCommit.Success && failedGroundCommit.SnapshotRollbackSucceeded && snapshotRollback,
+    "A failed native world removal must roll back the persisted snapshot rather than report pickup success.");
+
+ground = GroundPair();
+SDG.Unturned.ItemManager.Destroy = (x, y, id, effect) => { };
+Assert(!RemoveGround(ground.Drop) && ground.Region.items.Count == 3 && ReferenceEquals(ground.Region.items[1], ground.Data),
+    "A native destroy that leaves the client drop must restore its authoritative data instead of leaving a half-removed world item.");
+ground = GroundPair();
+SDG.Unturned.ItemManager.Destroy = (x, y, id, effect) =>
+{
+    ground.Region.drops.Remove(ground.Drop);
+    throw new InvalidOperationException("native post-destroy callback failed");
+};
+Assert(RemoveGround(ground.Drop) && ground.Region.items.Count == 2 && ground.Region.drops.Count == 0,
+    "A confirmed completed world removal must keep the persisted snapshot when a later native callback throws.");
+Assert(runtimeSource.Split("return RemovePersistedWorldDrop(candidate);", StringSplitOptions.None).Length == 3 &&
+       !runtimeSource.Contains("ItemManager.ReceiveDestroyItem(", StringComparison.Ordinal),
+    "Both synchronous storage pickup and persisted background finalization must use the authoritative native adapter.");
 
 Console.WriteLine($"Auto-pickup smoke checks passed; 10,000 indexed matches completed in {stopwatch.Elapsed.TotalMilliseconds:0.0} ms.");

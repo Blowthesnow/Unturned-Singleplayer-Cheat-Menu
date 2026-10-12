@@ -92,10 +92,18 @@ internal readonly struct OverheadOcclusionDiagnostics
 {
 	public OcclusionSummary Summary { get; }
 	public bool UndergroundAllowlistContainsPlayer { get; }
+	public float TerrainCoverDepth { get; }
+	public int OverheadSurfaceProbeCount { get; }
+	public float CutawayCeilingY { get; }
 
-	public OverheadOcclusionDiagnostics(OcclusionSummary summary, bool undergroundAllowlistContainsPlayer)
+	public OverheadOcclusionDiagnostics(OcclusionSummary summary,
+		bool undergroundAllowlistContainsPlayer, float terrainCoverDepth,
+		int overheadSurfaceProbeCount, float cutawayCeilingY)
 	{
 		Summary = summary;
 		UndergroundAllowlistContainsPlayer = undergroundAllowlistContainsPlayer;
+		TerrainCoverDepth = terrainCoverDepth;
+		OverheadSurfaceProbeCount = overheadSurfaceProbeCount;
+		CutawayCeilingY = cutawayCeilingY;
 	}
 }

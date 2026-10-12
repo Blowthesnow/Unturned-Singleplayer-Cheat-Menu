@@ -193,6 +193,7 @@ string minimapLayoutInputGate = Read(Path.Combine(sourceRoot, "Minimap", "Minima
 string minimapLayoutInputPatch = Read(Path.Combine(sourceRoot, "Patches", "MinimapLayoutInputPatch.cs"));
 string minimapDisplayTextSource = Read(Path.Combine(sourceRoot, "Minimap", "MinimapDisplayText.cs"));
 string minimapRenderer = Read(Path.Combine(sourceRoot, "Minimap", "MinimapSceneRenderer.cs"));
+string minimapUnshadowedCaptureScope = Read(Path.Combine(sourceRoot, "Minimap", "MinimapUnshadowedCaptureScope.cs"));
 string nativeMapCropProvider = Read(Path.Combine(sourceRoot, "Minimap", "NativeMapCropProvider.cs"));
 string minimapToolsView = Read(Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.MinimapToolsView.cs"));
 string globalShortcutActions = Read(Path.Combine(sourceRoot, "Services", "GlobalShortcutActions.cs"));
@@ -923,10 +924,10 @@ Check(minimapRenderer.Contains("class MinimapMainCameraIdentityBridge", StringCo
       !ReadMethodBody(minimapRenderer, "private Camera CreateCamera(string name, RenderTexture target, int mask, Color clearColor)")
           .Contains("MainCamera", StringComparison.Ordinal),
     "The terrain camera must acquire MainCamera identity only during rendering so WaterTile/PlanarReflection execute without permanently hijacking Camera.main.");
-Check(minimapRenderer.Contains("RenderSettings.fog = false", StringComparison.Ordinal) &&
-      minimapRenderer.Contains("RenderSettings.ambientMode = AmbientMode.Trilight", StringComparison.Ordinal) &&
-      minimapRenderer.Contains("Palette.AMBIENT", StringComparison.Ordinal) &&
-      minimapRenderer.Contains("QualitySettings.lodBias = float.MaxValue", StringComparison.Ordinal) &&
+Check(minimapUnshadowedCaptureScope.Contains("RenderSettings.fog = false", StringComparison.Ordinal) &&
+	  minimapUnshadowedCaptureScope.Contains("RenderSettings.ambientMode = AmbientMode.Trilight", StringComparison.Ordinal) &&
+	  minimapRenderer.Contains("Palette.AMBIENT", StringComparison.Ordinal) &&
+	  minimapRenderer.Contains("QualitySettings.lodBias = float.MaxValue", StringComparison.Ordinal) &&
       minimapRenderer.Contains("LevelLighting.setSeaFloat(\"_Shininess\", 500f)", StringComparison.Ordinal) &&
       minimapRenderer.Contains("LevelLighting.setSeaColor(\"_SpecularColor\", Color.black)", StringComparison.Ordinal) &&
       minimapRenderer.Contains("basemapDistance", StringComparison.Ordinal) &&
@@ -936,6 +937,15 @@ Check(minimapRenderer.Contains("RenderSettings.fog = false", StringComparison.Or
       minimapRenderer.Contains("PlanarReflection.postRender -= HandlePlanarReflectionPostRender", StringComparison.Ordinal) &&
       minimapRenderer.Contains("EndTerrainCapture", StringComparison.Ordinal),
     "The high-altitude terrain camera must reproduce and fully restore Unturned's native satellite-capture lighting and terrain LOD context.");
+Check(minimapRenderer.Contains("MinimapCaptureLightingBridge", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("MinimapUnshadowedCaptureScope", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_terrainLightingBridge.SetArmed(renderTerrain)", StringComparison.Ordinal) &&
+      minimapRenderer.Contains("_objectLightingBridge.SetArmed(renderObjects)", StringComparison.Ordinal) &&
+      minimapUnshadowedCaptureScope.Contains("QualitySettings.shadows = ShadowQuality.Disable", StringComparison.Ordinal) &&
+      minimapUnshadowedCaptureScope.Contains("QualitySettings.shadowDistance = 0f", StringComparison.Ordinal) &&
+      minimapUnshadowedCaptureScope.Contains("RenderSettings.ambientIntensity = 1f", StringComparison.Ordinal) &&
+      minimapUnshadowedCaptureScope.Contains("RenderSettings.subtractiveShadowColor = ambientFill", StringComparison.Ordinal),
+    "Both realtime minimap passes must share the scoped unshadowed ambient capture path.");
 string minimapRendererInitialize = ReadMethodBody(minimapRenderer, "private void Initialize(int resolution)");
 Check(minimapRenderer.Contains("RayMasks.WATER | RayMasks.GROUND | RayMasks.GROUND2 | RayMasks.RESOURCE", StringComparison.Ordinal) &&
       !minimapRenderer.Contains("RayMasks.DEFAULT | RayMasks.TRANSPARENT_FX | RayMasks.RESOURCE", StringComparison.Ordinal) &&
@@ -1256,11 +1266,14 @@ Check(worldView.Contains("_worldPresenter.CaptureSnapshot()", StringComparison.O
     "World View does not render from a presenter snapshot.");
 Check(!worldView.Contains("LightingManager.", StringComparison.Ordinal) && !worldView.Contains("_plugin.Actions", StringComparison.Ordinal),
     "World View still calls the Unturned gameplay API or action service directly.");
-Check(worldView.Split("CreateWorldCard(", StringSplitOptions.None).Length - 1 == 3 &&
+Check(worldView.Split("CreateWorldCard(", StringSplitOptions.None).Length - 1 == 5 &&
       worldView.Contains("\"TimeCard\"", StringComparison.Ordinal) &&
+      worldView.Contains("\"EnvironmentStatusCard\"", StringComparison.Ordinal) &&
       worldView.Contains("\"WorldEventsCard\"", StringComparison.Ordinal) &&
-      worldView.Contains("\"ScanInfoCard\"", StringComparison.Ordinal),
-    "Other page is not grouped into time, world-event, and scan/misc operation cards.");
+      worldView.Contains("\"WorldScenarioCard\"", StringComparison.Ordinal) &&
+      worldView.Contains("\"AssetOverviewCard\"", StringComparison.Ordinal) &&
+      worldView.Contains("BuildWorldMaintenanceView(transform)", StringComparison.Ordinal),
+    "Other page is not grouped into time, environment, event, scenario, asset-overview, and maintenance sections.");
 Check(worldView.Contains("primaryCardHeight = 460f", StringComparison.Ordinal) &&
       worldView.Contains("CreateShortcutScroll(_contentHost.transform, styleSurface: false)", StringComparison.Ordinal) &&
       worldView.Contains("AddShortcutScrollbar(worldScroll)", StringComparison.Ordinal) &&
@@ -1776,6 +1789,80 @@ Check(!destroyQueue.TryDequeueReady(currentFrame: 101, canvasRebuilding: true, o
 Check(destroyQueue.TryDequeueReady(currentFrame: 101, canvasRebuilding: false, out FakeUiSubtree readyTextSubtree) &&
       ReferenceEquals(queuedTextSubtree, readyTextSubtree),
     "A uGUI subtree was not released on the first safe frame after rebuild completion.");
+
+string worldMaintenanceViewPath = Path.Combine(sourceRoot, "UI", "CheatMenuOverlayUi.WorldMaintenanceView.cs");
+Check(File.Exists(worldMaintenanceViewPath), "The Other page has no world-maintenance view implementation.");
+string worldMaintenanceView = Read(worldMaintenanceViewPath);
+string worldMaintenanceContractsPath = Path.Combine(sourceRoot, "Models", "WorldMaintenanceContracts.cs");
+string worldMaintenanceServicePath = Path.Combine(sourceRoot, "Services", "WorldMaintenanceService.cs");
+string worldMaintenanceBridgePath = Path.Combine(sourceRoot, "Services", "WorldMaintenanceNativeBridge.cs");
+string worldMaintenanceServiceSource = Read(worldMaintenanceServicePath);
+string worldMaintenanceBridgeSource = Read(worldMaintenanceBridgePath);
+Check(File.Exists(worldMaintenanceContractsPath) && File.Exists(worldMaintenanceServicePath) && File.Exists(worldMaintenanceBridgePath),
+    "World-maintenance contracts, service, and native bridge must be separate production files.");
+Check(worldViewSource.Contains("环境状态", StringComparison.Ordinal) &&
+      worldViewSource.Contains("世界事件", StringComparison.Ordinal) &&
+      worldViewSource.Contains("情景预设", StringComparison.Ordinal) &&
+      worldViewSource.Contains("资产概览", StringComparison.Ordinal) &&
+      worldViewSource.Contains("BuildWorldMaintenanceView", StringComparison.Ordinal) &&
+      !worldViewSource.Contains("CurrentWorldCard", StringComparison.Ordinal) &&
+      !worldViewSource.Contains("CreateLabel(currentWorld", StringComparison.Ordinal) &&
+      !worldViewSource.Contains("CreateLabel(worldCard.transform, \"当前世界\"", StringComparison.Ordinal),
+    "The Other page must replace the empty right card with environment/event/preset sections and omit Current World.");
+foreach (string label in new[] { "世界维护", "自然资源刷新", "物资点补货", "丧尸清除", "丧尸生成", "地面掉落物清理" })
+    Check(worldMaintenanceView.Contains(label, StringComparison.Ordinal), "World-maintenance UI is missing label: " + label);
+Check(worldMaintenanceView.Contains("_uiRoot.ModalLayer", StringComparison.Ordinal) &&
+      worldMaintenanceView.Contains("_uiRoot.RegisterModal", StringComparison.Ordinal),
+    "Destructive maintenance confirmation must reuse the existing ModalLayer contract.");
+Check(featurePorts.Contains("IWorldMaintenanceUiFeature", StringComparison.Ordinal) &&
+      featurePresenters.Contains("WorldMaintenancePresenter", StringComparison.Ordinal) &&
+      runtimeComposition.Contains("WorldMaintenance", StringComparison.Ordinal) &&
+      context.Contains("_worldMaintenance?.Pump()", StringComparison.Ordinal) &&
+      context.Contains("InvalidateSharedItemSnapshot", StringComparison.Ordinal),
+    "The world-maintenance feature is not wired through the port/presenter/composition/runtime boundaries.");
+Check(!worldMaintenanceView.Contains("ResourceManager.", StringComparison.Ordinal) &&
+      !worldMaintenanceView.Contains("ZombieManager.", StringComparison.Ordinal) &&
+      !worldMaintenanceView.Contains("ItemManager.", StringComparison.Ordinal),
+    "The world-maintenance View must not write directly through Unturned managers.");
+Check(worldMaintenanceServiceSource.Contains("RestockGroundItems", StringComparison.Ordinal) &&
+      worldMaintenanceServiceSource.Contains("GenerateZombies", StringComparison.Ordinal) &&
+      worldMaintenanceServiceSource.Contains("TryRespawnItems", StringComparison.Ordinal) &&
+      worldMaintenanceBridgeSource.Contains("respawnItems", StringComparison.Ordinal) &&
+      !worldMaintenanceBridgeSource.Contains("ItemManager.dropItem", StringComparison.Ordinal) &&
+	  !worldMaintenanceBridgeSource.Contains("SpawnItemDelegate", StringComparison.Ordinal) &&
+	  worldMaintenanceBridgeSource.Contains("return addedCount;", StringComparison.Ordinal) &&
+      worldMaintenanceBridgeSource.Contains("ZombieManager.sendZombieAlive", StringComparison.Ordinal),
+    "物资点补货必须走原生 respawnItems；丧尸生成必须有显式 native bridge write contract。");
+string sceneTransitionBody = ReadMethodBody(context, "private void HandleSceneTransition(string source)");
+int maintenanceSceneReset = sceneTransitionBody.IndexOf("_worldMaintenance?.HandleSceneChanged();", StringComparison.Ordinal);
+int uiSceneReset = sceneTransitionBody.IndexOf("_ui?.HandleSceneChanged();", StringComparison.Ordinal);
+int minimapSceneReset = sceneTransitionBody.IndexOf("_minimap?.HandleSceneChanged();", StringComparison.Ordinal);
+Check(maintenanceSceneReset >= 0 && uiSceneReset >= 0 && minimapSceneReset >= 0 &&
+      maintenanceSceneReset < uiSceneReset && maintenanceSceneReset < minimapSceneReset,
+    "Scene transition must stop and release maintenance candidates before rebuilding UI or minimap scene state.");
+Check(refreshOtherTime.Contains("RefreshWorldEnvironment(snapshot);", StringComparison.Ordinal) &&
+      worldViewSource.Contains("private void RefreshWorldEnvironment(WorldPageSnapshot snapshot)", StringComparison.Ordinal) &&
+      worldViewSource.Contains("_worldEnvironmentWeatherText.text", StringComparison.Ordinal) &&
+      worldViewSource.Contains("_worldEnvironmentStateText.text", StringComparison.Ordinal),
+    "Environment weather, freeze, and full-moon status must refresh with the existing synchronous Other-page update path.");
+Check(featurePorts.Contains("bool ApplyScenario(WorldScenarioKind scenario);", StringComparison.Ordinal) &&
+      featurePorts.Contains("if (!_plugin.CurrentSessionState.IsSupportedGameplay) return false;", StringComparison.Ordinal) &&
+      pagePresenters.Contains("internal bool ApplyScenario(WorldScenarioKind scenario)", StringComparison.Ordinal) &&
+      worldViewSource.Contains("_worldPresenter.ApplyScenario", StringComparison.Ordinal),
+    "New world scenarios must execute behind a strict singleplayer port instead of composing multiplayer-acknowledged writes in the View.");
+int worldMaintenancePump = context.IndexOf("_worldMaintenance?.Pump();", StringComparison.Ordinal);
+int worldMaintenanceTry = context.LastIndexOf("try", worldMaintenancePump, StringComparison.Ordinal);
+int worldMaintenanceCatch = context.IndexOf("catch (Exception exception)", worldMaintenancePump, StringComparison.Ordinal);
+int sharedSnapshotAfterMaintenance = context.IndexOf("RefreshSharedItemSnapshot(", worldMaintenancePump, StringComparison.Ordinal);
+Check(worldMaintenanceTry >= 0 && worldMaintenanceCatch > worldMaintenancePump &&
+      context.IndexOf("_worldMaintenance?.Fail(", worldMaintenanceCatch, StringComparison.Ordinal) > worldMaintenanceCatch &&
+      context.Contains("_hasLoggedWorldMaintenancePumpFailure", StringComparison.Ordinal) &&
+      sharedSnapshotAfterMaintenance > worldMaintenanceCatch,
+    "World-maintenance Pump exceptions must fail the active task, log once, and allow downstream snapshot/minimap/AutoPickup work to continue.");
+Check(worldMaintenanceServiceSource.Contains("private CandidateBatch SafeScan(", StringComparison.Ordinal) &&
+      worldMaintenanceServiceSource.Contains("WorldMaintenanceScanCoordinator.SafeScan", StringComparison.Ordinal) &&
+      worldMaintenanceServiceSource.Contains("扫描失败", StringComparison.Ordinal),
+    "Dashboard, preview, and start scans must share a fail-closed exception boundary.");
 
 Console.WriteLine("UI architecture smoke checks passed.");
 

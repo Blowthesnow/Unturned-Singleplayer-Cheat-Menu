@@ -106,3 +106,37 @@ opacityScope.Restore();
 Check(opacityMaterial.Value.w == 0f && opacityMaterial.Value.x == 0.25f && opacityMaterial.Value.y == 0.5f && opacityMaterial.Value.z == 0.4f,
     "Original full material vector must survive retries unchanged.");
 Console.WriteLine("Low-quality water opacity and restoration checks passed.");
+
+RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+RenderSettings.ambientSkyColor = new Color(.1f, .2f, .3f);
+RenderSettings.ambientEquatorColor = new Color(.2f, .3f, .4f);
+RenderSettings.ambientGroundColor = new Color(.3f, .4f, .5f);
+RenderSettings.ambientIntensity = .2f;
+RenderSettings.subtractiveShadowColor = new Color(.05f, .06f, .07f);
+RenderSettings.fog = true;
+QualitySettings.shadows = ShadowQuality.All;
+QualitySettings.shadowDistance = 123f;
+var unshadowed = new MinimapUnshadowedCaptureScope();
+var fill = new Color(.6f, .6f, .6f);
+Check(unshadowed.Begin(fill), "Unshadowed capture setup failed.");
+Check(QualitySettings.shadows == ShadowQuality.Disable && QualitySettings.shadowDistance == 0f,
+    "Realtime minimap capture must ignore realtime shadows.");
+Check(!RenderSettings.fog, "Realtime minimap capture must not be blacked out by scene fog.");
+Check(RenderSettings.ambientMode == UnityEngine.Rendering.AmbientMode.Trilight &&
+      RenderSettings.ambientIntensity == 1f &&
+      RenderSettings.ambientSkyColor.r == .6f && RenderSettings.ambientEquatorColor.g == .6f &&
+      RenderSettings.ambientGroundColor.b == .6f && RenderSettings.subtractiveShadowColor.r == .6f,
+    "Realtime minimap capture must retain a uniform ambient fill for dark interiors.");
+Check(!unshadowed.Begin(fill), "An active global capture receipt must not be overwritten.");
+QualitySettings.FailShadowRestoreCount = 1;
+unshadowed.Restore();
+Check(!unshadowed.Begin(fill), "A failed global restore must block the next camera pass.");
+unshadowed.Restore();
+Check(QualitySettings.shadows == ShadowQuality.All && QualitySettings.shadowDistance == 123f &&
+      RenderSettings.fog &&
+      RenderSettings.ambientMode == UnityEngine.Rendering.AmbientMode.Flat &&
+      RenderSettings.ambientIntensity == .2f && RenderSettings.subtractiveShadowColor.g == .06f &&
+      RenderSettings.ambientSkyColor.r == .1f && RenderSettings.ambientEquatorColor.g == .3f &&
+      RenderSettings.ambientGroundColor.b == .5f,
+    "Shadow and ambient settings must be restored exactly after capture.");
+Console.WriteLine("Unshadowed minimap capture scope and restoration checks passed.");

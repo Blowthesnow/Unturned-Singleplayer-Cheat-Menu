@@ -22,6 +22,30 @@ internal static class FlightDirectionPolicy
 {
 	private const float DirectionEpsilonSquared = 0.000001f;
 
+	internal static FlightDirectionVector ResolveVelocityForMode(
+		FlightMode mode,
+		FlightDirectionVector viewForward,
+		FlightDirectionVector fallbackForward,
+		float forwardInput,
+		float strafeInput,
+		float verticalInput,
+		float horizontalSpeed,
+		float verticalSpeed)
+	{
+		if (mode == FlightMode.ViewDirection)
+		{
+			return ResolveVelocity(viewForward, fallbackForward,
+				forwardInput, strafeInput, verticalInput,
+				horizontalSpeed, verticalSpeed);
+		}
+
+		return ResolveVelocity(
+			new FlightDirectionVector(viewForward.X, 0f, viewForward.Z),
+			new FlightDirectionVector(fallbackForward.X, 0f, fallbackForward.Z),
+			forwardInput, strafeInput, verticalInput,
+			horizontalSpeed, verticalSpeed);
+	}
+
 	internal static FlightDirectionVector ResolveVelocity(
 		FlightDirectionVector viewForward,
 		FlightDirectionVector fallbackForward,

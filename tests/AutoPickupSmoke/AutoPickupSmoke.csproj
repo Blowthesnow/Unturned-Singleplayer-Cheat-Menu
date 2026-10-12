@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupContracts.cs" Link="AutoPickupContracts.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupScheduler.cs" Link="AutoPickupScheduler.cs" />
+    <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupWorldDropAdapter.cs" Link="AutoPickupWorldDropAdapter.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\AutoPickup\AutoPickupRuleStore.cs" Link="AutoPickupRuleStore.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\Services\InfiniteStorageDestructionCoordinator.cs" Link="InfiniteStorageDestructionCoordinator.cs" />
     <Compile Include="..\..\src\UnturnedSingleplayerCheatMenu\InfiniteStorage\SnapshotKernel\SnapshotDestruction.cs" Link="SnapshotDestruction.cs" />

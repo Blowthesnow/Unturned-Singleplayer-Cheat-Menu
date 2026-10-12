@@ -63,12 +63,18 @@ Check(disclosure.Contains("content.SetActive(expanded)") && !disclosure.Contains
     !disclosure.Contains("ResetWorkshopApiKeyDrafts") && disclosure.Contains("RebuildWorkshopLocalizationScrollLayout()"),
     "Disclosure toggles visibility without destroying credentials or resetting drafts");
 string world = Read("WorldView");
-Check(world.Contains("CreateWorldCard(detailsColumn.transform, \"WorldEventsCard\"") &&
-    world.Contains("CreateWorldCard(detailsColumn.transform, \"ScanInfoCard\""),
-    "World scan card occupies the space below weather in the same column");
+int environmentCardIndex = world.IndexOf("CreateWorldCard(detailsColumn.transform, \"EnvironmentStatusCard\"", StringComparison.Ordinal);
+int eventCardIndex = world.IndexOf("CreateWorldCard(detailsColumn.transform, \"WorldEventsCard\"", StringComparison.Ordinal);
+int scenarioCardIndex = world.IndexOf("CreateWorldCard(detailsColumn.transform, \"WorldScenarioCard\"", StringComparison.Ordinal);
+int assetOverviewIndex = world.IndexOf("CreateWorldCard(transform, \"AssetOverviewCard\"", StringComparison.Ordinal);
+int maintenanceIndex = world.IndexOf("BuildWorldMaintenanceView(transform)", StringComparison.Ordinal);
+Check(environmentCardIndex >= 0 && eventCardIndex > environmentCardIndex && scenarioCardIndex > eventCardIndex &&
+    assetOverviewIndex > scenarioCardIndex && maintenanceIndex > assetOverviewIndex,
+    "World page orders environment, events, scenarios, asset overview, and maintenance without an empty right card");
 Check(world.Contains("CreateRow(transform, 0f,") && world.Contains("childAlignment = TextAnchor.UpperLeft") &&
-    world.Contains("\"WorldEventsCard\", -1f") && world.Contains("\"ScanInfoCard\", -1f"),
-    "World row and secondary cards derive height from content rather than stretching weather");
+    world.Contains("\"EnvironmentStatusCard\", -1f") && world.Contains("\"WorldEventsCard\", -1f") &&
+    world.Contains("\"WorldScenarioCard\", -1f") && world.Contains("\"AssetOverviewCard\", -1f"),
+    "World row and all secondary cards derive height from content rather than stretching the time card");
 Check(world.Contains("SetLayout(timeCard, 360f, primaryCardHeight, 1f, 0f)") &&
     world.Contains("SetLayout(detailsColumn, 360f, -1f, 1f, 0f)"),
     "World columns have equal preferred widths independent of long localized text");

@@ -328,8 +328,10 @@ static int FindMethodToken(string assemblyPath, string typeNamespace, string typ
 
 Assembly product = Assembly.Load("UnturnedSingleplayerCheatMenu");
 Assembly nativeAssembly = typeof(Item).Assembly;
+// Audited against installed Unturned 3.26.3.13 on 2026-10-12;
+// see docs/2026-10-12_snapshot-runtime-abi-audit.md. Keep this exact drift gate.
 Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(nativeAssembly.Location))) ==
-       "A110F5FE471422254C594E29F90FC4058D04D357EB3AE9CB4D3EDA0FFEC33F10",
+       "D122E0B615322E660ACEAF65E4F68850A2C9AEDD233B92D6028E35F0C80DB0DF",
     "Assembly-CSharp ABI hash drifted and requires a new explicit audit.");
 Assert(typeof(Item).GetConstructor(new[] { typeof(ushort), typeof(byte), typeof(byte), typeof(byte[]) }) != null &&
        typeof(Item).GetConstructor(new[] { typeof(ItemAsset), typeof(EItemOrigin) }) != null &&

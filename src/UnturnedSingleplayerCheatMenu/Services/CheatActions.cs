@@ -495,6 +495,13 @@ internal sealed class CheatActions
 		_log.LogInfo("已关闭当前天气和自然天气调度。");
 	}
 
+	public void RestoreNaturalWeather()
+	{
+		if (!CanExecuteGameplay()) return;
+		WorldWeatherNativeBridge.RestoreNaturalWeather();
+		_log.LogInfo("已清除当前天气并恢复当前地图的自然天气调度。");
+	}
+
 	private bool StartWeather(WeatherAssetBase weather, string label)
 	{
 		if (weather == null)

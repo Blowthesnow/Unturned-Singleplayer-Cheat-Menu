@@ -45,6 +45,33 @@ Equal(
     PluginLocalization.Translate("自动扫描完成：123 个物品、45 辆载具。"),
     "Dynamic scan status translation");
 Equal(
+    "Action: Zombie cleanup\nScope: Nearby 250m\nExecutable: 12    protected special: 3    collision blocked: 0",
+    string.Format(
+        PluginLocalization.Translate("动作：{0}\n范围：{1}\n可执行候选：{2}    特殊保护：{3}    碰撞阻挡：{4}"),
+        PluginLocalization.Translate("丧尸清除"),
+        string.Format(PluginLocalization.Translate("附近 {0}m"), 250), 12, 3, 0),
+    "World-maintenance confirmation summary must be fully English as one structured template");
+Equal(
+    "Processing 16 / 40. Maintenance is running in frame-sized batches.",
+    string.Format(PluginLocalization.Translate("处理中 {0} / {1}。{2}"), 16, 40,
+        PluginLocalization.Translate("维护任务正在分帧执行。")),
+    "World-maintenance progress refresh must explicitly translate both template and service state");
+Equal(
+    "Task completed: succeeded 7, protected 2, blocked 1, stale 0, failed 0, unprocessed 0.",
+    PluginLocalization.Translate("任务完成：成功 7，保护 2，阻挡 1，失效 0，失败 0，未处理 0。"),
+    "World-maintenance terminal result must translate after the next-frame refresh");
+Equal("Current weather: Rain",
+    string.Format(PluginLocalization.Translate("当前天气：{0}"), "Rain"),
+    "Environment status must translate the prefix of a runtime weather asset name");
+Equal("Current weather: No active weather",
+    string.Format(PluginLocalization.Translate("当前天气：{0}"),
+        PluginLocalization.Translate("无活动天气")),
+    "Environment status must translate the no-weather sentinel value");
+Equal("Time: Frozen    full moon: On",
+    string.Format(PluginLocalization.Translate("时间：{0}    满月：{1}"),
+        PluginLocalization.Translate("已冻结"), PluginLocalization.Translate("已开启")),
+    "Environment status must translate both runtime state values");
+Equal(
     "Gave 12 × Example Item.",
     PluginLocalization.Translate("已给予 12 × Example Item。"),
     "Dynamic asset status translation");
@@ -346,6 +373,25 @@ string[] overlayFiles = Directory.EnumerateFiles(overlayDirectory, "CheatMenuOve
     .OrderBy(path => path, StringComparer.Ordinal)
     .ToArray();
 string overlaySource = string.Join("\n", overlayFiles.Select(File.ReadAllText));
+string maintenanceViewSource = File.ReadAllText(Path.Combine(overlayDirectory, "CheatMenuOverlayUi.WorldMaintenanceView.cs"));
+string worldViewSource = File.ReadAllText(Path.Combine(overlayDirectory, "CheatMenuOverlayUi.WorldView.cs"));
+Equal(true, worldViewSource.Contains("PluginLocalization.Translate(\"当前天气：{0}\")", StringComparison.Ordinal) &&
+            worldViewSource.Contains("PluginLocalization.Translate(snapshot.ActiveWeatherName)", StringComparison.Ordinal) &&
+            worldViewSource.Contains("PluginLocalization.Translate(\"时间：{0}    满月：{1}\")", StringComparison.Ordinal),
+    "Environment runtime rows must localize their full templates before rendering");
+int maintenancePreviewFormatter = maintenanceViewSource.IndexOf("private static string FormatMaintenancePreview", StringComparison.Ordinal);
+int maintenanceActionFormatter = maintenanceViewSource.IndexOf("private static string MaintenanceActionLabel", StringComparison.Ordinal);
+int maintenanceProgressFormatter = maintenanceViewSource.IndexOf("private static string FormatMaintenanceProgress", StringComparison.Ordinal);
+string maintenancePreviewBody = maintenancePreviewFormatter >= 0 && maintenanceActionFormatter > maintenancePreviewFormatter
+    ? maintenanceViewSource[maintenancePreviewFormatter..maintenanceActionFormatter]
+    : string.Empty;
+string maintenanceProgressBody = maintenanceProgressFormatter >= 0 && maintenancePreviewFormatter > maintenanceProgressFormatter
+    ? maintenanceViewSource[maintenanceProgressFormatter..maintenancePreviewFormatter]
+    : string.Empty;
+Equal(true, maintenancePreviewBody.Contains("PluginLocalization.Translate", StringComparison.Ordinal),
+    "World-maintenance initial confirmation formatter must localize its complete structured template");
+Equal(true, maintenanceProgressBody.Contains("PluginLocalization.Translate", StringComparison.Ordinal),
+    "World-maintenance next-frame progress formatter must localize template and runtime message explicitly");
 MatchCollection stringLiterals = Regex.Matches(overlaySource, "(?<!\\\\)\\\"((?:\\\\.|[^\\\"\\\\])*)\\\"");
 HashSet<string> staticChineseTemplates = new(StringComparer.Ordinal);
 HashSet<string> dynamicChineseTemplates = new(StringComparer.Ordinal);

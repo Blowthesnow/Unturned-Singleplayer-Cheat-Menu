@@ -80,6 +80,15 @@ EqualVector(new FlightDirectionVector(0f, 0f, 21f),
         1f, 0f, 0f, horizontalSpeed, verticalSpeed),
     "Non-finite camera direction must fall back without producing NaN");
 
+EqualVector(new FlightDirectionVector(0f, 12.6f, 16.8f),
+    FlightDirectionPolicy.ResolveVelocityForMode(FlightMode.ViewDirection,
+        pitchForward, worldForward, 1f, 0f, 0f, horizontalSpeed, verticalSpeed),
+    "View-direction mode must preserve camera pitch in the shared flight path");
+EqualVector(new FlightDirectionVector(0f, 0f, 21f),
+    FlightDirectionPolicy.ResolveVelocityForMode(FlightMode.WorldAxis,
+        pitchForward, worldForward, 1f, 0f, 0f, horizontalSpeed, verticalSpeed),
+    "World-axis mode must keep forward travel level in the shared flight path");
+
 string movementSource = File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "src",
     "UnturnedSingleplayerCheatMenu", "Services", "MovementCheatService.cs"));
 if (!movementSource.Contains("FlightDirectionPolicy.ResolveVelocity", StringComparison.Ordinal) ||
@@ -97,6 +106,15 @@ if (!movementSource.Contains("FlightDirectionPolicy.ResolveVelocity", StringComp
     movementSource.Contains("inputJump", StringComparison.Ordinal))
 {
     throw new InvalidOperationException("Flight must use configured directional keys with fixed Space/Ctrl vertical priority, independent of native simulation input fields.");
+}
+
+int sharedVelocityCallCount = movementSource.Split(
+    "GetCustomFlightVelocity(localPlayer)", StringSplitOptions.None).Length - 1;
+if (sharedVelocityCallCount != 2 ||
+    movementSource.Contains("private static Vector3 GetHorizontalInput", StringComparison.Ordinal))
+{
+    throw new InvalidOperationException(
+        "Colliding and noclip flight must share one mode-aware velocity path instead of bypassing ViewDirection during noclip.");
 }
 
 Console.WriteLine("Flight mode smoke checks passed.");

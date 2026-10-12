@@ -31,6 +31,7 @@ internal sealed class PluginRuntimeComposition
 		NearbyItemIndex nearbyItemIndex,
 		AutoPickupFeature autoPickup,
 		MinimapFeature minimap,
+		WorldMaintenanceService worldMaintenance,
 		SnapshotInfiniteStorageRuntime infiniteStorage,
 		CreatureHealthBarService creatureHealthBars,
 		WorkshopLocalizationService workshopLocalization)
@@ -51,6 +52,7 @@ internal sealed class PluginRuntimeComposition
 		NearbyItemIndex = nearbyItemIndex;
 		AutoPickup = autoPickup;
 		Minimap = minimap;
+		WorldMaintenance = worldMaintenance;
 		InfiniteStorage = infiniteStorage;
 		CreatureHealthBars = creatureHealthBars;
 		WorkshopLocalization = workshopLocalization;
@@ -72,6 +74,7 @@ internal sealed class PluginRuntimeComposition
 	internal NearbyItemIndex NearbyItemIndex { get; }
 	internal AutoPickupFeature AutoPickup { get; }
 	internal MinimapFeature Minimap { get; }
+	internal WorldMaintenanceService WorldMaintenance { get; }
 	internal SnapshotInfiniteStorageRuntime InfiniteStorage { get; }
 	internal CreatureHealthBarService CreatureHealthBars { get; }
 	internal WorkshopLocalizationService WorkshopLocalization { get; }

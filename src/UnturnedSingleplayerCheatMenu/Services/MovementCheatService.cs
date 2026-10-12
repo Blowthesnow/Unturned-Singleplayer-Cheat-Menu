@@ -182,9 +182,8 @@ internal sealed class MovementCheatService
 			MaintainNoclipControllerDisabled(movement);
 			if (!IsMovementInputBlocked())
 			{
-				Vector3 horizontalInput = GetHorizontalInput(localPlayer);
-				float verticalInput = GetVerticalInput();
-				Vector3 vector = (horizontalInput * HorizontalMetersPerSecond + Vector3.up * (verticalInput * VerticalMetersPerSecond)) * Mathf.Max(deltaTime, 0.001f);
+				Vector3 velocity = GetCustomFlightVelocity(localPlayer);
+				Vector3 vector = velocity * Mathf.Max(deltaTime, 0.001f);
 				if (vector.sqrMagnitude > 0f)
 				{
 					localPlayer.transform.position += vector;
@@ -193,7 +192,7 @@ internal sealed class MovementCheatService
 		}
 		else if (Mode == FlightMode.ViewDirection && !(movement.controller == null) && movement.controller.enabled && !IsMovementInputBlocked())
 		{
-			Vector3 velocity = GetViewDirectionVelocity(localPlayer);
+			Vector3 velocity = GetCustomFlightVelocity(localPlayer);
 			if (velocity.sqrMagnitude > 0.0001f)
 			{
 				movement.controller.Move(velocity * Mathf.Max(deltaTime, 0.001f));
@@ -312,25 +311,7 @@ internal sealed class MovementCheatService
 		return true;
 	}
 
-	private static Vector3 GetHorizontalInput(Player player)
-	{
-		Vector3 vector = player.look?.aim?.forward ?? player.transform.forward;
-		vector.y = 0f;
-		if (vector.sqrMagnitude < 0.001f)
-		{
-			vector = player.transform.forward;
-		}
-		vector.Normalize();
-		Vector3 normalized = Vector3.Cross(Vector3.up, vector).normalized;
-		Vector3 result = vector * (Input.GetKey(KeyCode.W) ? 1f : 0f) - vector * (Input.GetKey(KeyCode.S) ? 1f : 0f) + normalized * (Input.GetKey(KeyCode.D) ? 1f : 0f) - normalized * (Input.GetKey(KeyCode.A) ? 1f : 0f);
-		if (result.sqrMagnitude > 1f)
-		{
-			result.Normalize();
-		}
-		return result;
-	}
-
-	private Vector3 GetViewDirectionVelocity(Player player)
+	private Vector3 GetCustomFlightVelocity(Player player)
 	{
 		Vector3 forward = player.look?.aim?.forward ?? player.transform.forward;
 		Vector3 fallbackForward = player.transform.forward;
@@ -339,7 +320,7 @@ internal sealed class MovementCheatService
 		float strafeInput = (InputEx.GetKey(ControlsSettings.right) ? 1f : 0f) -
 			(InputEx.GetKey(ControlsSettings.left) ? 1f : 0f);
 		float verticalInput = GetVerticalInput();
-		FlightDirectionVector velocity = FlightDirectionPolicy.ResolveVelocity(
+		FlightDirectionVector velocity = FlightDirectionPolicy.ResolveVelocityForMode(Mode,
 			new FlightDirectionVector(forward.x, forward.y, forward.z),
 			new FlightDirectionVector(fallbackForward.x, fallbackForward.y, fallbackForward.z),
 			forwardInput, strafeInput, verticalInput,
